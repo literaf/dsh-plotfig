@@ -47,6 +47,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.systemPrompt.section({ name: 'seedream:workflow', order: 159, text: [
     'dsh-seedream provides /seedream and a per-conversation Seedream canvas (right sidebar tab "Seedream 画布"). Use seedream_generate to create or edit images and seedream_canvas to list what is already on the canvas.',
     'Every seedream_generate call is billed per output image. Do not call it again to retry or to produce variants unless the user asks. Read the canvas first instead of regenerating an existing image.',
+    'Use seedream_decompose only when the user requests splitting an image into layers. It is billed per output image (background included); never retry automatically. Editable artboards preserve the original and support local drag, resize, text, shapes and PNG export without further model calls.',
     'Write rich, specific prompts (subject, composition, style, text to render, colors). For edits pass the source as images: ["item:<id>"] and say what to change and what must stay the same.',
     'A user message may contain [Seedream 图片 item:<id>] references from the canvas; pass those exact references in images.',
     'After generating, describe the result briefly and give the local file path. The image is already on the canvas; the user can open it from the conversation header or the Seedream panel.',

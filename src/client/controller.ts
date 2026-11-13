@@ -1,6 +1,7 @@
 import { ROUTE } from '../shared/types.js'
-import type { Canvas, CanvasEntry, PendingGeneration, Status } from '../shared/types.js'
+import type { Canvas, CanvasEntry, CanvasItem, Composition, PendingGeneration, Status } from '../shared/types.js'
 import type { CredentialsPort } from './credentials-port.js'
+import { EditorModel } from './editor-model.js'
 export interface Catalog extends Status { canvases: CanvasEntry[]; active?: Record<string, PendingGeneration[]> }
 type CanvasReply = Canvas & { pending?: PendingGeneration[] }
 export interface State {
@@ -72,6 +73,7 @@ export class CanvasModel extends Emitter<CanvasState> {
   private writes = 0
   private serial = 0
   private readonly path: string
+  private editors = new Map<string, EditorModel>()
   constructor(readonly sessionId: string, private readonly fetcher: Fetcher, private readonly onChange: () => void) {
     super({ loading: true, pending: [], created: [] })
     this.path = `${ROUTE}/canvas?session=${encodeURIComponent(sessionId)}`
@@ -141,7 +143,8 @@ export class CanvasModel extends Emitter<CanvasState> {
     const canvas = this.state.canvas
     if (!canvas || !positions.length) return
     const byId = new Map(positions.map(p => [p.id, p]))
-    this.set({ canvas: { ...canvas, items: canvas.items.map(i => { const p = byId.get(i.id); return p ? { ...i, x: Math.round(p.x), y: Math.round(p.y) } : i }) } })
+    const moved = <T extends { id: string; x: number; y: number }>(i: T): T => { const p = byId.get(i.id); return p ? { ...i, x: Math.round(p.x), y: Math.round(p.y) } : i }
+    this.set({ canvas: { ...canvas, items: canvas.items.map(moved), ...(canvas.compositions ? { compositions: canvas.compositions.map(moved) } : {}) } })
     this.writes++
     try {
       const reply = await this.fetcher<Canvas>(this.path, new AbortController().signal, { positions }, 'PATCH')
@@ -157,7 +160,44 @@ export class CanvasModel extends Emitter<CanvasState> {
       this.accept(reply.value.canvas); this.onChange(); return true
     } catch (error) { this.set({ error: errorText(error, '删除失败。') }); return false }
   }
-  override dispose() { clearInterval(this.timer); this.reading?.abort(); for (const c of this.generating.values()) c.abort(); super.dispose() }
+  async createComposition(sourceId: string, composition?: Composition): Promise<Composition> {
+    const reply = await this.fetcher<{ canvas: Canvas; composition: Composition }>(`${ROUTE}/composition?session=${encodeURIComponent(this.sessionId)}`, new AbortController().signal, { sourceId, ...(composition ? { composition } : {}) })
+    if (!reply.ok) throw new Error(reply.error)
+    this.accept(reply.value.canvas); this.onChange(); return reply.value.composition
+  }
+  editor(composition: Composition): EditorModel {
+    let editor = this.editors.get(composition.id)
+    if (!editor) { editor = new EditorModel(composition, (c, v) => this.saveComposition(c, v)); this.editors.set(composition.id, editor) }
+    return editor
+  }
+  async saveComposition(composition: Composition, version: number): Promise<Composition> {
+    const reply = await this.fetcher<{ canvas: Canvas; composition: Composition }>(`${ROUTE}/composition?session=${encodeURIComponent(this.sessionId)}`, new AbortController().signal,
+      { id: composition.id, version, composition }, 'PATCH')
+    if (!reply.ok) throw new Error(reply.error)
+    this.accept(reply.value.canvas); return reply.value.composition
+  }
+  async deleteComposition(id: string): Promise<boolean> {
+    try {
+      const reply = await this.fetcher<{ canvas: Canvas }>(`${ROUTE}/composition?session=${encodeURIComponent(this.sessionId)}&id=${encodeURIComponent(id)}`, new AbortController().signal, undefined, 'DELETE')
+      if (!reply.ok) throw new Error(reply.error)
+      this.accept(reply.value.canvas); this.onChange(); return true
+    } catch (error) { this.set({ error: errorText(error, '删除画板失败。') }); return false }
+  }
+  async decompose(input: { image: string; maxImages: number; prompt: string }): Promise<Composition> {
+    const key = `split-${++this.serial}`, parentId = input.image.slice(5)
+    this.local = [...this.local, { key, prompt: `分图层 · ${this.state.canvas?.items.find(i => i.id === parentId)?.title ?? ''}`, parentId, startedAt: Date.now() }]; this.syncPending()
+    try {
+      const reply = await this.fetcher<{ canvas: Canvas; composition: Composition }>(`${ROUTE}/decompose?session=${encodeURIComponent(this.sessionId)}`, new AbortController().signal, input)
+      if (!reply.ok) throw new Error(reply.error)
+      this.accept(reply.value.canvas); this.onChange(); return reply.value.composition
+    } finally { this.local = this.local.filter(p => p.key !== key); this.syncPending() }
+  }
+  async importComposite(png: string, title: string, asLayer = true): Promise<CanvasItem> {
+    const reply = await this.fetcher<{ canvas: Canvas; item: CanvasItem }>(`${ROUTE}/composite?session=${encodeURIComponent(this.sessionId)}`, new AbortController().signal, { png, title, asLayer })
+    if (!reply.ok) throw new Error(reply.error)
+    this.accept(reply.value.canvas); this.onChange(); return reply.value.item
+  }
+  override dispose() { clearInterval(this.timer); this.reading?.abort(); for (const e of this.editors.values()) e.dispose(); for (const c of this.generating.values()) c.abort(); super.dispose() }
 }
 export const ACTIVE_MS = 2000
 /** Root state: status, settings and the canvas list; per-Session models are cached here. */

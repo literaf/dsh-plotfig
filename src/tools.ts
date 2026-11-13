@@ -6,6 +6,7 @@ import type { Seedream } from './service.js'
 import { checkSession } from './store.js'
 import { parseGenerate } from './shared/types.js'
 import type { Canvas, CanvasItem } from './shared/types.js'
+import { parseDecompose } from './shared/layers.js'
 
 const ITEM = { type: 'object', additionalProperties: false, properties: {
   id: { type: 'string', required: true }, ref: { type: 'string', required: true }, title: { type: 'string', required: true },
@@ -15,6 +16,7 @@ const ITEM = { type: 'object', additionalProperties: false, properties: {
 const OUTPUT = { type: 'object', additionalProperties: false, properties: {
   session_id: { type: 'string', required: true }, created: { type: 'array', required: true, items: ITEM },
   items: { type: 'array', required: true, items: ITEM },
+  composition_id: { type: 'string' },
 } } as const
 type Value = InferValue<typeof OUTPUT>
 type Defaults = () => Promise<{ size: string; watermark: boolean }>
@@ -35,6 +37,24 @@ function render(value: Value, generated: boolean) {
   ).join('\n') }]
 }
 export function applyTools(ctx: Context, service: Seedream, defaults: Defaults): void {
+  ctx.tools.register(defineTool({
+    name: 'seedream_decompose',
+    description: 'Split one existing canvas image into a background and independently editable transparent layers. Creates a separate artboard and preserves the original. Billed per output image; call only when the user requests splitting, never retry automatically. Dragging, text, shapes and exporting the resulting artboard are local and do not call the model.',
+    parameters: {
+      image: { type: 'string', required: true, description: 'Exactly one image reference from this Session, item:<id>. Use seedream_canvas to find it.' },
+      prompt: { type: 'string', description: 'Optional instructions for which objects or text to separate.' },
+      max_images: { type: 'integer', description: 'Maximum billed output images, including the background, from 2 to 100. Defaults to 30.' },
+      size: { type: 'string', description: 'auto (default), 1K, 1.5K or 2K.' },
+    },
+    output: { schema: OUTPUT, render: (_a, v) => [{ type: 'text' as const, text: `已保存 ${v.created.length} 张分层素材，并创建可编辑图层画板。原图仍保留。画板 ID：${v.composition_id}\n在右侧画布打开“编辑图层”，可移动、添加文字图形或导出。\n${v.created.map(i => `${i.title} · ${i.ref} · ${i.path}`).join('\n')}` }] },
+    timeoutMs: 600_000, isConcurrencySafe: () => false,
+    presentCall: () => ({ card: 'generic', title: 'Seedream · 分图层', kind: 'other' }),
+    async execute(args, exec) {
+      const sessionId = sessionOf(exec), input = parseDecompose(args, (await defaults()).watermark)
+      const result = await service.decompose(sessionId, input, exec.signal)
+      return { ...valueOf(service, result.canvas, result.items), composition_id: result.composition.id }
+    },
+  }))
   ctx.tools.register(defineTool({
     name: 'seedream_generate',
     description: 'Generate or edit images with Volcengine Seedream 5.5 and place the results on the current conversation\'s canvas. Each call is billed per output image; never repeat a call to "retry" without the user asking. For edits, pass the source as images: ["item:<id>"] and state both what changes and what must stay unchanged.',

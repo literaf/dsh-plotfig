@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add Seedream layer decomposition with output limits, preserved bounding-box/OCR metadata, partial-download warnings, immutable original images and late-result persistence.
+- Add editable artboards with independent movement outside the artboard, resize/rotation, text and shape overlays, multi-select, alignment, automatic arrangement, merging, stacking order, hide/lock and undo/redo.
+- Autosave validated per-Session compositions with independent revisions; detect concurrent edits and recover local changes as a separate copy.
+- Export artboard or selected content as PNG, preserve transparency, save composites to the canvas and reference them into the native conversation draft. Local editing does not invoke the model.
+- Keep existing canvas data compatible. Artboards use the optional `compositions` field; layer assets are immutable and retained when an artboard is deleted. OCR text replacement and PSD/PDF export remain out of scope.
+- Validate this iteration using cached real layer assets and simulated API responses; no new billable image-generation/decomposition requests.
+
 - Use the native DSH conversation composer for conversation canvases. Examples, image edits and references prepare the same Session's draft without sending; standalone boards keep their direct-generation composer.
 - Preserve structured draft references, quotes and attachments with the host's append API; protect drafts during all submission phases, including `sending`.
 - Reopen gallery conversation canvases in their original native Session and reveal the right canvas only after that Session mounts. Background generations cannot open another conversation's canvas.

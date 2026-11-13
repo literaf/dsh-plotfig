@@ -6,6 +6,7 @@ import { MAX_BYTES } from './ark.js'
 import type { CanvasStore } from './store.js'
 import type { Canvas, CanvasItem, GenerateInput, PendingGeneration } from './shared/types.js'
 import { ITEM_ID, titleFrom } from './shared/types.js'
+import type { DecomposeInput } from './shared/layers.js'
 const LOCAL_TYPES: Record<string, string> = { '.png': 'png', '.jpg': 'jpeg', '.jpeg': 'jpeg', '.webp': 'webp', '.bmp': 'bmp', '.gif': 'gif', '.tif': 'tiff', '.tiff': 'tiff', '.heic': 'heic', '.heif': 'heif' }
 const DATA_URL = /^data:image\/(png|jpeg|webp|bmp|tiff|gif|heic|heif);base64,[A-Za-z0-9+/=]+$/
 export interface GenerateResult { canvas: Canvas; items: CanvasItem[] }
@@ -58,6 +59,23 @@ export class Seedream {
       return await this.store.add(sessionId, result.images, {
         title: input.title ?? titleFrom(input.prompt), prompt: input.prompt, refs: refs.items, externalRefs: refs.external, size: input.size,
       }, refs.items[0])
+    } finally {
+      const rest = this.pending(sessionId).filter(p => p.key !== entry.key)
+      if (rest.length) this.inflight.set(sessionId, rest); else this.inflight.delete(sessionId)
+    }
+  }
+  async decompose(sessionId: string, input: DecomposeInput, signal: AbortSignal) {
+    const refs = await this.resolve(sessionId, [input.image], false), sourceId = refs.items[0]!
+    const source = (await this.store.get(sessionId)).items.find(i => i.id === sourceId)!
+    if (source.width * source.height < 262144 || source.width * source.height > 36000000) throw new Error('分层输入图片总像素须在 512×512 到 6000×6000 之间。')
+    signal.throwIfAborted()
+    const entry: PendingGeneration = { key: randomUUID(), prompt: `分图层 · ${source.title}`, size: `${source.width}x${source.height}`, parentId: sourceId, startedAt: new Date().toISOString() }
+    this.inflight.set(sessionId, [...this.pending(sessionId), entry])
+    try {
+      // Once submitted, a split can be billed for many files. Closing the view must
+      // not cancel their downloads or discard a result; the next poll retrieves it.
+      const result = await this.ark.generate({ ...input, images: refs.images, decomposition: { maxImages: input.maxImages } }, new AbortController().signal)
+      return await this.store.addDecomposition(sessionId, sourceId, result.images, result.warnings)
     } finally {
       const rest = this.pending(sessionId).filter(p => p.key !== entry.key)
       if (rest.length) this.inflight.set(sessionId, rest); else this.inflight.delete(sessionId)

@@ -36,6 +36,17 @@ export interface CanvasItem {
   externalRefs: number
   size: string
   createdAt: string
+  /** Decomposition assets are kept for editing and undo, not laid out as separate originals. */
+  role?: 'layer'
+  layerMetadata?: LayerMetadata
+}
+export interface LayerMetadata {
+  zIndex: number
+  bounds?: [number, number, number, number]
+  name?: string
+  description?: string
+  /** Kept verbatim for future text editing; model font/style recognition is approximate. */
+  textRecognition?: unknown
 }
 export interface Canvas {
   sessionId: string
@@ -44,6 +55,45 @@ export interface Canvas {
   createdAt: string
   updatedAt: string
   items: CanvasItem[]
+  compositions?: Composition[]
+}
+export type LayerKind = 'image' | 'text' | 'rect' | 'ellipse'
+export interface CanvasLayer {
+  id: string
+  kind: LayerKind
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  rotation: number
+  opacity: number
+  hidden: boolean
+  locked: boolean
+  assetId?: string
+  text?: string
+  fontSize?: number
+  fontFamily?: string
+  bold?: boolean
+  italic?: boolean
+  align?: 'left' | 'center' | 'right'
+  fill?: string
+  stroke?: string
+  strokeWidth?: number
+}
+/** Layer coordinates are relative to the artboard, and may extend beyond it. */
+export interface Composition {
+  id: string
+  title: string
+  sourceId: string
+  x: number
+  y: number
+  width: number
+  height: number
+  background: string
+  version: number
+  layers: CanvasLayer[]
+  warnings?: string[]
 }
 /** A generation still running on the host, whoever started it (conversation tool or canvas). */
 export interface PendingGeneration { key: string; prompt: string; size: string; parentId?: string; startedAt: string }
@@ -68,9 +118,10 @@ export const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typ
 export const labelOf = (item: Pick<CanvasItem, 'title' | 'prompt'>): string =>
   item.title === item.prompt.replace(/\s+/g, ' ').slice(0, 24) ? titleFrom(item.prompt) : item.title
 export const entryOf = (canvas: Canvas): CanvasEntry => {
-  const first = canvas.items[0], last = canvas.items.at(-1)
+  const originals = canvas.items.filter(i => i.role !== 'layer')
+  const first = originals[0], last = originals.at(-1)
   const title = first && (canvas.title === undefined || canvas.title === first.title) ? labelOf(first) : canvas.title ?? '未命名画布'
-  return { sessionId: canvas.sessionId, title, count: canvas.items.length, revision: canvas.revision, updatedAt: canvas.updatedAt, ...(last ? { cover: last.id } : {}) }
+  return { sessionId: canvas.sessionId, title, count: originals.length + (canvas.compositions?.length ?? 0), revision: canvas.revision, updatedAt: canvas.updatedAt, ...(last ? { cover: last.id } : {}) }
 }
 /**
  * A short, readable label from a prompt: the first clause, cut at a word
