@@ -85,7 +85,7 @@ export class CanvasStore {
     return this.serial(sessionId, async () => {
       const canvas = await this.get(sessionId)
       if (!canvas.items.some(i => i.id === checkItem(itemId))) throw new Error('图片不存在。')
-      if (canvas.compositions?.some(c => c.sourceId === itemId || c.layers.some(l => l.assetId === itemId))) throw new Error('这张图仍被图层画板使用，请先删除相关画板。')
+      if (canvas.compositions?.some(c => c.sourceId === itemId || c.layers.some(l => l.assetId === itemId || l.ocr?.sourceAssetId === itemId))) throw new Error('这张图仍被图层画板使用，请先删除相关画板。')
       canvas.items = canvas.items.filter(i => i.id !== itemId)
       const next = await this.commit(canvas)
       await rm(this.imagePath(sessionId, itemId), { force: true })

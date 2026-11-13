@@ -45,7 +45,7 @@ export interface LayerMetadata {
   bounds?: [number, number, number, number]
   name?: string
   description?: string
-  /** Kept verbatim for future text editing; model font/style recognition is approximate. */
+  /** Raw OCR stays with the immutable image; editor text is a separate, approximate reconstruction. */
   textRecognition?: unknown
 }
 export interface Canvas {
@@ -58,6 +58,33 @@ export interface Canvas {
   compositions?: Composition[]
 }
 export type LayerKind = 'image' | 'text' | 'rect' | 'ellipse'
+export interface TextRun {
+  text: string
+  fontFamily: string
+  fill: string
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  strikethrough: boolean
+  shadow: boolean
+  translucent: boolean
+}
+export interface OCRLine {
+  /** Coordinates in the source layer's bounding-box space, not the PNG's pixel dimensions. */
+  x: number
+  y: number
+  width: number
+  height: number
+  fontSize: number
+  runs: TextRun[]
+}
+export interface OCRText {
+  /** Immutable raster retained for comparison and restoration. */
+  sourceAssetId: string
+  width: number
+  height: number
+  lines: OCRLine[]
+}
 export interface CanvasLayer {
   id: string
   kind: LayerKind
@@ -80,6 +107,7 @@ export interface CanvasLayer {
   fill?: string
   stroke?: string
   strokeWidth?: number
+  ocr?: OCRText
 }
 /** Layer coordinates are relative to the artboard, and may extend beyond it. */
 export interface Composition {

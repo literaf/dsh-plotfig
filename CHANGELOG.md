@@ -2,11 +2,15 @@
 
 ## Unreleased
 
+- Convert OCR-bearing text layers to locally editable rich text with per-line positioning and per-run font, color, weight, decoration, shadow and transparency controls.
+- Preserve moved/scaled/rotated layer geometry, immutable original text PNGs, comparison/restoration, undo/redo and autosave; use the same text layout for the canvas, composites and PNG exports.
+- Validate OCR coordinates, rich text and backup asset references per Session. Existing layers without usable OCR remain raster images; exact font matching is not guaranteed.
+
 - Add Seedream layer decomposition with output limits, preserved bounding-box/OCR metadata, partial-download warnings, immutable original images and late-result persistence.
 - Add editable artboards with independent movement outside the artboard, resize/rotation, text and shape overlays, multi-select, alignment, automatic arrangement, merging, stacking order, hide/lock and undo/redo.
 - Autosave validated per-Session compositions with independent revisions; detect concurrent edits and recover local changes as a separate copy.
 - Export artboard or selected content as PNG, preserve transparency, save composites to the canvas and reference them into the native conversation draft. Local editing does not invoke the model.
-- Keep existing canvas data compatible. Artboards use the optional `compositions` field; layer assets are immutable and retained when an artboard is deleted. OCR text replacement and PSD/PDF export remain out of scope.
+- Keep existing canvas data compatible. Artboards use the optional `compositions` field; layer assets are immutable and retained when an artboard is deleted. PSD/PDF export remains out of scope.
 - Validate this iteration using cached real layer assets and simulated API responses; no new billable image-generation/decomposition requests.
 
 - Use the native DSH conversation composer for conversation canvases. Examples, image edits and references prepare the same Session's draft without sending; standalone boards keep their direct-generation composer.

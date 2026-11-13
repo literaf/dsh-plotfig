@@ -11,6 +11,9 @@ import { imageUrl } from './controller.js'
 import type { ConversationActions } from './handoff.js'
 import { LayerContent, renderLayers, downloadPng } from './layer-render.js'
 import { DownloadIcon, FitIcon, MinusIcon, PlusIcon, QuoteIcon, RedoIcon, TrashIcon, UndoIcon } from './icons.js'
+import { editableText, ocrPlainText, originalTextImage, readOCR } from '../shared/ocr.js'
+import { estimateOCRFonts } from './ocr-layout.js'
+import { OcrProperties } from './OcrProperties.js'
 
 const ACCENT = '#3b6cf6'
 const DEFAULT_FONT = 'Arial, PingFang SC, Microsoft YaHei, sans-serif'
@@ -29,11 +32,14 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
   const [selected, setSelected] = useState<string[]>([]), [hand, setHand] = useState(false), [space, setSpace] = useState(false)
   const [panel, setPanel] = useState(true), [menu, setMenu] = useState(false), [exportMenu, setExportMenu] = useState(false)
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState(''), [localError, setLocalError] = useState('')
+  const [compare, setCompare] = useState(false)
   const [marquee, setMarquee] = useState<LayerBox>(), marqueeStart = useRef<{ x: number; y: number; keep: string[] }>()
   const dragStart = useRef<{ id: string; x: number; y: number; layers: CanvasLayer[] }>()
   const noticeTimer = useRef<ReturnType<typeof setTimeout>>()
   const panning = hand || space, chosen = layers.filter(l => selected.includes(l.id)), one = chosen.length === 1 ? chosen[0] : undefined
   const editable = chosen.filter(l => !l.locked && !l.hidden)
+  const assets = model.getSnapshot().canvas?.items ?? []
+  const recognized = one?.kind === 'image' ? readOCR(assets.find(i => i.id === one.assetId), c) : undefined
   const flash = (text: string) => { clearTimeout(noticeTimer.current); setNotice(text); noticeTimer.current = setTimeout(() => setNotice(''), 3000) }
   useEffect(() => {
     const current = editor.getSnapshot()
@@ -55,6 +61,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
   const fitted = useRef(false)
   useEffect(() => { if (!fitted.current && size.width) { fitted.current = true; fit(true) } }, [fit, size])
   useEffect(() => { setSelected(s => s.filter(id => layers.some(l => l.id === id))) }, [layers])
+  useEffect(() => { setCompare(false) }, [one?.id])
   useEffect(() => {
     transformer.current?.nodes(editable.map(l => nodes.current.get(l.id)).filter((n): n is Konva.Group => !!n))
     transformer.current?.getLayer()?.batchDraw()
@@ -67,6 +74,24 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
   }, [editor])
   const changeLayers = (update: (layers: CanvasLayer[]) => CanvasLayer[], group?: string) => { if (!busy) editor.change(current => ({ ...current, layers: update(current.layers) }), group) }
   const patch = (id: string, value: Partial<CanvasLayer>, group?: string) => changeLayers(ls => ls.map(l => l.id === id ? { ...l, ...value } : l), group)
+  const editRecognizedText = (layer: CanvasLayer) => {
+    if (busy || layer.locked || layer.hidden) return
+    const ocr = readOCR(assets.find(i => i.id === layer.assetId), c)
+    if (!ocr) return
+    try {
+      const converted = editableText(layer, estimateOCRFonts(ocr))
+      changeLayers(ls => ls.map(l => l.id === layer.id ? converted : l)); setSelected([layer.id]); setPanel(true); setCompare(false)
+      requestAnimationFrame(() => host.current?.querySelector<HTMLInputElement>('[aria-label="识别文字"]')?.focus())
+    } catch (error) { setLocalError(error instanceof Error ? error.message : '文字转换失败，原图已保留。') }
+  }
+  const editLayerText = (layer: CanvasLayer) => {
+    if (layer.locked || busy) return
+    if (layer.kind === 'image') editRecognizedText(layer)
+    else if (layer.kind === 'text') {
+      setSelected([layer.id]); setPanel(true)
+      requestAnimationFrame(() => host.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(layer.ocr ? '[aria-label="识别文字"]' : '[aria-label="文字内容"]')?.focus())
+    }
+  }
   const remove = () => { const ids = new Set(editable.map(l => l.id)); changeLayers(ls => ls.filter(l => !ids.has(l.id))); setSelected([]) }
   const duplicate = () => {
     if (!editable.length) return
@@ -129,7 +154,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
       for (const l of editable) {
         const node = nodes.current.get(l.id); if (!node) continue
         const sx = node.scaleX(), sy = node.scaleY()
-        changes.set(l.id, { x: node.x(), y: node.y(), width: Math.max(1, l.width * sx), height: Math.max(1, l.height * sy), rotation: normalAngle(node.rotation()), ...(l.kind === 'text' ? { fontSize: Math.max(1, Math.min(2000, (l.fontSize ?? 36) * sy)) } : {}) })
+        changes.set(l.id, { x: node.x(), y: node.y(), width: Math.max(1, l.width * sx), height: Math.max(1, l.height * sy), rotation: normalAngle(node.rotation()), ...(l.kind === 'text' && !l.ocr ? { fontSize: Math.max(1, Math.min(2000, (l.fontSize ?? 36) * sy)) } : {}) })
         node.scale({ x: 1, y: 1 })
       }
       changeLayers(ls => ls.map(l => changes.has(l.id) ? { ...l, ...changes.get(l.id) } : l))
@@ -145,7 +170,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
   }
   const task = async (action: () => Promise<void>) => {
     if (busy) return
-    setBusy(true); setLocalError(''); setMenu(false); setExportMenu(false)
+    setBusy(true); setLocalError(''); setMenu(false); setExportMenu(false); setCompare(false)
     try { await action() } catch (error) { setLocalError(error instanceof Error ? error.message : '操作失败') } finally { setBusy(false) }
   }
   const exportPng = (selection: boolean) => task(async () => { const { png } = await getOutput(selection); downloadPng(png, selection ? `${c.title} · 选中图层` : c.title); flash('PNG 已导出') })
@@ -239,12 +264,12 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
               draggable={!panning && !l.locked && !busy}
               onMouseDown={e => { if (panning) return; e.cancelBubble = true; if (l.locked) startMarquee(e); else select(l.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey) }}
               onTouchStart={e => { if (!panning && !l.locked) { e.cancelBubble = true; select(l.id) } }}
-              onDblClick={() => { if (l.kind === 'text' && !l.locked) { setSelected([l.id]); setPanel(true); requestAnimationFrame(() => host.current?.querySelector<HTMLTextAreaElement>('[aria-label="文字内容"]')?.focus()) } }}
+              onDblClick={() => editLayerText(l)} onDblTap={() => editLayerText(l)}
               onDragStart={e => { e.cancelBubble = true; const ids = selected.includes(l.id) ? selected : [l.id]; setSelected(ids); dragStart.current = { id: l.id, x: l.x, y: l.y, layers: layers.filter(n => ids.includes(n.id) && !n.locked) } }}
               onDragMove={e => { e.cancelBubble = true; const start = dragStart.current; if (!start) return; const dx = e.target.x() - start.x, dy = e.target.y() - start.y; for (const other of start.layers) if (other.id !== l.id) nodes.current.get(other.id)?.position({ x: other.x + dx, y: other.y + dy }) }}
               onDragEnd={e => { e.cancelBubble = true; const start = dragStart.current; dragStart.current = undefined; if (!start) return; const dx = e.target.x() - start.x, dy = e.target.y() - start.y, ids = new Set(start.layers.map(n => n.id)); changeLayers(ls => ls.map(n => ids.has(n.id) ? { ...n, x: n.x + dx, y: n.y + dy } : n)) }}
               onTransformEnd={finishTransform}>
-              <LayerContent layer={l} sessionId={model.sessionId}/>
+              <LayerContent layer={compare && one?.id === l.id ? originalTextImage(l) : l} sessionId={model.sessionId}/>
             </Group>)}
             <Transformer ref={transformer} visible={!panning} rotateEnabled flipEnabled={false} keepRatio={chosen.every(l => l.kind === 'image')} padding={2} borderStroke={ACCENT} anchorStroke={ACCENT} anchorFill="#fff" anchorSize={8}
               boundBoxFunc={(old, next) => Math.abs(next.width) < 8 || Math.abs(next.height) < 8 ? old : next}/>
@@ -252,7 +277,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
           </Layer>
         </Stage> : null}
         <div className="sd-editor-frame-label" style={{ left: view.x, top: view.y - 24 }}>{c.width} × {c.height}<span>画板</span></div>
-        <div className="sd-editor-hint">{chosen.length ? `已选择 ${chosen.length} 个图层 · Shift 多选` : '拖动元素或框选 · 按住空格移动画布'}</div>
+        <div className="sd-editor-hint">{compare ? '正在对照原始文字图片 · 导出使用编辑后的文字' : chosen.length ? `已选择 ${chosen.length} 个图层 · Shift 多选` : '拖动元素或框选 · 按住空格移动画布'}</div>
         <div className="sd-zoom">
           <button onClick={() => zoom(1 / 1.2)} aria-label="缩小图层画布"><MinusIcon/></button><button className="sd-zoom-value" onClick={() => fit(true)} title="查看全部图层">{Math.round(view.scale * 100)}%</button><button onClick={() => zoom(1.2)} aria-label="放大图层画布"><PlusIcon/></button><button onClick={() => fit(false)} title="适应画板" aria-label="适应画板"><FitIcon/></button>
         </div>
@@ -263,8 +288,9 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
         <div className="sd-layer-panel-title">图层<span>{layers.length}</span></div>
         <div className="sd-layer-list" role="listbox" aria-label="图层列表" aria-multiselectable="true">
           {[...layers].reverse().map(l => <div key={l.id} className="sd-layer-row" data-selected={selected.includes(l.id)} data-hidden={l.hidden}>
-            <button className="sd-layer-select" role="option" aria-selected={selected.includes(l.id)} onClick={e => select(l.id, e.shiftKey || e.metaKey || e.ctrlKey)} title={l.name}>
+            <button className="sd-layer-select" role="option" aria-selected={selected.includes(l.id)} onClick={e => select(l.id, e.shiftKey || e.metaKey || e.ctrlKey)} onDoubleClick={() => editLayerText(l)} title={l.name}>
               <span className="sd-layer-thumb">{l.kind === 'image' ? <img src={imageUrl(model.sessionId, l.assetId!)} alt="" loading="lazy"/> : l.kind === 'text' ? 'T' : l.kind === 'rect' ? '▭' : '○'}</span><span>{l.name}</span>
+              {l.kind === 'image' && readOCR(assets.find(i => i.id === l.assetId), c) ? <span className="sd-ocr-badge" aria-hidden="true" title="含 OCR 文字，双击编辑">T</span> : null}
             </button>
             <button className="sd-layer-state" onClick={() => patch(l.id, { hidden: !l.hidden })} aria-label={`${l.hidden ? '显示' : '隐藏'} ${l.name}`} title={l.hidden ? '显示' : '隐藏'}>{l.hidden ? '◌' : '◉'}</button>
             <button className="sd-layer-state" onClick={() => patch(l.id, { locked: !l.locked })} aria-label={`${l.locked ? '解锁' : '锁定'} ${l.name}`} title={l.locked ? '解锁' : '锁定'}>{l.locked ? '▣' : '◇'}</button>
@@ -276,7 +302,9 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
             <label>名称<input aria-label="图层名称" value={one.name} maxLength={200} disabled={busy} onChange={e => patch(one.id, { name: e.target.value }, `name:${one.id}`)}/></label>
             <fieldset disabled={one.locked || busy}>
               <div className="sd-layer-grid">{([['x', 'X'], ['y', 'Y'], ['width', '宽'], ['height', '高'], ['rotation', '角度'], ['opacity', '不透明度']] as const).map(([key, label]) => <label key={key}>{label}<input type="number" aria-label={label} step={key === 'opacity' ? 0.1 : 1} min={key === 'opacity' ? 0 : key === 'width' || key === 'height' ? 1 : undefined} max={key === 'opacity' ? 1 : undefined} value={Math.round(one[key] * 100) / 100} onChange={e => { const value = Number(e.target.value); if (!Number.isFinite(value) || (['width', 'height'].includes(key) && value < 1) || (key === 'opacity' && (value < 0 || value > 1))) return; patch(one.id, { [key]: key === 'rotation' ? normalAngle(value) : value }, key) }}/></label>)}</div>
-              {one.kind === 'text' ? <>
+              {one.kind === 'text' && one.ocr ? <OcrProperties key={one.id} layer={{ ...one, ocr: one.ocr }} disabled={busy || one.locked} compare={compare} onCompare={() => setCompare(!compare)} onRestore={() => {
+                changeLayers(ls => ls.map(l => l.id === one.id ? originalTextImage(l) : l)); setCompare(false); flash('已恢复原始文字图片，可撤销')
+              }} onChange={(ocr, group) => { patch(one.id, { ocr, text: ocrPlainText(ocr) }, group); setCompare(false) }}/> : one.kind === 'text' ? <>
                 <label>文字<textarea aria-label="文字内容" value={one.text} maxLength={10000} rows={3} onChange={e => patch(one.id, { text: e.target.value }, 'text')}/></label>
                 <label>字体<select aria-label="字体" value={one.fontFamily} onChange={e => patch(one.id, { fontFamily: e.target.value })}><option value={DEFAULT_FONT}>无衬线</option><option value="Georgia, Songti SC, SimSun, serif">衬线</option><option value="Menlo, Consolas, monospace">等宽</option></select></label>
                 <div className="sd-layer-grid"><label>字号<input type="number" aria-label="字号" min={1} max={2000} value={one.fontSize} onChange={e => { const v = Number(e.target.value); if (v > 0 && v <= 2000) patch(one.id, { fontSize: v }, 'fontSize') }}/></label><label>颜色<input aria-label="文字颜色" type="color" value={one.fill} onChange={e => patch(one.id, { fill: e.target.value }, 'fill')}/></label></div>
@@ -285,7 +313,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
                 <div className="sd-layer-grid"><label>填充<input type="color" aria-label="填充颜色" value={one.fill === 'transparent' ? '#ffffff' : one.fill} onChange={e => patch(one.id, { fill: e.target.value }, 'fill')}/></label><label>描边<input type="color" aria-label="描边颜色" value={one.stroke === 'transparent' ? '#ffffff' : one.stroke} onChange={e => patch(one.id, { stroke: e.target.value }, 'stroke')}/></label></div>
                 <label className="sd-layer-check"><input type="checkbox" checked={one.fill === 'transparent'} onChange={e => patch(one.id, { fill: e.target.checked ? 'transparent' : '#dbeafe' })}/>无填充</label>
                 <label>描边宽度<input type="number" aria-label="描边宽度" min={0} max={1000} value={one.strokeWidth} onChange={e => { const v = Number(e.target.value); if (v >= 0 && v <= 1000) patch(one.id, { strokeWidth: v }, 'strokeWidth') }}/></label>
-              </> : null}
+              </> : recognized ? <div className="sd-ocr-properties"><div className="sd-ocr-caption">已识别文字<span>{recognized.lines.length} 行</span></div><p className="sd-ocr-preview">{ocrPlainText(recognized)}</p><button className="sd-button sd-button-primary" onClick={() => editRecognizedText(one)}>编辑识别文字</button><p>转换在本地完成。字体近似还原，原始文字图片会保留，可随时恢复。</p></div> : <p>此图层没有可用的 OCR 数据。新分层请求会获取规整文字的 OCR，也可以用「文字」添加新内容。</p>}
             </fieldset>
           </> : chosen.length ? <><strong>已选择 {chosen.length} 个图层</strong><p>拖动可一起移动。在“更多”中对齐、整理或合并。</p></> : <>
             <strong>画板</strong><label>标题<input aria-label="画板标题" value={c.title} maxLength={200} disabled={busy} onChange={e => editor.change(v => ({ ...v, title: e.target.value }), 'title')}/></label>

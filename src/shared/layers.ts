@@ -1,5 +1,6 @@
 import { isRecord, ITEM_ID, MAX_PROMPT, SIZE_TIERS } from './types.js'
-import type { CanvasLayer, Composition, LayerKind } from './types.js'
+import type { CanvasLayer, Composition, LayerKind, OCRText } from './types.js'
+import { ocrPlainText, parseOCR } from './ocr.js'
 
 export const LAYER_ID = /^[a-zA-Z0-9_-]{1,80}$/
 export const MAX_LAYERS = 500
@@ -53,6 +54,7 @@ export function parseCompositionEdit(raw: unknown, assets: ReadonlySet<string>):
         layer.fontFamily = str(value.fontFamily, 100, '字体')
         if (typeof value.bold !== 'boolean' || typeof value.italic !== 'boolean' || !['left', 'center', 'right'].includes(String(value.align))) throw new Error('文字样式无效。')
         layer.bold = value.bold; layer.italic = value.italic; layer.align = value.align as NonNullable<CanvasLayer['align']>
+        if (value.ocr !== undefined) { layer.ocr = parseOCR(value.ocr, assets); layer.text = ocrPlainText(layer.ocr) }
       } else { layer.stroke = color(value.stroke); layer.strokeWidth = num(value.strokeWidth, 0, 1000, '描边') }
     }
     return layer
@@ -61,9 +63,15 @@ export function parseCompositionEdit(raw: unknown, assets: ReadonlySet<string>):
 }
 export interface LayerBox { x: number; y: number; width: number; height: number }
 /** Axis-aligned bounds after rotation, shared by selection, alignment and export. */
-export function layerBounds(layer: LayerBox & { rotation?: number }): LayerBox {
+export function layerBounds(layer: LayerBox & { rotation?: number; ocr?: OCRText }): LayerBox {
   const a = (layer.rotation ?? 0) * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a)
-  const p = [[0, 0], [layer.width, 0], [layer.width, layer.height], [0, layer.height]].map(([x, y]) => ({ x: layer.x + x! * cos - y! * sin, y: layer.y + x! * sin + y! * cos }))
+  let left = 0, top = 0, right = layer.width, bottom = layer.height
+  if (layer.ocr) for (const line of layer.ocr.lines) {
+    const sx = layer.width / layer.ocr.width, sy = layer.height / layer.ocr.height, pad = line.runs.some(r => r.shadow) ? line.fontSize * 0.25 : 0
+    left = Math.min(left, (line.x - pad) * sx); top = Math.min(top, (line.y - pad) * sy)
+    right = Math.max(right, (line.x + line.width + pad) * sx); bottom = Math.max(bottom, (line.y + line.height + pad) * sy)
+  }
+  const p = [[left, top], [right, top], [right, bottom], [left, bottom]].map(([x, y]) => ({ x: layer.x + x! * cos - y! * sin, y: layer.y + x! * sin + y! * cos }))
   const x = Math.min(...p.map(v => v.x)), y = Math.min(...p.map(v => v.y))
   return { x, y, width: Math.max(...p.map(v => v.x)) - x, height: Math.max(...p.map(v => v.y)) - y }
 }
