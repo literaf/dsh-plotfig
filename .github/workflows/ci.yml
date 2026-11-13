@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm test
+      - name: pack (publish dry run)
+        run: pnpm pack --pack-destination /tmp
+
+  plugin-pages:
+    name: native plugin pages (current published Harness)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - name: install current UI runtime in isolation
+        run: |
+          # Individual UI packages retain old latest tags; the dsh release
+          # version identifies the matching published UI composition.
+          harness_ui_version=$(npm view @deepseek-ai/dsh@latest version --registry=https://registry.npmjs.org)
+          npm install --prefix "$RUNNER_TEMP/dsh-ui" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --registry=https://registry.npmjs.org \
+            @deepseek-ai/cordis@latest \
+            "@deepseek-ai/dsh-client-ui-slots@$harness_ui_version" \
+            "@deepseek-ai/dsh-client-ui-renderer@$harness_ui_version" \
+            "@deepseek-ai/dsh-client-ui-plugin-manager@$harness_ui_version" \
+            "@deepseek-ai/dsh-client-ui-layout@$harness_ui_version" \
+            "@deepseek-ai/dsh-client-ui-sidebar@$harness_ui_version" \
+            "@deepseek-ai/dsh-client-connection@$harness_ui_version" \
+            "@deepseek-ai/dsh-scope@$harness_ui_version"
+      - name: exercise native pages and fiber lifetimes
+        run: DSH_COMPAT_ROOT="$RUNNER_TEMP/dsh-ui" pnpm exec vitest run tests/plugin-pages-current.test.ts
+
