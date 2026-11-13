@@ -11,6 +11,8 @@ dsh plugin add dsh-seedream
 
 Save an Ark API key under Settings → Seedream (credential `ARK_API_KEY`). Then use `/seedream <description>`, ask the assistant to draw, or create a canvas and type into its prompt box. The size menu offers seven aspect ratios at 2K, or a resolution tier that lets the model choose the shape. Select an image to edit it (Tab), reference it into the conversation draft (conversation canvases only), download it, or delete it.
 
+Conversation canvases share the native DSH composer: examples, edits and references append to the same Session's draft without submitting it or replacing structured references and attachments. Opening a conversation canvas from the gallery returns to its original conversation with the canvas on the right. Only standalone canvases have a direct-generation prompt box. Older hosts without structured draft initialization fall back to copying the prompt/reference for manual pasting.
+
 Each generation is billed per output image by Ark and is never retried automatically. Result URLs expire after 24 hours, so images are downloaded at once to `$DSH_HOME/seedream/canvases/<canvas id>/` (owner-only files). The watermark is on by default, matching Ark; it can be turned off in settings.
 
 Not yet implemented: layer decomposition, text and shape overlays, background removal, erase, outpainting, upscaling. The dark theme has not been reviewed. See [README_CN.md](README_CN.md) for the full guide and shortcuts.

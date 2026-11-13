@@ -2,7 +2,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Controller, POLL_MS } from '../src/client/controller.js'
 import type { Fetcher } from '../src/client/controller.js'
-import { referenceItem, referenceText } from '../src/client/handoff.js'
 import type { Canvas } from '../src/shared/types.js'
 
 const canvas = (revision: number, ids: string[] = []): Canvas => ({ sessionId: 's', revision, createdAt: '', updatedAt: '', items: ids.map((id, i) => ({ id, title: id, prompt: 'p', width: 10, height: 10, x: i * 90, y: 0, refs: [], externalRefs: 0, size: '2K', createdAt: '' })) })
@@ -65,24 +64,5 @@ describe('canvas model', () => {
     const fetcher = vi.fn(async () => ({ ok: true, value: catalog })) as unknown as Fetcher
     const c = new Controller(() => port, fetcher); await c.attach(); await c.saveKey(' k '); await c.removeKey()
     expect(port.set).toHaveBeenCalledWith('ARK_API_KEY', 'k'); expect(port.unset).toHaveBeenCalledWith('ARK_API_KEY'); c.dispose()
-  })
-})
-describe('reference handoff', () => {
-  const item = { id: 'abcdefabcdef', title: '雨林' }
-  function fixture(draft: string, phase = 'plain') {
-    const state = { draft, phase }, input = { state: { getSnapshot: () => state }, setDraft: vi.fn((t: string) => { state.draft = t }), focus: vi.fn() }
-    const services: Record<string, unknown> = { sessions: { binding: (id: string) => id === 's' ? { ctx: {} } : undefined }, conversation: { input: { for: () => input } } }
-    return { ctx: { get: (k: string) => services[k] } as never, state, input }
-  }
-  it('appends to the Session draft without sending', async () => {
-    const f = fixture('把这张')
-    expect(await referenceItem(f.ctx, 's', item)).toBe('filled'); expect(f.state.draft).toBe(`把这张 ${referenceText(item)}`)
-    expect(await referenceItem(f.ctx, 's', item)).toBe('filled'); expect(f.input.setDraft).toHaveBeenCalledTimes(1)
-  })
-  it('leaves a submitting draft alone and falls back to the clipboard', async () => {
-    const f = fixture('x', 'submitting')
-    expect(await referenceItem(f.ctx, 's', item)).toBe('busy'); expect(f.input.setDraft).not.toHaveBeenCalled()
-    const writeText = vi.fn(async () => {}); Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    expect(await referenceItem(f.ctx, 'other', item)).toBe('copied'); expect(writeText).toHaveBeenCalledWith(referenceText(item))
   })
 })

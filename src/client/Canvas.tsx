@@ -3,10 +3,10 @@ import type { KonvaEventObject } from 'konva/lib/Node'
 import type Konva from 'konva'
 import { Group, Image as KImage, Layer, Rect, Stage } from 'react-konva'
 import type { CanvasItem } from '../shared/types.js'
-import { labelOf } from '../shared/types.js'
+import { isBoard, labelOf } from '../shared/types.js'
 import type { CanvasModel, PendingView } from './controller.js'
 import { imageUrl } from './controller.js'
-import type { Outcome } from './handoff.js'
+import type { ConversationActions, Outcome } from './handoff.js'
 import { Composer, SizePicker } from './Composer.js'
 import type { SizeChoice } from './Composer.js'
 import { CloseIcon, DownloadIcon, EditIcon, FitIcon, ImageIcon, MinusIcon, PlusIcon, QuoteIcon, RedoIcon, TrashIcon, UndoIcon } from './icons.js'
@@ -89,13 +89,14 @@ function PendingCard({ pending, rect }: { pending: PendingView; rect: { left: nu
   </div>
 }
 const EXAMPLES = ['热带雨林垂直分层剖面图，教材插画风格，标注每层高度和代表物种', '一只坐在苔藓石头上的红眼树蛙，自然博物水彩风格，浅色背景', '细胞有丝分裂各时期的示意图，扁平矢量风格，白色背景']
-export function CanvasView({ model, active = true, onReference, defaultSize }: {
+export function CanvasView({ model, active = true, conversation, defaultSize }: {
   model: CanvasModel; active?: boolean
   /** Absent for a standalone canvas: no conversation can read its items. */
-  onReference?: ((item: CanvasItem) => Promise<Outcome>) | undefined
+  conversation?: ConversationActions | undefined
   defaultSize?: string | undefined
 }) {
   const state = useSyncExternalStore(model.subscribe, model.getSnapshot)
+  const inConversation = !isBoard(model.sessionId), bottom = inConversation ? 72 : BOTTOM
   const items = useMemo(() => state.canvas?.items ?? [], [state.canvas])
   const host = useRef<HTMLDivElement>(null), stage = useRef<Konva.Stage>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
@@ -125,8 +126,8 @@ export function CanvasView({ model, active = true, onReference, defaultSize }: {
   }, [items, state.pending, slot])
   const fitAll = useCallback((extra: Box[] = []) => {
     const box = bounds([...items, ...extra])
-    if (box && size.width && size.height) setView(fit(box, size.width, size.height, BOTTOM, TOP))
-  }, [items, size])
+    if (box && size.width && size.height) setView(fit(box, size.width, size.height, bottom, TOP))
+  }, [items, size, bottom])
   useEffect(() => { if (!fitted.current && items.length && size.width) { fitted.current = true; fitAll() } }, [items, size, fitAll])
   // Newly arrived results (from this view or the conversation) are revealed and selected.
   useEffect(() => {
@@ -136,7 +137,7 @@ export function CanvasView({ model, active = true, onReference, defaultSize }: {
     if (seen.current !== undefined && key !== seen.current && items.length) {
       const known = new Set(seen.current.split(',')), fresh = items.filter(i => !known.has(i.id))
       // Reveal what just arrived at a readable size; the fit button still shows everything.
-      if (fresh.length) { const box = bounds(fresh); if (box && size.width) setView(fit(box, size.width, size.height, BOTTOM, TOP)); setSelected(fresh.at(-1)!.id); setEditing(false) }
+      if (fresh.length) { const box = bounds(fresh); if (box && size.width) setView(fit(box, size.width, size.height, bottom, TOP)); setSelected(fresh.at(-1)!.id); setEditing(false) }
     }
     seen.current = key
   }, [items, fitAll, state.canvas, size])
@@ -162,20 +163,25 @@ export function CanvasView({ model, active = true, onReference, defaultSize }: {
   const redo = () => { const m = history.undone.at(-1); if (!m) return; setHistory(h => ({ done: [...h.done, m], undone: h.undone.slice(0, -1) })); apply([m], 'to') }
   const [notice, setNotice] = useState('')
   const flash = (text: string) => { setNotice(text); setTimeout(() => setNotice(n => n === text ? '' : n), 2500) }
-  const reference = async () => {
-    if (!item || !onReference) return
-    const outcome = await onReference(item)
-    flash(outcome === 'filled' ? '已引用到对话输入框' : outcome === 'copied' ? '已复制引用，可粘贴到对话中' : outcome === 'busy' ? '对话正在提交，请稍后再引用' : '当前无法引用')
+  const handoff = async (action: (() => Promise<Outcome>) | undefined, success: string) => {
+    try {
+      const outcome = await action?.()
+      flash(outcome === 'filled' ? success : outcome === 'copied' ? '已复制，可粘贴到原对话中' : outcome === 'busy' ? '对话正在提交，请稍后再试' : '请先打开这张画布所属的对话')
+    } catch (error) { flash(error instanceof Error ? error.message : '无法写入对话输入框') }
   }
   const submit = () => {
     const text = prompt.trim()
-    if (!text) return
+    if (!text || inConversation) return
     if (editing && item) void model.generate({ prompt: text, images: [`item:${item.id}`], title: `${labelOf(item)} · 编辑`, ...(genSize ? { size: genSize } : {}) }, item.id)
     else void model.generate({ prompt: text, ...(genSize ? { size: genSize } : {}) })
     setPrompt(''); setEditing(false)
   }
   const remove = () => { if (item) { void model.remove(item.id); setConfirming(false) } }
-  const startEdit = () => { setEditing(true); setConfirming(false); requestAnimationFrame(() => host.current?.querySelector<HTMLTextAreaElement>('.sd-composer textarea')?.focus()) }
+  const startEdit = () => {
+    setConfirming(false)
+    if (inConversation) { if (item) void handoff(conversation && (() => conversation.edit(item)), '已引用图片，请在对话中描述修改要求'); return }
+    setEditing(true); requestAnimationFrame(() => host.current?.querySelector<HTMLTextAreaElement>('.sd-composer textarea')?.focus())
+  }
   const onKey = (e: React.KeyboardEvent) => {
     if ((e.target as HTMLElement).closest('input,textarea,select,button')) return
     const mod = e.metaKey || e.ctrlKey
@@ -186,7 +192,7 @@ export function CanvasView({ model, active = true, onReference, defaultSize }: {
     else if (e.key === '0' && mod) { e.preventDefault(); fitAll() }
   }
   const toolbar = useRef<HTMLDivElement>(null), [toolbarWidth, setToolbarWidth] = useState(280)
-  useLayoutEffect(() => { if (toolbar.current) setToolbarWidth(toolbar.current.offsetWidth) }, [item?.id, confirming, onReference])
+  useLayoutEffect(() => { if (toolbar.current) setToolbarWidth(toolbar.current.offsetWidth) }, [item?.id, confirming, inConversation])
   // Floating controls stay inside the canvas even when the image extends past its edge.
   const inside = (left: number, width: number) => clamp(left, 8, Math.max(8, size.width - width - 8))
   const screen = (b: Box) => ({ left: view.x + b.x * view.scale, top: view.y + b.y * view.scale, width: b.width * view.scale, height: b.height * view.scale })
@@ -199,7 +205,7 @@ export function CanvasView({ model, active = true, onReference, defaultSize }: {
   const error = state.error, toast = notice || state.message
   const dots = Math.max(8, 24 * view.scale)
   const empty = !items.length && !state.pending.length && !state.loading
-  return <div className="sd-canvas" ref={host} tabIndex={0} onKeyDown={onKey}
+  return <div className="sd-canvas" data-mode={inConversation ? 'conversation' : 'board'} ref={host} tabIndex={0} onKeyDown={onKey}
     style={{ backgroundSize: `${dots}px ${dots}px`, backgroundPosition: `${view.x}px ${view.y}px` }}>
     {size.width > 0 ? <Stage ref={stage} width={size.width} height={size.height} x={view.x} y={view.y} scaleX={view.scale} scaleY={view.scale}
       draggable onWheel={onWheel}
@@ -214,9 +220,12 @@ export function CanvasView({ model, active = true, onReference, defaultSize }: {
     {placeholders.map(p => <PendingCard key={p.key} pending={p} rect={screen(p)}/>)}
     {empty ? <div className="sd-empty">
       <div className="sd-empty-icon"><ImageIcon size={22}/></div>
-      <strong>{onReference ? '这个对话的画布' : '新画布'}</strong>
-      <p>{onReference ? '对话里生成的图片会出现在这里。也可以在下方直接描述画面。' : '描述你想要的画面，生成第一张图。这个画布不属于任何对话。'}</p>
-      <div className="sd-examples">{EXAMPLES.map(x => <button key={x} type="button" onClick={() => { setPrompt(x); host.current?.querySelector<HTMLTextAreaElement>('.sd-composer textarea')?.focus() }}>{x}</button>)}</div>
+      <strong>{inConversation ? '这个对话的画布' : '新画布'}</strong>
+      <p>{inConversation ? '在对话中描述画面，Seedream 生成的图片会出现在这里。选中图片后可回到同一个对话继续修改。' : '描述你想要的画面，生成第一张图。这个画布不属于任何对话。'}</p>
+      <div className="sd-examples">{EXAMPLES.map(x => <button key={x} type="button" onClick={() => {
+        if (inConversation) void handoff(conversation && (() => conversation.prompt(x)), '示例已填入对话，可修改后发送')
+        else { setPrompt(x); host.current?.querySelector<HTMLTextAreaElement>('.sd-composer textarea')?.focus() }
+      }}>{x}</button>)}</div>
     </div> : null}
     {item && box ? <>
       <div className="sd-label" style={{ left: inside(box.left, labelWidth), top: labelTop, width: labelWidth }}>
@@ -229,7 +238,7 @@ export function CanvasView({ model, active = true, onReference, defaultSize }: {
           <button onClick={() => setConfirming(false)}>取消</button>
         </> : <>
           <button onClick={() => editing ? setEditing(false) : startEdit()} aria-pressed={editing}><EditIcon/>编辑<kbd>Tab</kbd></button>
-          {onReference ? <button onClick={() => { void reference() }} title="引用到对话输入框"><QuoteIcon/>引用</button> : null}
+          {inConversation ? <button onClick={() => { void handoff(conversation && (() => conversation.reference(item)), '已引用到对话输入框') }} title="引用到对话输入框"><QuoteIcon/>引用</button> : null}
           <span className="sd-float-sep"/>
           <a href={imageUrl(model.sessionId, item.id, true)} download={`${labelOf(item)}.png`} title="下载原图" aria-label="下载"><DownloadIcon/></a>
           <button onClick={() => setConfirming(true)} title="删除" aria-label="删除"><TrashIcon/></button>
@@ -239,13 +248,13 @@ export function CanvasView({ model, active = true, onReference, defaultSize }: {
     {toast ? <div className="sd-toast" role="status">{toast}</div> : null}
     <div className="sd-bottom">
       {error ? <div className="sd-error" role="alert"><span>{error}</span><button type="button" className="sd-icon-button sd-icon-small" onClick={() => model.dismiss()} aria-label="关闭"><CloseIcon size={12}/></button></div> : null}
-      <Composer value={prompt} onChange={setPrompt} onSubmit={submit} onStop={() => model.cancel()} waiting={waiting} autoFocus={empty}
+      {inConversation ? <button className="sd-conversation-link" onClick={() => { void handoff(conversation?.focus, '请在对话输入框继续描述') }}><QuoteIcon size={14}/>回到对话继续描述</button> : <Composer value={prompt} onChange={setPrompt} onSubmit={submit} onStop={() => model.cancel()} waiting={waiting} autoFocus={empty && active}
         placeholder={editing ? '描述要修改的地方，以及需要保持不变的部分…' : '描述你想生成的画面…'}
         context={editing && item ? <span className="sd-context-chip"><img src={imageUrl(model.sessionId, item.id)} alt=""/>编辑 · {labelOf(item)}</span> : undefined}
         onClearContext={() => setEditing(false)}
         hint={waiting ? '生成中…' : '每次生成都会计费'}>
         <SizePicker value={genSize} onChange={setGenSize} fallback={defaultSize}/>
-      </Composer>
+      </Composer>}
     </div>
     <div className="sd-zoom" role="toolbar" aria-label="视图">
       <button onClick={undo} disabled={!history.done.length} title="撤销移动 (⌘Z)" aria-label="撤销"><UndoIcon/></button>

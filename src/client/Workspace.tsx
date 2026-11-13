@@ -1,11 +1,10 @@
 import { useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { BOARD_PREFIX, isBoard, SIZE_TIERS } from '../shared/types.js'
 import { BackIcon, GearIcon, ImageIcon, NewIcon } from './icons.js'
-import type { CanvasItem } from '../shared/types.js'
 import type { Controller, State } from './controller.js'
 import { imageUrl } from './controller.js'
 import { CanvasView } from './Canvas.js'
-import type { Outcome } from './handoff.js'
+import type { ConversationActions } from './handoff.js'
 export function Icon({ size = 20 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
     <rect width="100" height="100" rx="22" fill="#0a0a0a"/>
@@ -39,8 +38,8 @@ export function Settings({ controller }: { controller: Controller }) {
     <p>版本 {c?.version ?? '—'}</p>
   </section>
 }
-/** Main panel: every Session's canvas, opened in place; settings live alongside. */
-export function Workspace({ controller, reference }: { controller: Controller; reference(sessionId: string, item: CanvasItem): Promise<Outcome> }) {
+/** Main panel: gallery and settings; conversation canvases reopen their native Session. */
+export function Workspace({ controller, openConversation, conversation }: { controller: Controller; openConversation(id: string): boolean; conversation(id: string): ConversationActions }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
   const [open, setOpen] = useState<string | undefined>(), [settings, setSettings] = useState(false)
   useEffect(() => { void controller.attach() }, [controller])
@@ -54,6 +53,10 @@ export function Workspace({ controller, reference }: { controller: Controller; r
   const current = canvases.find(x => x.sessionId === open)
   // An empty canvas is kept only in memory; it is saved with its first image.
   const create = () => { setSettings(false); setOpen(BOARD_PREFIX + crypto.randomUUID()) }
+  const openCanvas = (id: string) => {
+    try { if (isBoard(id) || !openConversation(id)) setOpen(id) }
+    catch (error) { controller.notify(error instanceof Error ? error.message : '无法打开原对话') }
+  }
   const relative = (iso: string) => {
     const minutes = Math.round((Date.now() - Date.parse(iso)) / 60000)
     if (minutes < 1) return '刚刚'
@@ -75,13 +78,14 @@ export function Workspace({ controller, reference }: { controller: Controller; r
       </div>
     </header>
     {settings || (c && !c.configured) ? <div className="sd-scroll"><Settings controller={controller}/></div>
-      : open ? <CanvasView key={open} model={controller.canvas(open)} defaultSize={c?.defaultSize} onReference={isBoard(open) ? undefined : item => reference(open, item)}/>
+      : open ? <CanvasView key={open} model={controller.canvas(open)} defaultSize={c?.defaultSize} conversation={isBoard(open) ? undefined : conversation(open)}/>
       : <div className="sd-scroll">
         {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}
+        {state.message ? <div className="sd-alert" role="status">{state.message}</div> : null}
         {canvases.length ? <ul className="sd-gallery">
           {c?.configured ? <li><button className="sd-card sd-card-new" onClick={create}><span className="sd-card-new-icon"><NewIcon size={22}/></span><strong>新建画布</strong><span>不属于任何对话，直接画图</span></button></li> : null}
           {canvases.map(x => { const running = c?.active?.[x.sessionId]?.length ?? 0
-            return <li key={x.sessionId}><button className="sd-card" onClick={() => setOpen(x.sessionId)}>
+            return <li key={x.sessionId}><button className="sd-card" onClick={() => openCanvas(x.sessionId)}>
               <span className="sd-card-cover">{x.cover ? <img src={imageUrl(x.sessionId, x.cover)} alt="" loading="lazy"/> : <ImageIcon size={22}/>}
                 {running ? <span className="sd-card-badge"><span className="sd-spinner sd-spinner-small"/>生成中</span> : x.count > 1 ? <span className="sd-card-badge">{x.count} 张</span> : null}</span>
               <strong>{x.title}</strong>

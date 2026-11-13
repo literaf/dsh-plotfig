@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Use the native DSH conversation composer for conversation canvases. Examples, image edits and references prepare the same Session's draft without sending; standalone boards keep their direct-generation composer.
+- Preserve structured draft references, quotes and attachments with the host's append API; protect drafts during all submission phases, including `sending`.
+- Reopen gallery conversation canvases in their original native Session and reveal the right canvas only after that Session mounts. Background generations cannot open another conversation's canvas.
+- Fall back to copying on older hosts without safe draft initialization; do not rewrite their structured drafts as plain text.
+
 ## 0.1.0
 
 First version. Not published yet; tested locally against real Ark requests and the Harness 0.2.2-rc web and desktop hosts.
