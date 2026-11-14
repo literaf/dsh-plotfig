@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import jpeg from 'jpeg-js'
 import { ArkClient } from '../src/ark.js'
 import type { ArkImage } from '../src/ark.js'
-import { decodePixels, encodePixels, eraseMask, finishImageEdit, prepareImageEdit, resizePixels } from '../src/image-edit.js'
+import { decodePixels, encodePixels, eraseMask, featherEraseMask, finishImageEdit, prepareImageEdit, refineCutoutEdges, resizePixels } from '../src/image-edit.js'
 import type { Pixels } from '../src/image-edit.js'
 import { arkEditDimensions, editDimensions, expandedLayerBox, parseImageEdit } from '../src/shared/image-edit.js'
 import { parseSize } from '../src/shared/types.js'
@@ -24,6 +24,25 @@ beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'seedream-edit-')) 
 afterEach(async () => { vi.restoreAllMocks(); await rm(root, { recursive: true, force: true }) })
 
 describe('image editing pixels and input contract', () => {
+  it('feathers only inside irregular selections, preserving holes and full-strength interiors', () => {
+    const mask = new Uint8Array(60 * 60)
+    for (let y = 5; y < 55; y++) mask.fill(255, y * 60 + 5, y * 60 + 55)
+    mask[30 * 60 + 30] = 0
+    const feathered = featherEraseMask(mask, 60, 60, 8)
+    for (let p = 0; p < mask.length; p++) if (!mask[p]) expect(feathered[p]).toBe(0)
+    expect(feathered[5 * 60 + 20]).toBeLessThan(32)
+    expect(feathered[6 * 60 + 20]).toBeGreaterThan(feathered[5 * 60 + 20]!)
+    expect(feathered[20 * 60 + 20]).toBe(255)
+    expect(feathered[30 * 60 + 29]).toBeLessThan(32)
+    expect(featherEraseMask(mask, 60, 60, 0)).toBe(mask)
+  })
+  it('decontaminates supported white fringes without deleting alpha, opaque whites or isolated fine details', () => {
+    const p = { width: 5, height: 1, data: new Uint8Array([40, 80, 120, 255, 148, 168, 188, 128, 255, 255, 255, 0, 255, 255, 255, 255, 10, 20, 30, 100]) }
+    const cleaned = refineCutoutEdges(p)
+    for (let c = 0; c < 3; c++) expect(Math.abs(cleaned.data[4 + c]! - p.data[c]!)).toBeLessThanOrEqual(3)
+    expect(cleaned.data.slice(12)).toEqual(p.data.slice(12))
+    for (let i = 3; i < p.data.length; i += 4) expect(cleaned.data[i]).toBe(p.data[i])
+  })
   it('rejects unsafe references, invalid regions and incompatible options before generation', () => {
     for (const patch of [
       { image: '/tmp/private.png' }, { image: 'https://example.test/a.png' }, { image: 'item:../../secret' },
@@ -77,6 +96,11 @@ describe('image editing pixels and input contract', () => {
   it('copies the entire original rectangle exactly into every expansion offset', () => {
     const source = pixels(), expand = { left: 3, top: 5, right: 7, bottom: 9 }
     const prepared = prepareImageEdit(input({ operation: 'expand', expand }), encodePixels(source))
+    expect(prepared.request.images).toHaveLength(1)
+    const guide = decodePixels(Buffer.from(prepared.request.images[0]!.split(',')[1]!, 'base64'))
+    expect(`${guide.width}x${guide.height}`).toBe(prepared.request.size)
+    expect(guide.data[3]).toBe(0)
+    expect(prepared.request.background).toBe('opaque')
     const generated = pixels(26, 30); generated.data.fill(245)
     const out = decodePixels(finishImageEdit(prepared, image(generated)).image.bytes)
     expect([out.width, out.height]).toEqual([26, 30])
@@ -104,6 +128,17 @@ describe('image editing pixels and input contract', () => {
     await expect(ark.generate({ ...prepared.request, decomposition: { maxImages: 3 } }, new AbortController().signal)).rejects.toThrow()
     expect(bodies).toHaveLength(1)
   })
+  it('flags changed expansion anchors before restoring original pixels, without certifying unchanged outputs', () => {
+    const source = { width: 32, height: 32, data: new Uint8Array(32 * 32 * 4).fill(255) }, generated = { width: 48, height: 48, data: new Uint8Array(48 * 48 * 4).fill(255) }
+    const prepared = prepareImageEdit(input({ operation: 'expand', expand: { left: 8, right: 8, top: 8, bottom: 8 } }), encodePixels(source))
+    expect(finishImageEdit(prepared, image(generated)).warnings).toEqual([])
+    generated.data.fill(0)
+    const result = finishImageEdit(prepared, image(generated))
+    expect(result.warnings.join()).toContain('扩图需检查')
+    const out = decodePixels(result.image.bytes)
+    for (let y = 0; y < 32; y++) expect(out.data.subarray(((y + 8) * 48 + 8) * 4, ((y + 8) * 48 + 40) * 4)).toEqual(Buffer.from(source.data.subarray(y * 32 * 4, (y + 1) * 32 * 4)))
+  })
+
 })
 
 describe('editing persistence, cancellation and session isolation', () => {
@@ -152,8 +187,19 @@ describe('editing persistence, cancellation and session isolation', () => {
     generate.mockResolvedValue({ images: [bad] })
     const result = await service.editImage('session-a', request, new AbortController().signal)
     expect(result.items[0]!.edit?.applied).toBe(false)
+    expect(result.items[0]!.edit?.needsReview).toBe(true)
     expect(result.warnings.join()).toContain('已保留模型原始结果')
     expect(await store.readImage('session-a', result.items[0]!.id)).toEqual(Buffer.from(bad.bytes))
+  })
+  it('retains review warnings and the receipt after reopening the canvas', async () => {
+    const { service, request, generate } = await setup()
+    const opaque = { ...pixels(), data: new Uint8Array(16 * 16 * 4).fill(255) }
+    generate.mockResolvedValue({ images: [image(opaque)] })
+    const result = await service.editImage('session-a', request, new AbortController().signal)
+    const stored = (await new CanvasStore(root).get('session-a')).items.find(item => item.id === result.items[0]!.id)!
+    expect(stored.edit).toMatchObject({ applied: true, needsReview: true })
+    expect(stored.warnings?.join()).toContain('未返回透明')
+    expect(generate).toHaveBeenCalledTimes(1)
   })
   it('does not automatically retry upstream errors, even with the same request id', async () => {
     const { service, request, generate } = await setup()

@@ -5,18 +5,14 @@ import { layerBounds } from '../shared/layers.js'
 import type { LayerBox } from '../shared/layers.js'
 import { ocrTextNodes } from './ocr-layout.js'
 import type { TextMeasure } from './ocr-layout.js'
+import { psdFontName, psdFontRuns } from './psd-fonts.js'
 import { renderLayersCanvas } from './layer-render.js'
 
 export const MAX_PSD_PIXELS = 80_000_000
 export type PsdRasterizer = (layers: CanvasLayer[], box: LayerBox, background: string) => Promise<PixelData>
 const rgb = (color: string): RGB => ({ r: parseInt(color.slice(1, 3), 16), g: parseInt(color.slice(3, 5), 16), b: parseInt(color.slice(5, 7), 16) })
-const fontName = (family: string) => {
-  const first = family.split(',')[0]!.trim().replace(/^["']|["']$/g, '')
-  const known: Record<string, string> = { Arial: 'ArialMT', 'Helvetica Neue': 'HelveticaNeue', 'PingFang SC': 'PingFangSC-Regular', 'Microsoft YaHei': 'MicrosoftYaHei', Menlo: 'Menlo-Regular' }
-  return (known[first] ?? first) || 'ArialMT'
-}
 const textStyle = (run: Pick<TextRun, 'fontFamily' | 'fill' | 'bold' | 'italic'> & Partial<TextRun>, fontSize: number): TextStyle => ({
-  font: { name: fontName(run.fontFamily) }, fontSize, fillColor: rgb(run.fill), fauxBold: run.bold, fauxItalic: run.italic,
+  font: { name: psdFontName(run.fontFamily, run.text) }, fontSize, fillColor: rgb(run.fill), fauxBold: run.bold, fauxItalic: run.italic,
   underline: run.underline ?? false, strikethrough: run.strikethrough ?? false, autoLeading: false, leading: fontSize * 1.2,
 })
 const integerBox = (b: LayerBox): LayerBox => ({ x: Math.floor(b.x), y: Math.floor(b.y), width: Math.max(1, Math.ceil(b.x + b.width) - Math.floor(b.x)), height: Math.max(1, Math.ceil(b.y + b.height) - Math.floor(b.y)) })
@@ -31,6 +27,7 @@ const transform = (l: CanvasLayer, sx = 1, sy = 1, x = 0, y = 0): number[] => {
 const nativeText = (l: CanvasLayer): LayerTextData => ({
   text: l.text ?? '', orientation: 'horizontal', shapeType: 'box', boxBounds: [0, 0, l.width, l.height], transform: transform(l),
   style: textStyle({ fontFamily: l.fontFamily ?? 'Arial', fill: l.fill ?? '#20242c', bold: l.bold ?? false, italic: l.italic ?? false }, l.fontSize ?? 36),
+  styleRuns: psdFontRuns(l.text ?? '', l.fontFamily ?? 'Arial'),
   paragraphStyle: { justification: l.align ?? 'left' },
 })
 
@@ -64,7 +61,7 @@ export async function buildPsdDocument(composition: Composition, rasterize: PsdR
         const matrix = transform(layer, sx, sy, x, y), box = layerBounds({ x: matrix[4]!, y: matrix[5]!, width: runWidth * sx, height: line.height * sy, rotation: layer.rotation })
         const cached = await render([spanLayer], { x: box.x - 2, y: box.y - 2, width: box.width + 4, height: box.height + 4 })
         const text: LayerTextData = { text: run.text, orientation: 'horizontal', shapeType: 'point', pointBase: [0, 0],
-          transform: transform(layer, sx, sy, x, y + (line.height - fontSize) / 2 + fontSize * 0.8), style: textStyle(run, fontSize) }
+          transform: transform(layer, sx, sy, x, y + (line.height - fontSize) / 2 + fontSize * 0.8), style: textStyle(run, fontSize), styleRuns: psdFontRuns(run.text, run.fontFamily) }
         spans.push({ name: `第 ${lineIndex + 1} 行${line.runs.length > 1 ? ` · ${part + 1}` : ''} · ${run.text.slice(0, 28)}`, ...cached, text,
           opacity: run.translucent ? 0.6 : 1, blendMode: 'normal', ...(run.shadow ? { effects: { dropShadow: [{ enabled: true, present: true, color: { r: 0, g: 0, b: 0 }, opacity: 0.3, blendMode: 'multiply', angle: 135, useGlobalLight: false, distance: { units: 'Pixels', value: fontSize * sy * 0.05 * Math.SQRT2 }, size: { units: 'Pixels', value: fontSize * sy * 0.08 } }] } } : {}) })
       }

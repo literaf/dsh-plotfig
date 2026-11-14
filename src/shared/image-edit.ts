@@ -12,6 +12,8 @@ export interface ImageEditInput {
   watermark: boolean
   mask?: string
   regions?: EditRegion[]
+  /** Inward-only erase edge transition, in original pixels. Zero disables it. */
+  feather?: number
   expand?: ExpandMargins
 }
 export interface ImageEditReceipt {
@@ -21,6 +23,8 @@ export interface ImageEditReceipt {
   fingerprint: string
   /** False only when local processing failed and the paid, unprocessed result was rescued. */
   applied: boolean
+  /** Local processing succeeded, but the returned model image needs visual review. */
+  needsReview?: boolean
   expand?: ExpandMargins
 }
 export const MAX_EDIT_PIXELS = 32_000_000
@@ -37,6 +41,10 @@ export function parseImageEdit(raw: unknown, watermark: boolean): ImageEditInput
   if (raw.watermark !== undefined && typeof raw.watermark !== 'boolean') throw new Error('watermark 必须是布尔值。')
   const input: ImageEditInput = { operation, image: raw.image, requestId: raw.requestId, prompt: prompt.trim(), watermark: raw.watermark ?? watermark }
   if (operation === 'erase') {
+    if (raw.feather !== undefined) {
+      if (!integer(raw.feather, 0, 64)) throw new Error('消除边缘过渡须为 0–64 像素。')
+      input.feather = raw.feather
+    }
     if (raw.mask !== undefined && raw.regions !== undefined) throw new Error('涂抹蒙版与矩形选区只能选一种。')
     if (raw.mask !== undefined) {
       if (typeof raw.mask !== 'string' || raw.mask.length > Math.ceil(MAX_MASK_BYTES * 4 / 3) + 32 || !PNG_DATA.test(raw.mask)) throw new Error('消除蒙版须为不超过 30 MB 的 PNG。')
@@ -48,7 +56,7 @@ export function parseImageEdit(raw: unknown, watermark: boolean): ImageEditInput
         return { x: r.x, y: r.y, width: r.width, height: r.height }
       })
     }
-  } else if (raw.mask !== undefined || raw.regions !== undefined) throw new Error('只有消除操作接受蒙版或选区。')
+  } else if (raw.mask !== undefined || raw.regions !== undefined || raw.feather !== undefined) throw new Error('只有消除操作接受蒙版、选区或边缘过渡。')
   if (operation === 'expand') {
     if (!isRecord(raw.expand)) throw new Error('请设置扩图边距。')
     const m = raw.expand

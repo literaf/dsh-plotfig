@@ -47,6 +47,7 @@ export function applyTools(ctx: Context, service: Seedream, defaults: Defaults):
       operation: { type: 'string', required: true, enum: ['remove-background', 'erase', 'expand'] },
       image: { type: 'string', required: true, description: 'One item:<id> from this Session; local paths and external URLs are not accepted.' },
       prompt: { type: 'string', description: 'Optional description of which foreground to keep, what object to erase, or what scene to extend.' },
+      feather: { type: 'number', description: 'Erase only: inward edge transition in pixels, integer 0–64. Default adapts to resolution; 0 keeps a hard edge. Include some background around the object in the selection.' },
       regions: { type: 'array', description: 'Required for erase: 1–64 rectangles in original-image pixel coordinates. Must stay within the source image.', items: { type: 'object', additionalProperties: false, properties: {
         x: { type: 'integer', required: true }, y: { type: 'integer', required: true }, width: { type: 'integer', required: true }, height: { type: 'integer', required: true },
       } } },

@@ -35,7 +35,7 @@ describe('PSD binary roundtrip', () => {
     const source = scene([shape('标题', { kind: 'text', text: '可编辑文字', rotation: 90, fontSize: 12, fontFamily: 'Arial', bold: true, align: 'center' })])
     const out = roundtrip(await buildPsdDocument(source, rasterize)), text = out.children![0]!.text!
     expect(text.text).toBe('可编辑文字')
-    expect(text.style).toMatchObject({ font: { name: 'ArialMT' }, fauxBold: true, fontSize: 12 })
+    expect(text.style).toMatchObject({ font: { name: 'PingFangSC-Regular' }, fauxBold: true, fontSize: 12 })
     expect(text.paragraphStyle?.justification).toBe('center')
     expect(text.transform![1]).toBeCloseTo(1); expect(text.transform![2]).toBeCloseTo(-1)
     expect(out.children![0]!.imageData).toBeDefined()
@@ -59,6 +59,12 @@ describe('PSD binary roundtrip', () => {
     const raster = roundtrip(await buildPsdDocument(source, rasterize, false))
     expect(leaves(raster.children!).every(l => !l.text)).toBe(true)
     expect(raster.children).toHaveLength(1)
+  })
+  it('retains separate Latin and CJK fonts after writing and reading mixed text', async () => {
+    const source = scene([shape('mixed', { kind: 'text', text: 'AI研究2', fontSize: 12, fontFamily: 'Arial, "PingFang SC", sans-serif' })])
+    const text = roundtrip(await buildPsdDocument(source, rasterize)).children![0]!.text!
+    expect(text.text).toBe('AI研究2')
+    expect(text.styleRuns?.map(run => [run.length, run.style.font?.name])).toEqual([[2, 'ArialMT'], [2, 'PingFangSC-Regular'], [1, 'ArialMT']])
   })
   it('rejects excessive raster allocation and mismatched pixel buffers', async () => {
     await expect(buildPsdDocument({ ...scene([]), width: 16001 }, rasterize)).rejects.toThrow('画板')

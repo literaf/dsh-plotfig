@@ -16,6 +16,7 @@ export function ImageEditDialog({ model, source, initialOperation, onClose, onCo
 }) {
   const [operation, setOperation] = useState(initialOperation), [prompt, setPrompt] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [tool, setTool] = useState<'brush' | 'rect' | 'eraser'>('brush'), [brushSize, setBrushSize] = useState(Math.max(12, Math.round(source.width / 25)))
+  const [feather, setFeather] = useState(Math.min(24, Math.round(Math.min(source.width, source.height) * 0.008)))
   const [marks, setMarks] = useState<MaskMark[]>([]), [undone, setUndone] = useState<MaskMark[]>([]), [live, setLive] = useState<MaskMark>()
   const [margins, setMargins] = useState<ExpandMargins>({ left: Math.round(source.width / 4), right: Math.round(source.width / 4), top: Math.round(source.height / 4), bottom: Math.round(source.height / 4) })
   const area = useRef<HTMLDivElement>(null), dialog = useRef<HTMLElement>(null), stage = useRef<Konva.Stage>(null), activeMark = useRef<MaskMark>(), submitting = useRef(false), mounted = useRef(true)
@@ -76,7 +77,7 @@ export function ImageEditDialog({ model, source, initialOperation, onClose, onCo
     submitting.current = true; setBusy(true); setError('')
     try {
       const items = await model.editImage({ operation, image: `item:${source.id}`, requestId: crypto.randomUUID(), prompt,
-        ...(operation === 'erase' ? { mask: maskPng(source.width, source.height, marks) } : {}), ...(operation === 'expand' ? { expand: margins } : {}) })
+        ...(operation === 'erase' ? { mask: maskPng(source.width, source.height, marks), feather } : {}), ...(operation === 'expand' ? { expand: margins } : {}) })
       const item = items[0]; if (item) onComplete?.(item)
       if (mounted.current) onClose()
     } catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : '编辑失败。') }
@@ -111,13 +112,14 @@ export function ImageEditDialog({ model, source, initialOperation, onClose, onCo
           <div className="sd-image-edit-dimensions">{width} × {height}{operation === 'expand' ? ' · 蓝框内保留原图' : ''}</div>
         </div>
         <aside className="sd-image-edit-controls">
-          {operation === 'remove-background' ? <p>保留前景主体，生成带透明通道的 PNG。AI 可能微调细节，原图会保留。</p> : operation === 'erase' ? <>
-            <p>涂抹或框选要移除的部分，并覆盖其边缘和阴影。未选中的像素会从原图保留。</p>
+          {operation === 'remove-background' ? <p>抠出主要主体，默认去除旁注、图表及背景。需要保留的文字或物体可在下方说明。AI 可能微调细节，原图会保留。</p> : operation === 'erase' ? <>
+            <p>涂抹或框选要移除的部分，覆盖边缘、阴影并留出过渡空间。未选中的像素会从原图保留。</p>
             <div className="sd-image-edit-brushes">{([['brush', '涂抹'], ['rect', '框选'], ['eraser', '减选']] as const).map(([id, label]) => <button key={id} aria-pressed={tool === id} disabled={busy} onClick={() => setTool(id)}>{label}</button>)}</div>
             <label>画笔大小 · {brushSize} px<input type="range" aria-label="画笔大小" min={1} max={Math.min(2048, Math.max(source.width, source.height))} value={brushSize} disabled={busy || tool === 'rect'} onChange={e => setBrushSize(Number(e.target.value))}/></label>
+            <label>边缘过渡 · {feather} px<input type="range" aria-label="消除边缘过渡" min={0} max={64} value={feather} disabled={busy} onChange={e => setFeather(Number(e.target.value))}/></label>
             <div className="sd-image-edit-mask-actions"><button disabled={!marks.length || busy} onClick={undo}>撤销选区</button><button disabled={!undone.length || busy} onClick={redo}>重做选区</button><button disabled={!marks.length || busy} onClick={() => { setMarks([]); setUndone([]) }}>清空</button></div>
           </> : <>
-            <p>设置四边新增的像素，补全周围场景。原图的位置、像素及透明度保持不变。</p>
+            <p>设置四边新增的像素，补全周围场景。原图的位置、像素及透明度保持不变。复杂文字或图表可能衔接不佳；检测到明显偏差时会标记结果，不自动替换图层。</p>
             <div className="sd-image-edit-ratios">{[[1, 1], [16, 9], [9, 16], [4, 3]].map(([w, h]) => <button key={`${w}:${h}`} disabled={busy} onClick={() => ratio(w!, h!)}>{w}:{h}</button>)}</div>
             <fieldset disabled={busy} className="sd-layer-grid">{([['left', '左'], ['right', '右'], ['top', '上'], ['bottom', '下']] as const).map(([key, name]) => <label key={key}>{name}侧扩展<input type="number" min={0} max={16000} step={1} aria-label={`${name}侧扩展`} value={margins[key]} onChange={e => { const v = Number(e.target.value); if (Number.isInteger(v) && v >= 0 && v <= 16000) setMargins(m => ({ ...m, [key]: v })) }}/></label>)}</fieldset>
           </>}

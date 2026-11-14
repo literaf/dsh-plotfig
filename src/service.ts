@@ -131,7 +131,7 @@ export class Seedream {
       })
       const saved = await this.store.add(sessionId, images, {
         title: applied ? title : `${title} · 原始结果`, prompt: prepared.request.prompt, refs: [sourceId], externalRefs: 0, size: prepared.request.size,
-        edit: { operation: input.operation, sourceId, requestId: input.requestId, fingerprint, applied, ...(input.expand ? { expand: input.expand } : {}) },
+        edit: { operation: input.operation, sourceId, requestId: input.requestId, fingerprint, applied, ...(warnings.length ? { needsReview: true } : {}), ...(input.expand ? { expand: input.expand } : {}) },
         ...(warnings.length ? { warnings } : {}),
       }, sourceId)
       return { ...saved, warnings }

@@ -235,7 +235,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   const toolbarTop = box ? (labelTop - toolbarHeight - 10 >= 8 ? labelTop - toolbarHeight - 10 : Math.min(box.top + box.height - toolbarHeight - 10, Math.max(labelTop + 26, 8))) : 0
   const labelWidth = box ? Math.min(Math.max(box.width, 180), size.width - 16) : 0
   const waiting = state.pending.some(p => p.key.startsWith('local-'))
-  const error = operationError || state.error, toast = notice || state.message
+  const error = operationError || state.error, toast = notice || item?.warnings?.join('；') || state.message
   const dots = Math.max(8, 24 * view.scale)
   const empty = !items.length && !compositions.length && !state.pending.length && !state.loading
   if (opened) return <LayerEditor key={opened.id} model={model} initial={opened} conversation={conversation} onOpenCopy={setEditorId} onClose={() => { setEditorId(undefined); setSelected(opened.id) }}/>
@@ -264,7 +264,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
     </div> : null}
     {item && box ? <>
       <div className="sd-label" style={{ left: inside(box.left, labelWidth), top: labelTop, width: labelWidth }}>
-        <span className="sd-label-title"><ImageIcon size={12}/>{labelOf(item)}</span><span className="sd-label-size">{item.width} × {item.height}</span>
+        <span className="sd-label-title"><ImageIcon size={12}/>{labelOf(item)}{item.edit?.needsReview ? ' · 需检查' : ''}</span><span className="sd-label-size">{item.width} × {item.height}</span>
       </div>
       <div className="sd-float" ref={toolbar} role="toolbar" aria-label="图片操作" style={{ left: inside(box.left, toolbarWidth), top: toolbarTop }}>
         {confirming ? <>

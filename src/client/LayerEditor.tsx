@@ -189,6 +189,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
   })
   const applyImageEdit = (item: CanvasItem) => {
     if (!aiEdit) return
+    if (item.edit?.needsReview) { flash('结果需检查，已另存到画布；原图层保留。退出图层编辑后可查看结果。'); return }
     const current = editor.getSnapshot().composition.layers.find(l => l.id === aiEdit.layerId)
     if (item.edit?.applied === false || !current || current.kind !== 'image' || current.assetId !== aiEdit.source.id || current.locked) { flash('结果已另存到画布；当前图层未替换'); return }
     const box = item.edit?.expand ? expandedLayerBox(current, aiEdit.source, item.edit.expand) : {}
@@ -247,7 +248,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
         {exportMenu ? <div className="sd-editor-menu" role="menu">
           <button role="menuitem" onClick={() => { void exportPng(false) }}>画板 PNG</button>
           <button role="menuitem" disabled={!chosen.length} onClick={() => { void exportPng(true) }}>选中内容 PNG</button>
-          <button role="menuitem" onClick={() => { void exportPhotoshop(true) }} title="保留独立图层及可编辑文字；字体可能由目标软件替换">分层 PSD</button>
+          <button role="menuitem" onClick={() => { void exportPhotoshop(true) }} title="保留独立图层及可编辑文字；PSD 不嵌入字体，接收方需安装对应字体。需要固定版面可选文字转图片">分层 PSD</button>
           <button role="menuitem" onClick={() => { void exportPhotoshop(false) }} title="所有对象保持独立图片层，适合优先保留显示效果">PSD（文字转图片）</button>
           <button role="menuitem" onClick={() => { void saveAsImage() }}>保存为画布图片</button>
         </div> : null}
