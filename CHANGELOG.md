@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add background removal, brush/rectangle erase with subtraction and undo/redo, and four-sided outpainting to canvas images and editable image layers; expose the same operations through `seedream_edit`.
+- Restore exact original RGBA pixels outside erase masks and inside the original outpainting rectangle. Preserve the placement of scaled/rotated layers, immutable originals, undoable replacement and late results; reuse completed request ids and never retry a billed request automatically.
+- Export layered PSD with names, stacking order, opacity, hidden/locked state, off-artboard content, composite previews and optional native text/OCR runs. Keep a text-as-pixels mode for appearance compatibility; vector shapes export as individual pixel layers and native font layout is approximate.
+- Test pixel preservation, alpha blending, validation, per-Session access, duplicate/failed/cancelled requests, result rescue and actual PSD binary roundtrips using synthetic pixels and mocked API responses. No new paid model requests.
+
 - Convert OCR-bearing text layers to locally editable rich text with per-line positioning and per-run font, color, weight, decoration, shadow and transparency controls.
 - Preserve moved/scaled/rotated layer geometry, immutable original text PNGs, comparison/restoration, undo/redo and autosave; use the same text layout for the canvas, composites and PNG exports.
 - Validate OCR coordinates, rich text and backup asset references per Session. Existing layers without usable OCR remain raster images; exact font matching is not guaranteed.
@@ -10,7 +15,7 @@
 - Add editable artboards with independent movement outside the artboard, resize/rotation, text and shape overlays, multi-select, alignment, automatic arrangement, merging, stacking order, hide/lock and undo/redo.
 - Autosave validated per-Session compositions with independent revisions; detect concurrent edits and recover local changes as a separate copy.
 - Export artboard or selected content as PNG, preserve transparency, save composites to the canvas and reference them into the native conversation draft. Local editing does not invoke the model.
-- Keep existing canvas data compatible. Artboards use the optional `compositions` field; layer assets are immutable and retained when an artboard is deleted. PSD/PDF export remains out of scope.
+- Keep existing canvas data compatible. Artboards use the optional `compositions` field; layer assets are immutable and retained when an artboard is deleted. PDF export remains out of scope.
 - Validate this iteration using cached real layer assets and simulated API responses; no new billable image-generation/decomposition requests.
 
 - Use the native DSH conversation composer for conversation canvases. Examples, image edits and references prepare the same Session's draft without sending; standalone boards keep their direct-generation composer.

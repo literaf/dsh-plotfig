@@ -7,6 +7,8 @@ import { checkSession } from './store.js'
 import { parseGenerate } from './shared/types.js'
 import type { Canvas, CanvasItem } from './shared/types.js'
 import { parseDecompose } from './shared/layers.js'
+import { randomUUID } from 'node:crypto'
+import { parseImageEdit, IMAGE_EDIT_LABELS } from './shared/image-edit.js'
 
 const ITEM = { type: 'object', additionalProperties: false, properties: {
   id: { type: 'string', required: true }, ref: { type: 'string', required: true }, title: { type: 'string', required: true },
@@ -17,6 +19,7 @@ const OUTPUT = { type: 'object', additionalProperties: false, properties: {
   session_id: { type: 'string', required: true }, created: { type: 'array', required: true, items: ITEM },
   items: { type: 'array', required: true, items: ITEM },
   composition_id: { type: 'string' },
+  warnings: { type: 'array', items: { type: 'string' } },
 } } as const
 type Value = InferValue<typeof OUTPUT>
 type Defaults = () => Promise<{ size: string; watermark: boolean }>
@@ -34,9 +37,32 @@ function render(value: Value, generated: boolean) {
   return [{ type: 'text' as const, text: (generated
     ? [`已生成 ${value.created.length} 张图片，并放到当前对话的 Seedream 画布上。`, ...value.created.map(line), `画布共有 ${value.items.length} 张图片。修改其中一张时，把它的 item 引用放进 images。`]
     : [value.items.length ? `当前对话的 Seedream 画布共有 ${value.items.length} 张图片（读取画布不计费）：` : '当前对话的 Seedream 画布还是空的。', ...value.items.map(line)]
-  ).join('\n') }]
+  ).concat(value.warnings ?? []).join('\n') }]
 }
 export function applyTools(ctx: Context, service: Seedream, defaults: Defaults): void {
+  ctx.tools.register(defineTool({
+    name: 'seedream_edit',
+    description: 'Remove an image background, erase selected regions, or extend the canvas with Seedream 5.5. Billed for one generated image. Use only when requested; never retry automatically. The original stays intact and results are saved to this Session. Erase protects pixels outside the supplied rectangles; expansion preserves all pixels of the original rectangle. Inspect dimensions with seedream_canvas first. UI users can paint masks in AI 处理 instead.',
+    parameters: {
+      operation: { type: 'string', required: true, enum: ['remove-background', 'erase', 'expand'] },
+      image: { type: 'string', required: true, description: 'One item:<id> from this Session; local paths and external URLs are not accepted.' },
+      prompt: { type: 'string', description: 'Optional description of which foreground to keep, what object to erase, or what scene to extend.' },
+      regions: { type: 'array', description: 'Required for erase: 1–64 rectangles in original-image pixel coordinates. Must stay within the source image.', items: { type: 'object', additionalProperties: false, properties: {
+        x: { type: 'integer', required: true }, y: { type: 'integer', required: true }, width: { type: 'integer', required: true }, height: { type: 'integer', required: true },
+      } } },
+      expand: { type: 'object', description: 'Required for expand: nonnegative added pixels on each side. At least one side must be positive.', additionalProperties: false, properties: {
+        left: { type: 'integer', required: true }, top: { type: 'integer', required: true }, right: { type: 'integer', required: true }, bottom: { type: 'integer', required: true },
+      } },
+      request_id: { type: 'string', description: 'Optional stable request identifier, 8–80 ASCII letters/digits/_/-. Reusing the same id and inputs returns the original result instead of charging again.' },
+    },
+    output: { schema: OUTPUT, render: (_a, v) => render(v, true) }, timeoutMs: 600_000, isConcurrencySafe: () => false,
+    presentCall: a => ({ card: 'generic', title: `Seedream · ${IMAGE_EDIT_LABELS[a.operation as keyof typeof IMAGE_EDIT_LABELS] ?? '图片编辑'}`, kind: 'other' }),
+    async execute(args, exec) {
+      const input = parseImageEdit({ ...args, requestId: args.request_id ?? randomUUID() }, (await defaults()).watermark)
+      const result = await service.editImage(sessionOf(exec), input, exec.signal)
+      return { ...valueOf(service, result.canvas, result.items), warnings: result.warnings }
+    },
+  }))
   ctx.tools.register(defineTool({
     name: 'seedream_decompose',
     description: 'Split one existing canvas image into a background and independently editable transparent layers. Creates a separate artboard and preserves the original. Billed per output image; call only when the user requests splitting, never retry automatically. Dragging, text, shapes and exporting the resulting artboard are local and do not call the model.',

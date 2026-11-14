@@ -1,3 +1,5 @@
+import type { ImageEditReceipt } from './image-edit.js'
+
 export const ROUTE = '/api/seedream'
 export const PANEL = 'seedream'
 export const TAB_KIND = 'seedream'
@@ -39,6 +41,8 @@ export interface CanvasItem {
   /** Decomposition assets are kept for editing and undo, not laid out as separate originals. */
   role?: 'layer'
   layerMetadata?: LayerMetadata
+  edit?: ImageEditReceipt
+  warnings?: string[]
 }
 export interface LayerMetadata {
   zIndex: number

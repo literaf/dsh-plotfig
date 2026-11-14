@@ -12,8 +12,10 @@ import type { SizeChoice } from './Composer.js'
 import { CloseIcon, DownloadIcon, EditIcon, FitIcon, ImageIcon, MinusIcon, PlusIcon, QuoteIcon, RedoIcon, TrashIcon, UndoIcon } from './icons.js'
 import { useImage } from './images.js'
 import { LayerEditor, LayersIcon } from './LayerEditor.js'
-import { CompositionContent, renderLayers, downloadPng } from './layer-render.js'
+import { CompositionContent, renderLayers, downloadPng, downloadFile } from './layer-render.js'
 import { layersBounds } from '../shared/layers.js'
+import { ImageEditDialog } from './ImageEditDialog.js'
+import { exportPsd } from './psd-export.js'
 
 export interface View { x: number; y: number; scale: number }
 interface Move { id: string; from: { x: number; y: number }; to: { x: number; y: number } }
@@ -112,6 +114,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   const [editing, setEditing] = useState(false), [confirming, setConfirming] = useState(false)
   const [prompt, setPrompt] = useState(''), [genSize, setGenSize] = useState<SizeChoice>('')
   const [editorId, setEditorId] = useState<string>(), [splitSource, setSplitSource] = useState<CanvasItem>()
+  const [editSource, setEditSource] = useState<CanvasItem>()
   const [splitPrompt, setSplitPrompt] = useState('将主要元素、说明文字与背景拆成独立图层，保持原有位置、颜色和细节。')
   const [maxImages, setMaxImages] = useState(30), [operationBusy, setOperationBusy] = useState(false), [operationError, setOperationError] = useState('')
   const operation = useRef(false)
@@ -271,6 +274,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
         </> : <>
           <button onClick={() => editing ? setEditing(false) : startEdit()} aria-pressed={editing}><EditIcon/>编辑<kbd>Tab</kbd></button>
           <button disabled={operationBusy || state.pending.some(p => p.parentId === item.id)} onClick={() => { setSplitSource(item); setOperationError('') }}><LayersIcon/>分图层</button>
+          <button disabled={operationBusy || state.pending.some(p => p.parentId === item.id)} onClick={() => setEditSource(item)} title="去背景、涂抹消除、扩图">AI 处理</button>
           <button disabled={operationBusy} onClick={() => { void createBoard() }} title="创建可添加文字与图形的画板，不调用模型">加文字 / 图形</button>
           {inConversation ? <button onClick={() => { void handoff(conversation && (() => conversation.reference(item)), '已引用到对话输入框') }} title="引用到对话输入框"><QuoteIcon/>引用</button> : null}
           <span className="sd-float-sep"/>
@@ -285,6 +289,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
         {confirming ? <><span className="sd-float-text">删除画板？原图和素材会保留</span><button className="sd-float-danger" onClick={remove}>删除</button><button onClick={() => setConfirming(false)}>取消</button></> : <>
           <button onClick={() => setEditorId(composition.id)}><LayersIcon/>编辑图层</button>
           <button disabled={operationBusy} onClick={() => { void operate(async () => { const png = await renderLayers(model.sessionId, composition.layers, { x: 0, y: 0, width: composition.width, height: composition.height }, composition.background); downloadPng(png, composition.title) }) }} title="导出画板 PNG" aria-label="导出画板 PNG"><DownloadIcon/></button>
+          <button disabled={operationBusy} onClick={() => { void operate(async () => { const bytes = await exportPsd(model.sessionId, composition); downloadFile(bytes, composition.title, 'psd', 'image/vnd.adobe.photoshop'); flash('分层 PSD 已导出') }) }} title="导出独立图层及可编辑文字">PSD</button>
           <button onClick={() => setConfirming(true)} title="删除画板" aria-label="删除画板"><TrashIcon/></button>
         </>}
       </div>
@@ -297,6 +302,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
       <p className="sd-split-cost">此操作调用 Seedream，按实际返回图片数计费。之后拖动、加字和导出均在本地完成。</p>
       <div className="sd-split-actions"><button className="sd-button" onClick={() => setSplitSource(undefined)}>取消</button><button className="sd-button sd-button-primary" disabled={operationBusy || !Number.isInteger(maxImages) || maxImages < 2 || maxImages > 100} onClick={() => { void split() }}>开始分层</button></div>
     </div></div> : null}
+    {editSource ? <ImageEditDialog key={editSource.id} model={model} source={editSource} initialOperation="remove-background" onClose={() => setEditSource(undefined)} onComplete={result => setSelected(result.id)}/> : null}
     {toast ? <div className="sd-toast" role="status">{toast}</div> : null}
     <div className="sd-bottom">
       {error ? <div className="sd-error" role="alert"><span>{error}</span><button type="button" className="sd-icon-button sd-icon-small" onClick={() => { model.dismiss(); setOperationError('') }} aria-label="关闭"><CloseIcon size={12}/></button></div> : null}

@@ -17,6 +17,7 @@ export interface ArkRequest {
   size: string
   watermark: boolean
   decomposition?: { maxImages: number }
+  background?: 'auto' | 'transparent' | 'opaque'
 }
 export interface ArkImage { bytes: Uint8Array; width: number; height: number; mime: 'image/png' | 'image/jpeg'; layer?: LayerMetadata }
 export interface ArkResult { images: ArkImage[]; generated?: number; warnings?: string[] }
@@ -71,12 +72,14 @@ export class ArkClient {
   constructor(private readonly options: ArkOptions) {}
   private get fetch(): typeof fetch { return this.options.fetch ?? fetch }
   async generate(input: ArkRequest, signal: AbortSignal): Promise<ArkResult> {
+    if (input.decomposition && input.background) throw new Error('分层请求不能设置 background。')
     const timeout = AbortSignal.timeout(this.options.timeoutMs), combined = AbortSignal.any([signal, timeout])
     const body = {
       model: MODEL, prompt: input.prompt, size: input.size, watermark: input.watermark,
       response_format: 'url', output_format: 'png',
       ...(input.images.length === 1 ? { image: input.images[0] } : input.images.length ? { image: input.images } : {}),
       ...(input.decomposition ? { layer_decomposition: true, layer_decomposition_options: { max_images: input.decomposition.maxImages, text_recognition: true } } : {}),
+      ...(input.background ? { background: input.background } : {}),
     }
     const key = await this.options.apiKey()
     combined.throwIfAborted()

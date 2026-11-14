@@ -27,6 +27,9 @@ export function CompositionContent({ composition, sessionId }: { composition: Co
 }
 /** Same Konva attributes as the editor, rendered off-screen at output resolution. */
 export async function renderLayers(sessionId: string, layers: CanvasLayer[], bounds: LayerBox, background = 'transparent'): Promise<string> {
+  return (await renderLayersCanvas(sessionId, layers, bounds, background)).toDataURL('image/png')
+}
+export async function renderLayersCanvas(sessionId: string, layers: CanvasLayer[], bounds: LayerBox, background = 'transparent'): Promise<HTMLCanvasElement> {
   const x = Math.floor(bounds.x), y = Math.floor(bounds.y), width = Math.ceil(bounds.x + bounds.width) - x, height = Math.ceil(bounds.y + bounds.height) - y
   if (width < 1 || height < 1 || width > 16000 || height > 16000 || width * height > 32_000_000) throw new Error('导出范围过大，请缩小到 3200 万像素以内。')
   await document.fonts?.ready
@@ -53,13 +56,16 @@ export async function renderLayers(sessionId: string, layers: CanvasLayer[], bou
       plane.add(group)
     }
     plane.draw()
-    return stage.toDataURL({ pixelRatio: 1 })
+    return stage.toCanvas({ pixelRatio: 1 })
   } finally { stage.destroy(); container.remove() }
 }
 export function downloadPng(data: string, name: string): void {
   const bytes = Uint8Array.from(atob(data.slice(data.indexOf(',') + 1)), c => c.charCodeAt(0))
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'image/png' })), a = document.createElement('a')
-  a.download = name.replace(/[\\/:*?"<>|]/g, '_') + '.png'; a.href = url
+  downloadFile(bytes, name, 'png', 'image/png')
+}
+export function downloadFile(bytes: Uint8Array, name: string, extension: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type })), a = document.createElement('a')
+  a.download = name.replace(/[\\/:*?"<>|]/g, '_') + '.' + extension; a.href = url
   document.body.appendChild(a); a.click(); a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }

@@ -71,7 +71,10 @@
     "postpublish": "node scripts/sync-mirror.mjs",
     "sync-mirror": "node scripts/sync-mirror.mjs"
   },
-  "dependencies": {},
+  "dependencies": {
+    "jpeg-js": "0.4.4",
+    "pngjs": "7.0.0"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.1",
     "@deepseek-ai/dsh-commands": ">=0.1.0-rc.6",
@@ -101,8 +104,10 @@
     "@deepseek-ai/schemastery": "3.18.5",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^22.20.0",
+    "@types/pngjs": "6.0.5",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
+    "ag-psd": "34.2.0",
     "jsdom": "^26.1.0",
     "konva": "10.9.1",
     "react": "^18.3.1",

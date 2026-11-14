@@ -6,6 +6,7 @@ import { entryOf, isRecord, parseGenerate, parseSize, ROUTE } from './shared/typ
 import type { Status } from './shared/types.js'
 import type { Preferences } from './preferences.js'
 import { parseDecompose } from './shared/layers.js'
+import { MAX_MASK_BYTES, parseImageEdit } from './shared/image-edit.js'
 
 interface Route { path: string; methods: readonly string[]; requestBody: 'buffered'; fetch(request: Request): Promise<Response> }
 interface Connection { fetch?: { register(route: Route): () => Promise<void> } }
@@ -74,6 +75,13 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
         return json({ ok: true, value: { canvas: result.canvas, composition: result.composition } })
       } catch (error) { return fail(error, '分层失败。') }
     },
+    async editImage(request: Request): Promise<Response> {
+      try {
+        const sid = session(new URL(request.url)), input = parseImageEdit(await body(request, Math.ceil(MAX_MASK_BYTES * 4 / 3) + 64 * 1024), (await prefs.get()).watermark)
+        const result = await service.editImage(sid, input, request.signal)
+        return json({ ok: true, value: result })
+      } catch (error) { return fail(error, '图片编辑失败。') }
+    },
     /** Browser-created PNG composites; no filesystem path or remote URL is accepted. */
     async composite(request: Request): Promise<Response> {
       try {
@@ -119,6 +127,7 @@ export function applyRoutes(ctx: Context, service: Seedream, prefs: Preferences,
     bridge.register({ path: `${ROUTE}/generate`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.generate(r) })
     bridge.register({ path: `${ROUTE}/composition`, methods: ['POST', 'PATCH', 'DELETE'], requestBody: 'buffered', fetch: r => h.composition(r) })
     bridge.register({ path: `${ROUTE}/decompose`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.decompose(r) })
+    bridge.register({ path: `${ROUTE}/edit-image`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.editImage(r) })
     bridge.register({ path: `${ROUTE}/composite`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.composite(r) })
     bridge.register({ path: `${ROUTE}/image`, methods: ['GET'], requestBody: 'buffered', fetch: r => h.image(r) })
     bridge.register({ path: `${ROUTE}/item`, methods: ['DELETE'], requestBody: 'buffered', fetch: r => h.removeItem(r) })

@@ -2,6 +2,8 @@ import { ROUTE } from '../shared/types.js'
 import type { Canvas, CanvasEntry, CanvasItem, Composition, PendingGeneration, Status } from '../shared/types.js'
 import type { CredentialsPort } from './credentials-port.js'
 import { EditorModel } from './editor-model.js'
+import { IMAGE_EDIT_LABELS } from '../shared/image-edit.js'
+import type { ImageEditInput } from '../shared/image-edit.js'
 export interface Catalog extends Status { canvases: CanvasEntry[]; active?: Record<string, PendingGeneration[]> }
 type CanvasReply = Canvas & { pending?: PendingGeneration[] }
 export interface State {
@@ -191,6 +193,24 @@ export class CanvasModel extends Emitter<CanvasState> {
       if (!reply.ok) throw new Error(reply.error)
       this.accept(reply.value.canvas); this.onChange(); return reply.value.composition
     } finally { this.local = this.local.filter(p => p.key !== key); this.syncPending() }
+  }
+  async editImage(input: Omit<ImageEditInput, 'watermark'>): Promise<CanvasItem[]> {
+    const key = input.requestId, parentId = input.image.slice(5), control = new AbortController()
+    if (this.generating.has(key)) throw new Error('此编辑请求正在执行。')
+    this.generating.set(key, control)
+    this.local = [...this.local, { key, prompt: `${IMAGE_EDIT_LABELS[input.operation]} · ${this.state.canvas?.items.find(i => i.id === parentId)?.title ?? ''}`, parentId, startedAt: Date.now() }]
+    this.set({ error: undefined, message: undefined }); this.syncPending()
+    try {
+      const reply = await this.fetcher<{ canvas: Canvas; items: CanvasItem[]; warnings: string[] }>(`${ROUTE}/edit-image?session=${encodeURIComponent(this.sessionId)}`, control.signal, input)
+      if (!reply.ok) throw new Error(reply.error)
+      if (!this.disposed) {
+        this.accept(reply.value.canvas); this.set({ created: reply.value.items.map(i => i.id), ...(reply.value.warnings.length ? { message: reply.value.warnings.join('\n') } : {}) }); this.onChange()
+      }
+      return reply.value.items
+    } catch (error) {
+      if (control.signal.aborted) throw new Error('已停止等待；请求可能计费，完成后仍会保存到画布。')
+      throw error
+    } finally { this.generating.delete(key); this.local = this.local.filter(p => p.key !== key); this.syncPending() }
   }
   async importComposite(png: string, title: string, asLayer = true): Promise<CanvasItem> {
     const reply = await this.fetcher<{ canvas: Canvas; item: CanvasItem }>(`${ROUTE}/composite?session=${encodeURIComponent(this.sessionId)}`, new AbortController().signal, { png, title, asLayer })

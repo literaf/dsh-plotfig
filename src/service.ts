@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { extname, isAbsolute } from 'node:path'
 import type { ArkClient } from './ark.js'
 import { MAX_BYTES } from './ark.js'
@@ -7,11 +7,16 @@ import type { CanvasStore } from './store.js'
 import type { Canvas, CanvasItem, GenerateInput, PendingGeneration } from './shared/types.js'
 import { ITEM_ID, titleFrom } from './shared/types.js'
 import type { DecomposeInput } from './shared/layers.js'
+import { IMAGE_EDIT_LABELS } from './shared/image-edit.js'
+import type { ImageEditInput } from './shared/image-edit.js'
+import { finishImageEdit, prepareImageEdit } from './image-edit.js'
 const LOCAL_TYPES: Record<string, string> = { '.png': 'png', '.jpg': 'jpeg', '.jpeg': 'jpeg', '.webp': 'webp', '.bmp': 'bmp', '.gif': 'gif', '.tif': 'tiff', '.tiff': 'tiff', '.heic': 'heic', '.heif': 'heif' }
 const DATA_URL = /^data:image\/(png|jpeg|webp|bmp|tiff|gif|heic|heif);base64,[A-Za-z0-9+/=]+$/
 export interface GenerateResult { canvas: Canvas; items: CanvasItem[] }
+export interface ImageEditResult extends GenerateResult { warnings: string[] }
 export class Seedream {
   private inflight = new Map<string, PendingGeneration[]>()
+  private editRequests = new Map<string, { fingerprint: string; promise: Promise<ImageEditResult>; settled: boolean }>()
   constructor(readonly ark: ArkClient, readonly store: CanvasStore) {}
   pending(sessionId: string): PendingGeneration[] { return this.inflight.get(sessionId) ?? [] }
   /** Sessions with a generation running now, for the client to open their canvas. */
@@ -76,6 +81,60 @@ export class Seedream {
       // not cancel their downloads or discard a result; the next poll retrieves it.
       const result = await this.ark.generate({ ...input, images: refs.images, decomposition: { maxImages: input.maxImages } }, new AbortController().signal)
       return await this.store.addDecomposition(sessionId, sourceId, result.images, result.warnings)
+    } finally {
+      const rest = this.pending(sessionId).filter(p => p.key !== entry.key)
+      if (rest.length) this.inflight.set(sessionId, rest); else this.inflight.delete(sessionId)
+    }
+  }
+  /** A duplicate request id reuses its original result; it never starts another billable call. */
+  async editImage(sessionId: string, input: ImageEditInput, signal: AbortSignal): Promise<ImageEditResult> {
+    const fingerprint = createHash('sha256').update(JSON.stringify(input)).digest('hex'), key = `${sessionId}:${input.requestId}`
+    const known = this.editRequests.get(key)
+    if (known) {
+      if (known.fingerprint !== fingerprint) throw new Error('同一编辑请求标识不能用于不同参数。')
+      return known.promise
+    }
+    signal.throwIfAborted()
+    const request = { fingerprint, promise: this.performEdit(sessionId, input, fingerprint, signal), settled: false }
+    this.editRequests.set(key, request)
+    void request.promise.finally(() => {
+      request.settled = true
+      for (const [id, old] of this.editRequests) { if (this.editRequests.size <= 100) break; if (old.settled) this.editRequests.delete(id) }
+    }).catch(() => {})
+    return request.promise
+  }
+  private async performEdit(sessionId: string, input: ImageEditInput, fingerprint: string, signal: AbortSignal): Promise<ImageEditResult> {
+    const canvas = await this.store.get(sessionId), previous = canvas.items.filter(i => i.edit?.requestId === input.requestId)
+    if (previous.length) {
+      if (previous.some(i => i.edit?.fingerprint !== fingerprint)) throw new Error('同一编辑请求标识不能用于不同参数。')
+      return { canvas, items: previous, warnings: [...new Set(previous.flatMap(i => i.warnings ?? []))] }
+    }
+    const sourceId = input.image.slice(5), source = canvas.items.find(i => i.id === sourceId)
+    if (!source) throw new Error('当前对话的画布中没有这张图片。')
+    const prepared = prepareImageEdit(input, await this.store.readImage(sessionId, sourceId))
+    signal.throwIfAborted()
+    const title = `${IMAGE_EDIT_LABELS[input.operation]} · ${source.title}`, entry: PendingGeneration = {
+      key: input.requestId, prompt: title, size: `${prepared.width}x${prepared.height}`, parentId: sourceId, startedAt: new Date().toISOString(),
+    }
+    this.inflight.set(sessionId, [...this.pending(sessionId), entry])
+    try {
+      // After submission, closing a view or cancelling its wait cannot lose a billed output.
+      const result = await this.ark.generate(prepared.request, new AbortController().signal), warnings = [...result.warnings ?? []]
+      let applied = true
+      const images = result.images.map(image => {
+        try { const processed = finishImageEdit(prepared, image); warnings.push(...processed.warnings); return processed.image }
+        catch (error) {
+          applied = false
+          warnings.push(`本地合成失败，已保留模型原始结果，可能包含选区外的改动：${error instanceof Error ? error.message : '图片处理失败'}`)
+          return image
+        }
+      })
+      const saved = await this.store.add(sessionId, images, {
+        title: applied ? title : `${title} · 原始结果`, prompt: prepared.request.prompt, refs: [sourceId], externalRefs: 0, size: prepared.request.size,
+        edit: { operation: input.operation, sourceId, requestId: input.requestId, fingerprint, applied, ...(input.expand ? { expand: input.expand } : {}) },
+        ...(warnings.length ? { warnings } : {}),
+      }, sourceId)
+      return { ...saved, warnings }
     } finally {
       const rest = this.pending(sessionId).filter(p => p.key !== entry.key)
       if (rest.length) this.inflight.set(sessionId, rest); else this.inflight.delete(sessionId)

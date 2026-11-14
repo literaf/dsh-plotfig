@@ -3,17 +3,21 @@ import type { KeyboardEvent } from 'react'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { Group, Layer, Rect, Stage, Transformer } from 'react-konva'
-import type { CanvasLayer, Composition, LayerKind } from '../shared/types.js'
+import type { CanvasItem, CanvasLayer, Composition, LayerKind } from '../shared/types.js'
 import { alignLayers, layerBounds, layersBounds, MAX_LAYERS } from '../shared/layers.js'
 import type { LayerBox } from '../shared/layers.js'
 import type { CanvasModel } from './controller.js'
 import { imageUrl } from './controller.js'
 import type { ConversationActions } from './handoff.js'
-import { LayerContent, renderLayers, downloadPng } from './layer-render.js'
+import { LayerContent, renderLayers, downloadPng, downloadFile } from './layer-render.js'
 import { DownloadIcon, FitIcon, MinusIcon, PlusIcon, QuoteIcon, RedoIcon, TrashIcon, UndoIcon } from './icons.js'
 import { editableText, ocrPlainText, originalTextImage, readOCR } from '../shared/ocr.js'
 import { estimateOCRFonts } from './ocr-layout.js'
 import { OcrProperties } from './OcrProperties.js'
+import { ImageEditDialog } from './ImageEditDialog.js'
+import { expandedLayerBox } from '../shared/image-edit.js'
+import type { ImageEditOperation } from '../shared/image-edit.js'
+import { exportPsd } from './psd-export.js'
 
 const ACCENT = '#3b6cf6'
 const DEFAULT_FONT = 'Arial, PingFang SC, Microsoft YaHei, sans-serif'
@@ -33,6 +37,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
   const [panel, setPanel] = useState(true), [menu, setMenu] = useState(false), [exportMenu, setExportMenu] = useState(false)
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState(''), [localError, setLocalError] = useState('')
   const [compare, setCompare] = useState(false)
+  const [aiEdit, setAiEdit] = useState<{ layerId: string; source: CanvasItem; operation: ImageEditOperation }>(), [exportProgress, setExportProgress] = useState('')
   const [marquee, setMarquee] = useState<LayerBox>(), marqueeStart = useRef<{ x: number; y: number; keep: string[] }>()
   const dragStart = useRef<{ id: string; x: number; y: number; layers: CanvasLayer[] }>()
   const noticeTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -40,6 +45,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
   const editable = chosen.filter(l => !l.locked && !l.hidden)
   const assets = model.getSnapshot().canvas?.items ?? []
   const recognized = one?.kind === 'image' ? readOCR(assets.find(i => i.id === one.assetId), c) : undefined
+  const selectedImage = one?.kind === 'image' ? assets.find(i => i.id === one.assetId) : undefined
   const flash = (text: string) => { clearTimeout(noticeTimer.current); setNotice(text); noticeTimer.current = setTimeout(() => setNotice(''), 3000) }
   useEffect(() => {
     const current = editor.getSnapshot()
@@ -174,6 +180,21 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
     try { await action() } catch (error) { setLocalError(error instanceof Error ? error.message : '操作失败') } finally { setBusy(false) }
   }
   const exportPng = (selection: boolean) => task(async () => { const { png } = await getOutput(selection); downloadPng(png, selection ? `${c.title} · 选中图层` : c.title); flash('PNG 已导出') })
+  const exportPhotoshop = (editableText: boolean) => task(async () => {
+    setExportProgress('准备 PSD…')
+    try {
+      const bytes = await exportPsd(model.sessionId, c, editableText, (done, total) => setExportProgress(`PSD · ${done}/${total} 层`))
+      downloadFile(bytes, c.title + (editableText ? '' : ' · 图像层'), 'psd', 'image/vnd.adobe.photoshop'); flash('分层 PSD 已导出')
+    } finally { setExportProgress('') }
+  })
+  const applyImageEdit = (item: CanvasItem) => {
+    if (!aiEdit) return
+    const current = editor.getSnapshot().composition.layers.find(l => l.id === aiEdit.layerId)
+    if (item.edit?.applied === false || !current || current.kind !== 'image' || current.assetId !== aiEdit.source.id || current.locked) { flash('结果已另存到画布；当前图层未替换'); return }
+    const box = item.edit?.expand ? expandedLayerBox(current, aiEdit.source, item.edit.expand) : {}
+    editor.change(value => ({ ...value, layers: value.layers.map(l => l.id === current.id ? { ...l, ...box, assetId: item.id } : l) }))
+    flash(item.warnings?.join('；') || '已替换图层，可撤销；原图和结果均已保留')
+  }
   const merge = () => task(async () => {
     const selectedLayers = layers.filter(l => selected.includes(l.id) && !l.hidden)
     if (selectedLayers.length < 2 || selectedLayers.some(l => l.locked)) throw new Error('请选择至少两个未锁定的可见图层。')
@@ -222,10 +243,12 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
       <div className="sd-editor-heading"><strong title={c.title}>{c.title}</strong><span role="status">{state.error ? '尚未保存' : state.saving || state.dirty ? '保存中…' : '已保存'} · {layers.length} 个图层</span></div>
       <button className="sd-icon-button" onClick={() => setPanel(!panel)} aria-pressed={panel} title="图层与属性" aria-label="图层与属性"><LayersIcon/></button>
       <div className="sd-editor-menu-anchor">
-        <button className="sd-button" onClick={() => setExportMenu(!exportMenu)} disabled={busy}><DownloadIcon/>导出</button>
+        <button className="sd-button" onClick={() => setExportMenu(!exportMenu)} disabled={busy}><DownloadIcon/>{exportProgress || '导出'}</button>
         {exportMenu ? <div className="sd-editor-menu" role="menu">
           <button role="menuitem" onClick={() => { void exportPng(false) }}>画板 PNG</button>
           <button role="menuitem" disabled={!chosen.length} onClick={() => { void exportPng(true) }}>选中内容 PNG</button>
+          <button role="menuitem" onClick={() => { void exportPhotoshop(true) }} title="保留独立图层及可编辑文字；字体可能由目标软件替换">分层 PSD</button>
+          <button role="menuitem" onClick={() => { void exportPhotoshop(false) }} title="所有对象保持独立图片层，适合优先保留显示效果">PSD（文字转图片）</button>
           <button role="menuitem" onClick={() => { void saveAsImage() }}>保存为画布图片</button>
         </div> : null}
       </div>
@@ -233,6 +256,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
     <div className="sd-editor-tools" role="toolbar" aria-label="图层编辑工具">
       <button onClick={() => setHand(false)} aria-pressed={!hand} title="选择图层">选择</button><button onClick={() => setHand(true)} aria-pressed={hand} title="拖动画布（按住空格）">抓手</button><span/>
       <button disabled={busy} onClick={() => add('text')} title="添加文字">T 文字</button><button disabled={busy} onClick={() => add('rect')} title="添加矩形">▭ 矩形</button><button disabled={busy} onClick={() => add('ellipse')} title="添加圆形">○ 圆形</button><span/>
+      <button disabled={busy || !selectedImage || !one || one.locked || one.hidden || model.getSnapshot().pending.some(p => p.parentId === selectedImage?.id)} title="对选中图片去背景、涂抹消除或扩图" onClick={() => { if (one && selectedImage) setAiEdit({ layerId: one.id, source: selectedImage, operation: 'remove-background' }) }}>AI 处理</button><span/>
       <button onClick={() => editor.undo()} disabled={busy || !state.canUndo} title="撤销 (⌘Z)" aria-label="撤销编辑"><UndoIcon/></button>
       <button onClick={() => editor.redo()} disabled={busy || !state.canRedo} title="重做 (⇧⌘Z)" aria-label="重做编辑"><RedoIcon/></button>
       <button onClick={remove} disabled={busy || !editable.length} title="删除选中图层" aria-label="删除选中图层"><TrashIcon/></button>
@@ -324,6 +348,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
         <div className="sd-layer-panel-foot">本地编辑 · 自动保存</div>
       </aside> : null}
     </div>
+    {aiEdit ? <ImageEditDialog key={aiEdit.source.id} model={model} source={aiEdit.source} initialOperation={aiEdit.operation} onClose={() => setAiEdit(undefined)} onComplete={applyImageEdit}/> : null}
   </div>
 }
 export function LayersIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 10 5-10 5L2 8l10-5Zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg> }
