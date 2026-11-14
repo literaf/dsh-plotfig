@@ -235,7 +235,8 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   const toolbarTop = box ? (labelTop - toolbarHeight - 10 >= 8 ? labelTop - toolbarHeight - 10 : Math.min(box.top + box.height - toolbarHeight - 10, Math.max(labelTop + 26, 8))) : 0
   const labelWidth = box ? Math.min(Math.max(box.width, 180), size.width - 16) : 0
   const waiting = state.pending.some(p => p.key.startsWith('local-'))
-  const error = operationError || state.error, toast = notice || item?.warnings?.join('；') || state.message
+  const reviewWarning = item?.warnings?.join('；')
+  const error = operationError || state.error, toast = notice || (reviewWarning ? undefined : state.message)
   const dots = Math.max(8, 24 * view.scale)
   const empty = !items.length && !compositions.length && !state.pending.length && !state.loading
   if (opened) return <LayerEditor key={opened.id} model={model} initial={opened} conversation={conversation} onOpenCopy={setEditorId} onClose={() => { setEditorId(undefined); setSelected(opened.id) }}/>
@@ -306,6 +307,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
     {toast ? <div className="sd-toast" role="status">{toast}</div> : null}
     <div className="sd-bottom">
       {error ? <div className="sd-error" role="alert"><span>{error}</span><button type="button" className="sd-icon-button sd-icon-small" onClick={() => { model.dismiss(); setOperationError('') }} aria-label="关闭"><CloseIcon size={12}/></button></div> : null}
+      {reviewWarning ? <div className="sd-review-warning" role="status">{reviewWarning}</div> : null}
       {inConversation ? <button className="sd-conversation-link" onClick={() => { void handoff(conversation?.focus, '请在对话输入框继续描述') }}><QuoteIcon size={14}/>回到对话继续描述</button> : <Composer value={prompt} onChange={setPrompt} onSubmit={submit} onStop={() => model.cancel()} waiting={waiting} autoFocus={empty && active}
         placeholder={editing ? '描述要修改的地方，以及需要保持不变的部分…' : '描述你想生成的画面…'}
         context={editing && item ? <span className="sd-context-chip"><img src={imageUrl(model.sessionId, item.id)} alt=""/>编辑 · {labelOf(item)}</span> : undefined}
