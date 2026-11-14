@@ -51,7 +51,7 @@ export function applyTools(ctx: Context, service: Seedream, defaults: Defaults):
       regions: { type: 'array', description: 'Required for erase: 1–64 rectangles in original-image pixel coordinates. Must stay within the source image.', items: { type: 'object', additionalProperties: false, properties: {
         x: { type: 'integer', required: true }, y: { type: 'integer', required: true }, width: { type: 'integer', required: true }, height: { type: 'integer', required: true },
       } } },
-      expand: { type: 'object', description: 'Required for expand: nonnegative added pixels on each side. At least one side must be positive.', additionalProperties: false, properties: {
+      expand: { type: 'object', description: 'Required for expand: nonnegative added pixels on each side. Prefer exactly one positive side: it uses local edge context and preserves original pixels. Multi-sided requests retain full-image expansion and may need review. One billed image per call; never retry automatically.', additionalProperties: false, properties: {
         left: { type: 'integer', required: true }, top: { type: 'integer', required: true }, right: { type: 'integer', required: true }, bottom: { type: 'integer', required: true },
       } },
       request_id: { type: 'string', description: 'Optional stable request identifier, 8–80 ASCII letters/digits/_/-. Reusing the same id and inputs returns the original result instead of charging again.' },

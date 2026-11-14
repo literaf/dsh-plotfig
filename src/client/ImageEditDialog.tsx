@@ -18,7 +18,7 @@ export function ImageEditDialog({ model, source, initialOperation, onClose, onCo
   const [tool, setTool] = useState<'brush' | 'rect' | 'eraser'>('brush'), [brushSize, setBrushSize] = useState(Math.max(12, Math.round(source.width / 25)))
   const [feather, setFeather] = useState(Math.min(24, Math.round(Math.min(source.width, source.height) * 0.008)))
   const [marks, setMarks] = useState<MaskMark[]>([]), [undone, setUndone] = useState<MaskMark[]>([]), [live, setLive] = useState<MaskMark>()
-  const [margins, setMargins] = useState<ExpandMargins>({ left: Math.round(source.width / 4), right: Math.round(source.width / 4), top: Math.round(source.height / 4), bottom: Math.round(source.height / 4) })
+  const [margins, setMargins] = useState<ExpandMargins>({ left: Math.max(1, Math.round(source.width * 0.15)), right: 0, top: 0, bottom: 0 })
   const area = useRef<HTMLDivElement>(null), dialog = useRef<HTMLElement>(null), stage = useRef<Konva.Stage>(null), activeMark = useRef<MaskMark>(), submitting = useRef(false), mounted = useRef(true)
   const [size, setSize] = useState({ width: 0, height: 0 }), [image, setImage] = useState<HTMLImageElement>(), [imageError, setImageError] = useState('')
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
@@ -119,7 +119,9 @@ export function ImageEditDialog({ model, source, initialOperation, onClose, onCo
             <label>边缘过渡 · {feather} px<input type="range" aria-label="消除边缘过渡" min={0} max={64} value={feather} disabled={busy} onChange={e => setFeather(Number(e.target.value))}/></label>
             <div className="sd-image-edit-mask-actions"><button disabled={!marks.length || busy} onClick={undo}>撤销选区</button><button disabled={!undone.length || busy} onClick={redo}>重做选区</button><button disabled={!marks.length || busy} onClick={() => { setMarks([]); setUndone([]) }}>清空</button></div>
           </> : <>
-            <p>设置四边新增的像素，补全周围场景。原图的位置、像素及透明度保持不变。复杂文字或图表可能衔接不佳；检测到明显偏差时会标记结果，不自动替换图层。</p>
+            <p>建议一次扩展一侧，检查结果后再继续下一侧。原图的文字、像素及透明度完整保留；衔接偏差较大的结果会标记“需检查”，不自动替换图层。</p>
+            <div className="sd-image-edit-ratios" aria-label="扩图方向">{([['left', '向左'], ['right', '向右'], ['top', '向上'], ['bottom', '向下']] as const).map(([side, name]) => <button key={side} aria-pressed={margins[side] > 0 && Object.values(margins).filter(v => v > 0).length === 1} disabled={busy} onClick={() => setMargins({ left: 0, right: 0, top: 0, bottom: 0, [side]: margins[side] || Math.max(1, Math.round((side === 'left' || side === 'right' ? source.width : source.height) * 0.15)) })}>{name}</button>)}</div>
+            {Object.values(margins).filter(v => v > 0).length > 1 ? <p>当前同时扩展多侧。复杂文字、图表和贴边物体仍可能错位，建议先使用上方的单侧方向。</p> : null}
             <div className="sd-image-edit-ratios">{[[1, 1], [16, 9], [9, 16], [4, 3]].map(([w, h]) => <button key={`${w}:${h}`} disabled={busy} onClick={() => ratio(w!, h!)}>{w}:{h}</button>)}</div>
             <fieldset disabled={busy} className="sd-layer-grid">{([['left', '左'], ['right', '右'], ['top', '上'], ['bottom', '下']] as const).map(([key, name]) => <label key={key}>{name}侧扩展<input type="number" min={0} max={16000} step={1} aria-label={`${name}侧扩展`} value={margins[key]} onChange={e => { const v = Number(e.target.value); if (Number.isInteger(v) && v >= 0 && v <= 16000) setMargins(m => ({ ...m, [key]: v })) }}/></label>)}</fieldset>
           </>}

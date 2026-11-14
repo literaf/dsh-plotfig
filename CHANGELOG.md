@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Default expansion to one side with direction shortcuts. Single-sided requests use a cropped RGB edge reference, conservative geometry alignment and a narrow exterior transition, then copy every original RGBA byte back unchanged. Keep one paid output per submission and retain multi-sided API compatibility.
+- Flag mismatched edge overlaps, distorted model aspect ratios and unfilled exterior pixels before applying results to layers. Never use a cosmetic seam score to certify a structurally mismatched result.
+- Real follow-up: two full-image variants failed, while a 256 px left expansion of the rainforest sample passed visual review with zero original pixels changed. Three new paid outputs, no automatic retries. Other sides have synthetic and simulated UI coverage; broader live-image validation remains pending.
+
 - Add background removal, brush/rectangle erase with subtraction and undo/redo, and four-sided outpainting to canvas images and editable image layers; expose the same operations through `seedream_edit`.
 - Restore exact original RGBA pixels outside erase masks and inside the original outpainting rectangle. Preserve the placement of scaled/rotated layers, immutable originals, undoable replacement and late results; reuse completed request ids and never retry a billed request automatically.
 - Export layered PSD with names, stacking order, opacity, hidden/locked state, off-artboard content, composite previews and optional native text/OCR runs. Keep a text-as-pixels mode for appearance compatibility; vector shapes export as individual pixel layers and native font layout is approximate.

@@ -1,42 +1,14 @@
-import { PNG } from 'pngjs'
-import jpeg from 'jpeg-js'
-import { imageInfo } from './ark.js'
+import { decodePixels, encodePixels, resizePixels } from './pixels.js'
+import type { Pixels } from './pixels.js'
+export { decodePixels, encodePixels, resizePixels } from './pixels.js'
+export type { Pixels } from './pixels.js'
 import type { ArkImage, ArkRequest } from './ark.js'
-import { arkEditDimensions, editDimensions, MAX_EDIT_PIXELS } from './shared/image-edit.js'
+import { arkEditDimensions, editDimensions } from './shared/image-edit.js'
 import type { ImageEditInput } from './shared/image-edit.js'
+import { expansionContext, expansionRequest, finishExpansionContext } from './outpaint.js'
+import type { ExpansionContext } from './outpaint.js'
 
-export interface Pixels { width: number; height: number; data: Uint8Array }
-export function decodePixels(bytes: Uint8Array): Pixels {
-  const info = imageInfo(bytes)
-  if (!info || info.width < 1 || info.height < 1 || info.width * info.height > MAX_EDIT_PIXELS || info.width > 16000 || info.height > 16000) throw new Error('图片尺寸无效或超过 3200 万像素。')
-  if (info.mime === 'image/png') {
-    const png = PNG.sync.read(Buffer.from(bytes), { checkCRC: true })
-    return { width: png.width, height: png.height, data: png.data }
-  }
-  const result = jpeg.decode(bytes, { useTArray: true, formatAsRGBA: true, maxResolutionInMP: 32, maxMemoryUsageInMB: 512 })
-  return { width: result.width, height: result.height, data: result.data }
-}
-export function encodePixels(image: Pixels): Uint8Array {
-  return PNG.sync.write({ ...image, data: Buffer.from(image.data) } as PNG, { colorType: 6 })
-}
 const dataUrl = (image: Pixels) => `data:image/png;base64,${Buffer.from(encodePixels(image)).toString('base64')}`
-/** Bilinear interpolation in premultiplied alpha avoids dark fringes around cutouts. */
-export function resizePixels(image: Pixels, width: number, height: number): Pixels {
-  if (image.width === width && image.height === height) return image
-  const data = new Uint8Array(width * height * 4), sx = image.width / width, sy = image.height / height
-  for (let y = 0; y < height; y++) {
-    const py = Math.max(0, Math.min(image.height - 1, (y + 0.5) * sy - 0.5)), y0 = Math.floor(py), y1 = Math.min(image.height - 1, y0 + 1), fy = py - y0
-    for (let x = 0; x < width; x++) {
-      const px = Math.max(0, Math.min(image.width - 1, (x + 0.5) * sx - 0.5)), x0 = Math.floor(px), x1 = Math.min(image.width - 1, x0 + 1), fx = px - x0
-      const p0 = (y0 * image.width + x0) * 4, p1 = (y0 * image.width + x1) * 4, p2 = (y1 * image.width + x0) * 4, p3 = (y1 * image.width + x1) * 4
-      const a0 = image.data[p0 + 3]! * (1 - fx) * (1 - fy), a1 = image.data[p1 + 3]! * fx * (1 - fy), a2 = image.data[p2 + 3]! * (1 - fx) * fy, a3 = image.data[p3 + 3]! * fx * fy
-      const alpha = a0 + a1 + a2 + a3, out = (y * width + x) * 4
-      for (let c = 0; c < 3; c++) data[out + c] = alpha ? Math.round((image.data[p0 + c]! * a0 + image.data[p1 + c]! * a1 + image.data[p2 + c]! * a2 + image.data[p3 + c]! * a3) / alpha) : 0
-      data[out + 3] = Math.round(alpha)
-    }
-  }
-  return { width, height, data }
-}
 export function eraseMask(input: ImageEditInput, source: Pixels): Uint8Array {
   const data = new Uint8Array(source.width * source.height)
   if (input.mask) {
@@ -92,11 +64,16 @@ export function refineCutoutEdges(image: Pixels): Pixels {
   }
   return { width, height, data: cleaned }
 }
-export interface PreparedEdit { source: Pixels; input: ImageEditInput; request: ArkRequest; width: number; height: number; mask?: Uint8Array }
+export interface PreparedEdit { source: Pixels; input: ImageEditInput; request: ArkRequest; width: number; height: number; mask?: Uint8Array; expansion?: ExpansionContext }
 export function prepareImageEdit(input: ImageEditInput, bytes: Uint8Array): PreparedEdit {
-  const source = decodePixels(bytes), target = editDimensions(source.width, source.height, input.expand), work = arkEditDimensions(target.width, target.height)
-  const originalWork = arkEditDimensions(source.width, source.height), reference = resizePixels(source, originalWork.width, originalWork.height)
-  const images = [dataUrl(reference)], notes = input.prompt ? `\n用户补充要求：${input.prompt}` : ''
+  const source = decodePixels(bytes), target = editDimensions(source.width, source.height, input.expand)
+  const notes = input.prompt ? `\n用户补充要求：${input.prompt}` : ''
+  if (input.operation === 'expand') {
+    const expansion = expansionContext(source, input.expand!)
+    if (expansion) return { source, input, ...target, expansion, request: expansionRequest(expansion, input.watermark, notes) }
+  }
+  const work = arkEditDimensions(target.width, target.height), originalWork = arkEditDimensions(source.width, source.height)
+  const reference = resizePixels(source, originalWork.width, originalWork.height), images = [dataUrl(reference)]
   let prompt: string, mask: Uint8Array | undefined
   if (input.operation === 'remove-background') prompt = '精确抠出参考图中的主要实体主体，去除背景。默认移除主体之外独立的标题、说明文字、引线、图表、装饰面板和地面投影；用户指定保留的对象优先。保留主体本身的原始位置、比例、颜色、印刷文字和完整边缘，包括毛发、细小结构及半透明部分。输出与参考图相同构图的真正透明背景 RGBA PNG。前景轮廓之间的空隙也须透明，去净白边、底色残留和游离杂点；不要画棋盘格，不要增加背景、阴影或新物体。' + notes
   else if (input.operation === 'erase') {
@@ -118,6 +95,22 @@ export function prepareImageEdit(input: ImageEditInput, bytes: Uint8Array): Prep
   return { source, input, ...target, ...(mask ? { mask } : {}), request: { prompt, images, size: `${work.width}x${work.height}`, watermark: input.watermark, ...(input.operation === 'remove-background' ? { background: 'transparent' as const } : input.operation === 'expand' ? { background: 'opaque' as const } : {}) } }
 }
 export function finishImageEdit(prepared: PreparedEdit, result: ArkImage): { image: ArkImage; warnings: string[] } {
+  if (prepared.expansion) {
+    const { source, input, width, height, expansion } = prepared, margins = input.expand!
+    const processed = finishExpansionContext(expansion, decodePixels(result.bytes)), tile = processed.image
+    const data = new Uint8Array(width * height * 4), side = expansion.side, amount = expansion.amount
+    if (side === 'left' || side === 'right') {
+      const fromX = side === 'left' ? 0 : expansion.source.width, toX = side === 'left' ? 0 : source.width
+      for (let y = 0; y < height; y++) data.set(tile.data.subarray((y * tile.width + fromX) * 4, (y * tile.width + fromX + amount) * 4), (y * width + toX) * 4)
+    } else {
+      const fromY = side === 'top' ? 0 : expansion.source.height, toY = side === 'top' ? 0 : source.height
+      for (let y = 0; y < amount; y++) data.set(tile.data.subarray((y + fromY) * width * 4, (y + fromY + 1) * width * 4), (y + toY) * width * 4)
+    }
+    for (let y = 0; y < source.height; y++) data.set(source.data.subarray(y * source.width * 4, (y + 1) * source.width * 4), ((y + margins.top) * width + margins.left) * 4)
+    const bytes = encodePixels({ width, height, data })
+    if (bytes.length > 30 * 1024 * 1024) throw new Error('处理后的 PNG 超过 30 MB。')
+    return { image: { bytes, width, height, mime: 'image/png' }, warnings: processed.warnings }
+  }
   const { source, input, width, height } = prepared, generated = resizePixels(decodePixels(result.bytes), width, height)
   const data = new Uint8Array(input.operation === 'remove-background' ? refineCutoutEdges(generated).data : generated.data), warnings: string[] = []
   if (input.operation === 'erase') {
