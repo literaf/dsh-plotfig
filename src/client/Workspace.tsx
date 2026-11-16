@@ -65,7 +65,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
     return new Date(iso).toLocaleDateString()
   }
   const heading = settings ? '设置' : open ? current?.title ?? (isBoard(open) ? '新画布' : '画布') : '全部画布'
-  return <main className="sd">
+  return <main className="sd sd-workspace">
     <header className="sd-head">
       <div className="sd-title">
         {open || settings ? <button className="sd-icon-button" onClick={() => { setOpen(undefined); setSettings(false); void controller.attach() }} aria-label="返回全部画布" title="全部画布"><BackIcon/></button> : <Icon size={22}/>}

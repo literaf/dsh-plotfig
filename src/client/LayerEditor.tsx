@@ -10,7 +10,7 @@ import type { CanvasModel } from './controller.js'
 import { imageUrl } from './controller.js'
 import type { ConversationActions } from './handoff.js'
 import { LayerContent, renderLayers, downloadPng, downloadFile } from './layer-render.js'
-import { DownloadIcon, FitIcon, MinusIcon, PlusIcon, QuoteIcon, RedoIcon, TrashIcon, UndoIcon } from './icons.js'
+import { BackIcon, CheckIcon, CircleIcon, DownloadIcon, EyeIcon, EyeOffIcon, FitIcon, HandIcon, InfoIcon, LockIcon, MinusIcon, MoreIcon, PlusIcon, QuoteIcon, RectangleIcon, RedoIcon, SelectIcon, ShapesIcon, SparkIcon, TextIcon, TrashIcon, UndoIcon, UnlockIcon } from './icons.js'
 import { editableText, ocrPlainText, originalTextImage, readOCR } from '../shared/ocr.js'
 import { estimateOCRFonts } from './ocr-layout.js'
 import { OcrProperties } from './OcrProperties.js'
@@ -35,7 +35,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
   const nodes = useRef(new Map<string, Konva.Group>()), transformFrame = useRef<number>()
   const [size, setSize] = useState({ width: 0, height: 0 }), [view, setView] = useState({ x: 0, y: 0, scale: 0.3 })
   const [selected, setSelected] = useState<string[]>([]), [hand, setHand] = useState(false), [space, setSpace] = useState(false)
-  const [panel, setPanel] = useState(true), [menu, setMenu] = useState(false), [exportMenu, setExportMenu] = useState(false)
+  const [panel, setPanel] = useState(true), [popup, setPopup] = useState<'shapes' | 'more' | 'export' | 'warnings'>()
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState(''), [localError, setLocalError] = useState('')
   const [compare, setCompare] = useState(false)
   const [aiEdit, setAiEdit] = useState<{ layerId: string; source: CanvasItem; operation: ImageEditOperation }>(), [exportProgress, setExportProgress] = useState('')
@@ -47,12 +47,24 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
   const assets = model.getSnapshot().canvas?.items ?? []
   const recognized = one?.kind === 'image' ? readOCR(assets.find(i => i.id === one.assetId), c) : undefined
   const selectedImage = one?.kind === 'image' ? assets.find(i => i.id === one.assetId) : undefined
+  const saveStatus = state.error ? '尚未保存' : state.saving || state.dirty ? '保存中…' : '已保存'
+  const togglePopup = (value: NonNullable<typeof popup>) => setPopup(current => current === value ? undefined : value)
+  useEffect(() => {
+    if (!popup) return
+    const dismiss = (event: PointerEvent) => {
+      const target = event.target as Element
+      if (!host.current?.contains(target) || !target.closest('.sd-editor-menu-anchor')) setPopup(undefined)
+    }
+    document.addEventListener('pointerdown', dismiss)
+    return () => document.removeEventListener('pointerdown', dismiss)
+  }, [popup])
   const flash = (text: string) => { clearTimeout(noticeTimer.current); setNotice(text); noticeTimer.current = setTimeout(() => setNotice(''), 3000) }
   useEffect(() => {
     const current = editor.getSnapshot()
     if (!current.dirty && initial.version > current.composition.version) editor.reload(initial)
   }, [editor, initial])
   useEffect(() => () => { clearTimeout(noticeTimer.current); if (transformFrame.current !== undefined) cancelAnimationFrame(transformFrame.current) }, [])
+  useLayoutEffect(() => { if (host.current && host.current.clientWidth < 680) setPanel(false) }, [])
   useLayoutEffect(() => {
     const element = area.current; if (!element) return
     const resize = () => setSize({ width: element.clientWidth, height: element.clientHeight }), observer = new ResizeObserver(resize)
@@ -62,8 +74,9 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
     if (!size.width || !size.height) return
     const boxes = [{ x: 0, y: 0, width: c.width, height: c.height }, ...(all ? layers.filter(l => !l.hidden).map(layerBounds) : [])]
     const x = Math.min(...boxes.map(b => b.x)), y = Math.min(...boxes.map(b => b.y)), width = Math.max(...boxes.map(b => b.x + b.width)) - x, height = Math.max(...boxes.map(b => b.y + b.height)) - y
-    const scale = Math.max(0.01, Math.min((size.width - 96) / width, (size.height - 112) / height, 1))
-    setView({ x: (size.width - width * scale) / 2 - x * scale, y: (size.height - height * scale) / 2 - y * scale, scale })
+    const top = 88, bottom = 48, available = Math.max(1, size.height - top - bottom)
+    const scale = Math.max(0.01, Math.min((size.width - 96) / width, available / height, 1))
+    setView({ x: (size.width - width * scale) / 2 - x * scale, y: top + (available - height * scale) / 2 - y * scale, scale })
   }, [size, c.width, c.height, layers])
   const fitted = useRef(false)
   useEffect(() => { if (!fitted.current && size.width) { fitted.current = true; fit(true) } }, [fit, size])
@@ -114,7 +127,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
         : { fill: '#dbeafe', stroke: '#3b6cf6', strokeWidth: Math.max(2, c.width / 800) }) }
     changeLayers(ls => [...ls, layer]); setSelected([layer.id]); setPanel(true); setHand(false); area.current?.focus()
   }
-  const align = (value: Parameters<typeof alignLayers>[2]) => { changeLayers(ls => alignLayers(ls, new Set(selected), value)); setMenu(false) }
+  const align = (value: Parameters<typeof alignLayers>[2]) => { changeLayers(ls => alignLayers(ls, new Set(selected), value)); setPopup(undefined) }
   const order = (direction: 'front' | 'back' | 'up' | 'down') => {
     const ids = new Set(editable.map(l => l.id))
     changeLayers(ls => {
@@ -124,7 +137,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
       if (direction === 'up') { for (let i = next.length - 2; i >= 0; i--) if (ids.has(next[i]!.id) && !ids.has(next[i + 1]!.id)) [next[i], next[i + 1]] = [next[i + 1]!, next[i]!] }
       else { for (let i = 1; i < next.length; i++) if (ids.has(next[i]!.id) && !ids.has(next[i - 1]!.id)) [next[i], next[i - 1]] = [next[i - 1]!, next[i]!] }
       return next
-    }); setMenu(false)
+    }); setPopup(undefined)
   }
   const select = (id: string, append = false) => {
     setSelected(s => append ? s.includes(id) ? s.filter(x => x !== id) : [...s, id] : s.includes(id) ? s : [id])
@@ -177,7 +190,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
   }
   const task = async (action: () => Promise<void>) => {
     if (busy) return
-    setBusy(true); setLocalError(''); setMenu(false); setExportMenu(false); setCompare(false)
+    setBusy(true); setLocalError(''); setPopup(undefined); setCompare(false)
     try { await action() } catch (error) { setLocalError(error instanceof Error ? error.message : '操作失败') } finally { setBusy(false) }
   }
   const exportPng = (selection: boolean) => task(async () => { const { png } = await getOutput(selection); downloadPng(png, selection ? `${c.title} · 选中图层` : c.title); flash('PNG 已导出') })
@@ -219,6 +232,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
   })
   const close = () => task(async () => { if (await editor.flush()) onClose() })
   const onKey = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && popup) { event.preventDefault(); event.stopPropagation(); setPopup(undefined); return }
     const target = event.target as HTMLElement
     if (target.closest('input,textarea,select,[contenteditable=true]')) return
     if (busy) return
@@ -229,7 +243,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
     else if (modifier && event.key.toLowerCase() === 'd') { event.preventDefault(); duplicate() }
     else if (modifier && event.key === '0') { event.preventDefault(); fit(true) }
     else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); remove() }
-    else if (event.key === 'Escape') { setSelected([]); setMenu(false); setExportMenu(false) }
+    else if (event.key === 'Escape') { setSelected([]) }
     else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
       event.preventDefault(); const step = event.shiftKey ? 10 : 1, dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0, dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0
       changeLayers(ls => ls.map(l => selected.includes(l.id) && !l.locked ? { ...l, x: l.x + dx, y: l.y + dy } : l), 'nudge')
@@ -237,43 +251,59 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
   }
   return <div className="sd-layer-editor" ref={host} onKeyDown={onKey} onKeyUp={event => { if (event.code === 'Space') setSpace(false) }} data-testid="layer-editor">
     <div className="sd-editor-head">
-      <button className="sd-button" onClick={() => { void close() }} disabled={busy}>‹ 画布</button>
-      <div className="sd-editor-heading"><strong title={c.title}>{c.title}</strong><span role="status">{state.error ? '尚未保存' : state.saving || state.dirty ? '保存中…' : '已保存'} · {layers.length} 个图层</span></div>
-      <button className="sd-icon-button" onClick={() => setPanel(!panel)} aria-pressed={panel} title="图层与属性" aria-label="图层与属性"><LayersIcon/></button>
-      <div className="sd-editor-menu-anchor">
-        <button className="sd-button" onClick={() => setExportMenu(!exportMenu)} disabled={busy}><DownloadIcon/>{exportProgress || '导出'}</button>
-        {exportMenu ? <div className="sd-editor-menu" role="menu">
-          <button role="menuitem" onClick={() => { void exportPng(false) }}>画板 PNG</button>
-          <button role="menuitem" disabled={!chosen.length} onClick={() => { void exportPng(true) }}>选中内容 PNG</button>
-          <button role="menuitem" onClick={() => { void exportPhotoshop(true) }} title="保留独立图层及可编辑文字；PSD 不嵌入字体，接收方需安装对应字体。需要固定版面可选文字转图片">分层 PSD</button>
-          <button role="menuitem" onClick={() => { void exportPhotoshop(false) }} title="所有对象保持独立图片层，适合优先保留显示效果">PSD（文字转图片）</button>
-          <button role="menuitem" onClick={() => { void saveAsImage() }}>保存为画布图片</button>
+      <button className="sd-icon-button" onClick={() => { void close() }} disabled={busy} aria-label="返回画布" title="返回画布"><BackIcon/></button>
+      <div className="sd-editor-heading"><strong title={c.title}>{c.title}</strong></div>
+      <span className="sd-editor-save" role="status" data-state={state.error ? 'error' : state.saving || state.dirty ? 'saving' : 'saved'} title={saveStatus} aria-label={saveStatus}>
+        {state.error ? <InfoIcon size={14}/> : state.saving || state.dirty ? <span className="sd-spinner sd-spinner-small"/> : <CheckIcon size={14}/>}<span>{saveStatus}</span>
+      </span>
+      <div className="sd-editor-head-actions">
+        {c.warnings?.length ? <div className="sd-editor-menu-anchor sd-editor-warning-anchor">
+          <button className="sd-icon-button sd-editor-info" onClick={() => togglePopup('warnings')} aria-expanded={popup === 'warnings'} aria-label={`分层提示（${c.warnings.length} 条）`} title={`分层提示 · ${c.warnings.length} 条`}><InfoIcon/><i/></button>
+          {popup === 'warnings' ? <div className="sd-editor-menu sd-editor-warning" role="region" aria-label="分层提示"><strong>分层提示<span>{c.warnings.length}</span></strong>{c.warnings.map((w, i) => <p key={i}>{w}</p>)}</div> : null}
         </div> : null}
+        <button className="sd-icon-button" onClick={() => setPanel(!panel)} aria-pressed={panel} title="图层与属性" aria-label="图层与属性"><LayersIcon/></button>
+        <div className="sd-editor-menu-anchor">
+          <button className="sd-button sd-button-primary sd-editor-export" onClick={() => togglePopup('export')} disabled={busy} aria-expanded={popup === 'export'} aria-haspopup="menu" aria-label={exportProgress || '导出'} title={exportProgress || '导出'}><DownloadIcon/><span>{exportProgress || '导出'}</span></button>
+          {popup === 'export' ? <div className="sd-editor-menu" role="menu" aria-label="导出选项">
+            <button role="menuitem" onClick={() => { void exportPng(false) }}>画板 PNG</button>
+            <button role="menuitem" disabled={!chosen.length} onClick={() => { void exportPng(true) }}>选中内容 PNG</button>
+            <button role="menuitem" onClick={() => { void exportPhotoshop(true) }} title="保留独立图层及可编辑文字；PSD 不嵌入字体，接收方需安装对应字体。需要固定版面可选文字转图片">分层 PSD</button>
+            <button role="menuitem" onClick={() => { void exportPhotoshop(false) }} title="所有对象保持独立图片层，适合优先保留显示效果">PSD（文字转图片）</button><hr/>
+            <button role="menuitem" onClick={() => { void saveAsImage() }}>保存为画布图片</button>
+          </div> : null}
+        </div>
       </div>
-    </div>
-    <div className="sd-editor-tools" role="toolbar" aria-label="图层编辑工具">
-      <button onClick={() => setHand(false)} aria-pressed={!hand} title="选择图层">选择</button><button onClick={() => setHand(true)} aria-pressed={hand} title="拖动画布（按住空格）">抓手</button><span/>
-      <button disabled={busy} onClick={() => add('text')} title="添加文字">T 文字</button><button disabled={busy} onClick={() => add('rect')} title="添加矩形">▭ 矩形</button><button disabled={busy} onClick={() => add('ellipse')} title="添加圆形">○ 圆形</button><span/>
-      <button disabled={busy || !selectedImage || !one || one.locked || one.hidden || model.getSnapshot().pending.some(p => p.parentId === selectedImage?.id)} title="对选中图片去背景、涂抹消除或扩图" onClick={() => { if (one && selectedImage) setAiEdit({ layerId: one.id, source: selectedImage, operation: 'remove-background' }) }}>AI 处理</button><span/>
-      <button onClick={() => editor.undo()} disabled={busy || !state.canUndo} title="撤销 (⌘Z)" aria-label="撤销编辑"><UndoIcon/></button>
-      <button onClick={() => editor.redo()} disabled={busy || !state.canRedo} title="重做 (⇧⌘Z)" aria-label="重做编辑"><RedoIcon/></button>
-      <button onClick={remove} disabled={busy || !editable.length} title="删除选中图层" aria-label="删除选中图层"><TrashIcon/></button>
-      <div className="sd-editor-menu-anchor">
-        <button onClick={() => setMenu(!menu)} disabled={busy || !chosen.length} aria-expanded={menu}>更多 ⋯</button>
-        {menu ? <div className="sd-editor-menu" role="menu">
-          <button role="menuitem" onClick={() => { duplicate(); setMenu(false) }} disabled={!editable.length}>复制图层</button>
-          <button role="menuitem" onClick={() => { void merge() }} disabled={editable.length < 2 || busy || chosen.some(l => l.locked)}>合并图层</button>
-          <button role="menuitem" onClick={() => align('grid')} disabled={editable.length < 2}>自动整理</button><hr/>
-          {([['left', '左对齐'], ['center', '水平居中'], ['right', '右对齐'], ['top', '顶对齐'], ['middle', '垂直居中'], ['bottom', '底对齐']] as const).map(([v, name]) => <button role="menuitem" key={v} disabled={editable.length < 2} onClick={() => align(v)}>{name}</button>)}<hr/>
-          {([['front', '置于顶层'], ['up', '上移一层'], ['down', '下移一层'], ['back', '置于底层']] as const).map(([v, name]) => <button role="menuitem" key={v} disabled={!editable.length} onClick={() => order(v)}>{name}</button>)}
-        </div> : null}
-      </div>
-      {conversation ? <button disabled={busy} onClick={() => { void reference() }} title={selected.length ? '引用选中内容到对话' : '引用整张画板到对话'}><QuoteIcon/>引用</button> : null}
     </div>
     {state.error || localError ? <div className="sd-editor-error" role="alert"><span>{localError || state.error}</span>{state.error ? <><button className="sd-button" onClick={() => { void editor.flush() }} disabled={busy || state.saving}>重试保存</button><button className="sd-button" onClick={() => { void saveCopy() }} disabled={busy || state.saving}>另存副本</button></> : <button className="sd-button" onClick={() => setLocalError('')}>关闭</button>}</div> : null}
-    {c.warnings?.length ? <details className="sd-editor-warning"><summary>分层结果有 {c.warnings.length} 条提示</summary>{c.warnings.map((w, i) => <p key={i}>{w}</p>)}</details> : null}
     <div className="sd-editor-body">
       <div className="sd-editor-stage" ref={area} tabIndex={0} style={{ cursor: panning ? 'grab' : 'default' }}>
+        <div className="sd-editor-tools" role="toolbar" aria-label="图层编辑工具">
+          <button onClick={() => setHand(false)} aria-pressed={!hand} aria-label="选择图层" title="选择图层"><SelectIcon/></button>
+          <button onClick={() => setHand(true)} aria-pressed={hand} aria-label="抓手" title="拖动画布 · 按住空格"><HandIcon/></button><span className="sd-editor-tool-separator"/>
+          <button disabled={busy} onClick={() => add('text')} aria-label="添加文字" title="添加文字"><TextIcon/></button>
+          <div className="sd-editor-menu-anchor">
+            <button disabled={busy} onClick={() => togglePopup('shapes')} aria-label="添加形状" title="添加形状" aria-expanded={popup === 'shapes'} aria-haspopup="menu"><ShapesIcon/></button>
+            {popup === 'shapes' ? <div className="sd-editor-menu sd-editor-shapes" role="menu" aria-label="添加形状">
+              <button role="menuitem" onClick={() => { add('rect'); setPopup(undefined) }}><RectangleIcon/>矩形</button>
+              <button role="menuitem" onClick={() => { add('ellipse'); setPopup(undefined) }}><CircleIcon/>圆形</button>
+            </div> : null}
+          </div>
+          <button disabled={busy || !selectedImage || !one || one.locked || one.hidden || model.getSnapshot().pending.some(p => p.parentId === selectedImage?.id)} aria-label="AI 处理" title="AI 处理 · 去背景、消除、扩图" onClick={() => { if (one && selectedImage) setAiEdit({ layerId: one.id, source: selectedImage, operation: 'remove-background' }) }}><SparkIcon/></button><span className="sd-editor-tool-separator"/>
+          <button onClick={() => editor.undo()} disabled={busy || !state.canUndo} title="撤销 · ⌘Z" aria-label="撤销编辑"><UndoIcon/></button>
+          <button onClick={() => editor.redo()} disabled={busy || !state.canRedo} title="重做 · ⇧⌘Z" aria-label="重做编辑"><RedoIcon/></button><span className="sd-editor-tool-separator"/>
+          <div className="sd-editor-menu-anchor">
+            <button onClick={() => togglePopup('more')} disabled={busy} aria-label="更多操作" title="更多操作" aria-expanded={popup === 'more'} aria-haspopup="menu"><MoreIcon/></button>
+            {popup === 'more' ? <div className="sd-editor-menu" role="menu" aria-label="更多操作">
+              <button role="menuitem" onClick={() => { duplicate(); setPopup(undefined) }} disabled={!editable.length}>复制图层<kbd>⌘D</kbd></button>
+              <button role="menuitem" onClick={() => { void merge() }} disabled={editable.length < 2 || busy || chosen.some(l => l.locked)}>合并图层</button>
+              <button role="menuitem" onClick={() => align('grid')} disabled={editable.length < 2}>自动整理</button><hr/>
+              {([['left', '左对齐'], ['center', '水平居中'], ['right', '右对齐'], ['top', '顶对齐'], ['middle', '垂直居中'], ['bottom', '底对齐']] as const).map(([v, name]) => <button role="menuitem" key={v} disabled={editable.length < 2} onClick={() => align(v)}>{name}</button>)}<hr/>
+              {([['front', '置于顶层'], ['up', '上移一层'], ['down', '下移一层'], ['back', '置于底层']] as const).map(([v, name]) => <button role="menuitem" key={v} disabled={!editable.length} onClick={() => order(v)}>{name}</button>)}<hr/>
+              <button role="menuitem" className="sd-editor-menu-danger" onClick={() => { remove(); setPopup(undefined) }} disabled={!editable.length}><TrashIcon/>删除图层<kbd>⌫</kbd></button>
+              {conversation ? <><hr/><button role="menuitem" onClick={() => { void reference() }} title={selected.length ? '引用选中内容到对话' : '引用整张画板到对话'}><QuoteIcon/>引用到对话</button></> : null}
+            </div> : null}
+          </div>
+        </div>
         {size.width > 0 ? <Stage ref={stage} width={size.width} height={size.height} x={view.x} y={view.y} scaleX={view.scale} scaleY={view.scale} draggable={panning}
           onWheel={e => { e.evt.preventDefault(); if (e.evt.ctrlKey || e.evt.metaKey) zoom(Math.exp(-e.evt.deltaY * 0.01), stage.current?.getPointerPosition() ?? undefined); else setView(v => ({ ...v, x: v.x - e.evt.deltaX, y: v.y - e.evt.deltaY })) }}
           onDragEnd={e => { if (e.target === stage.current) setView(v => ({ ...v, x: e.target.x(), y: e.target.y() })) }}
@@ -309,13 +339,13 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
       {panel ? <aside className="sd-layer-panel" aria-label="图层与属性面板">
         <div className="sd-layer-panel-title">图层<span>{layers.length}</span></div>
         <div className="sd-layer-list" role="listbox" aria-label="图层列表" aria-multiselectable="true">
-          {[...layers].reverse().map(l => <div key={l.id} className="sd-layer-row" data-selected={selected.includes(l.id)} data-hidden={l.hidden}>
+          {[...layers].reverse().map(l => <div key={l.id} className="sd-layer-row" data-selected={selected.includes(l.id)} data-hidden={l.hidden} data-locked={l.locked}>
             <button className="sd-layer-select" role="option" aria-selected={selected.includes(l.id)} onClick={e => select(l.id, e.shiftKey || e.metaKey || e.ctrlKey)} onDoubleClick={() => editLayerText(l)} title={l.name}>
               <span className="sd-layer-thumb">{l.kind === 'image' ? <img src={imageUrl(model.sessionId, l.assetId!)} alt="" loading="lazy"/> : l.kind === 'text' ? 'T' : l.kind === 'rect' ? '▭' : '○'}</span><span>{l.name}</span>
               {l.kind === 'image' && readOCR(assets.find(i => i.id === l.assetId), c) ? <span className="sd-ocr-badge" aria-hidden="true" title="含 OCR 文字，双击编辑">T</span> : null}
             </button>
-            <button className="sd-layer-state" onClick={() => patch(l.id, { hidden: !l.hidden })} aria-label={`${l.hidden ? '显示' : '隐藏'} ${l.name}`} title={l.hidden ? '显示' : '隐藏'}>{l.hidden ? '◌' : '◉'}</button>
-            <button className="sd-layer-state" onClick={() => patch(l.id, { locked: !l.locked })} aria-label={`${l.locked ? '解锁' : '锁定'} ${l.name}`} title={l.locked ? '解锁' : '锁定'}>{l.locked ? '▣' : '◇'}</button>
+            <button className="sd-layer-state" onClick={() => patch(l.id, { hidden: !l.hidden })} aria-label={`${l.hidden ? '显示' : '隐藏'} ${l.name}`} title={l.hidden ? '显示' : '隐藏'}>{l.hidden ? <EyeOffIcon size={14}/> : <EyeIcon size={14}/>}</button>
+            <button className="sd-layer-state" onClick={() => patch(l.id, { locked: !l.locked })} aria-label={`${l.locked ? '解锁' : '锁定'} ${l.name}`} title={l.locked ? '解锁' : '锁定'}>{l.locked ? <LockIcon size={13}/> : <UnlockIcon size={13}/>}</button>
           </div>)}
         </div>
         <div className="sd-layer-properties">
@@ -349,4 +379,4 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
     {aiEdit ? <ImageEditDialog key={aiEdit.source.id} model={model} source={aiEdit.source} initialOperation={aiEdit.operation} onClose={() => setAiEdit(undefined)} onComplete={applyImageEdit}/> : null}
   </div>
 }
-export function LayersIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 10 5-10 5L2 8l10-5Zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg> }
+export function LayersIcon() { return <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 10 5-10 5L2 8l10-5Zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg> }
