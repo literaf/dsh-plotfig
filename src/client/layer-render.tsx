@@ -1,4 +1,5 @@
 import Konva from 'konva'
+import { useMemo } from 'react'
 import { Ellipse, Group, Image as KImage, Rect, Text } from 'react-konva'
 import type { CanvasLayer, Composition } from '../shared/types.js'
 import type { LayerBox } from '../shared/layers.js'
@@ -11,9 +12,39 @@ export const textAttributes = (l: CanvasLayer) => ({
   fontFamily: l.fontFamily ?? 'Arial', fontStyle: [l.bold ? 'bold' : '', l.italic ? 'italic' : ''].filter(Boolean).join(' ') || 'normal',
   fill: l.fill ?? '#222222', align: l.align ?? 'left', lineHeight: 1.2, wrap: 'word',
 })
-export function LayerContent({ layer: l, sessionId }: { layer: CanvasLayer; sessionId: string }) {
+/** Small hit masks let transparent PNG regions pass clicks to lower layers without caching the visible image. */
+const hitMasks = new WeakMap<HTMLImageElement, { width: number; height: number; runs: number[][] }>()
+function alphaMask(image: HTMLImageElement) {
+  const cached = hitMasks.get(image); if (cached) return cached
+  const ratio = Math.min(1, 512 / Math.max(image.naturalWidth, image.naturalHeight))
+  const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.ceil(image.naturalWidth * ratio)); canvas.height = Math.max(1, Math.ceil(image.naturalHeight * ratio))
+  const context = canvas.getContext('2d')!
+  context.drawImage(image, 0, 0, canvas.width, canvas.height)
+  const { data } = context.getImageData(0, 0, canvas.width, canvas.height), runs: number[][] = []
+  for (let y = 0; y < canvas.height; y++) {
+    let start = -1
+    for (let x = 0; x <= canvas.width; x++) {
+      const opaque = x < canvas.width && data[(y * canvas.width + x) * 4 + 3]! > 16
+      if (opaque && start < 0) start = x
+      else if (!opaque && start >= 0) { runs.push([start, y, x - start]); start = -1 }
+    }
+  }
+  const mask = { width: canvas.width, height: canvas.height, runs }; hitMasks.set(image, mask); return mask
+}
+export function LayerContent({ layer: l, sessionId, alphaHit = false }: { layer: CanvasLayer; sessionId: string; alphaHit?: boolean }) {
   const image = useImage(l.kind === 'image' && l.assetId ? imageUrl(sessionId, l.assetId) : undefined)
-  if (l.kind === 'image') return image ? <KImage image={image} width={l.width} height={l.height}/> : <Rect width={l.width} height={l.height} fill="#d4d7de"/>
+  const hitFunc = useMemo(() => {
+    if (!image || !alphaHit) return undefined
+    const mask = alphaMask(image)
+    return (context: Konva.Context, shape: Konva.Shape) => {
+      // A small screen-space tolerance keeps downscaled lettering and thin edges clickable.
+      const scale = shape.getAbsoluteScale(), px = 2 / Math.abs(scale.x || 1), py = 2 / Math.abs(scale.y || 1)
+      context.beginPath()
+      for (const [x, y, width] of mask.runs) context.rect(x! * l.width / mask.width - px, y! * l.height / mask.height - py, width! * l.width / mask.width + px * 2, l.height / mask.height + py * 2)
+      context.closePath(); context.fillStrokeShape(shape)
+    }
+  }, [image, alphaHit, l.width, l.height])
+  if (l.kind === 'image') return image ? <KImage image={image} width={l.width} height={l.height} {...(hitFunc ? { hitFunc } : {})}/> : <Rect width={l.width} height={l.height} fill="#d4d7de"/>
   if (l.kind === 'text' && l.ocr) return <><Rect width={l.width} height={l.height} fill="rgba(0,0,0,0)"/><Group scaleX={l.width / l.ocr.width} scaleY={l.height / l.ocr.height}>{ocrTextNodes(l.ocr).map((attrs, i) => <Text key={i} {...attrs}/>)}</Group></>
   if (l.kind === 'text') return <Text {...textAttributes(l)}/>
   const shape = { fill: l.fill ?? 'transparent', stroke: l.stroke ?? 'transparent', strokeWidth: l.strokeWidth ?? 0 }

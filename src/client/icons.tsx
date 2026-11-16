@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 const icon = (paths: ReactNode) => ({ size = 16 }: { size?: number }) =>
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths}</svg>
 export const EditIcon = icon(<><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></>)
+export const SelectIcon = icon(<path d="m5 3 15 10-7 1-4 7-4-18Z"/>)
+export const HandIcon = icon(<path d="M8 12V5a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v9-6a2 2 0 0 1 4 0v9c0 5-3 7-7 7-3 0-5-2-7-5l-3-5a2 2 0 0 1 3-2l2 2Z"/>)
 export const QuoteIcon = icon(<><path d="M9 7 4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 5 5v1"/></>)
 export const DownloadIcon = icon(<><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></>)
 export const TrashIcon = icon(<><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/></>)

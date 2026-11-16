@@ -9,16 +9,20 @@ import { imageUrl } from './controller.js'
 import type { ConversationActions, Outcome } from './handoff.js'
 import { Composer, SizePicker } from './Composer.js'
 import type { SizeChoice } from './Composer.js'
-import { CloseIcon, DownloadIcon, EditIcon, FitIcon, ImageIcon, MinusIcon, PlusIcon, QuoteIcon, RedoIcon, TrashIcon, UndoIcon } from './icons.js'
+import { CloseIcon, DownloadIcon, EditIcon, FitIcon, HandIcon, ImageIcon, MinusIcon, PlusIcon, QuoteIcon, RedoIcon, SelectIcon, TrashIcon, UndoIcon } from './icons.js'
 import { useImage } from './images.js'
 import { LayerEditor, LayersIcon } from './LayerEditor.js'
-import { CompositionContent, renderLayers, downloadPng, downloadFile } from './layer-render.js'
-import { layersBounds } from '../shared/layers.js'
+import { renderLayers, downloadPng, downloadFile } from './layer-render.js'
+import { alignLayers, layerBounds, layersBounds } from '../shared/layers.js'
+import { CanvasArtboard } from './CanvasArtboard.js'
+import { mergeSelectedLayers, selectionBounds } from './layer-actions.js'
+import type { EditorModel } from './editor-model.js'
 import { ImageEditDialog } from './ImageEditDialog.js'
 import { exportPsd } from './psd-export.js'
 
 export interface View { x: number; y: number; scale: number }
 interface Move { id: string; from: { x: number; y: number }; to: { x: number; y: number } }
+type CanvasChange = { kind: 'move'; move: Move } | { kind: 'layers'; editor: EditorModel }
 interface Box { x: number; y: number; width: number; height: number }
 const MIN_SCALE = 0.02, MAX_SCALE = 4, PAD = 48, GAP = 80, ACCENT = '#3b6cf6'
 /** Space kept clear for the label and toolbar above, and the composer below, when fitting. */
@@ -44,14 +48,14 @@ export function pendingShape(size: string | undefined, fallbackHeight: number): 
   const w = Number(m[1]), h = Number(m[2]), k = fallbackHeight / Math.max(w, h)
   return { width: Math.round(w * k), height: Math.round(h * k) }
 }
-function Picture({ item, sessionId, selected, hovered, scale, onSelect, onHover, onMove }: {
-  item: CanvasItem; sessionId: string; selected: boolean; hovered: boolean; scale: number
+function Picture({ item, sessionId, selected, hovered, scale, panning, onSelect, onHover, onMove }: {
+  item: CanvasItem; sessionId: string; selected: boolean; hovered: boolean; scale: number; panning: boolean
   onSelect(id: string): void; onHover(id: string | undefined): void; onMove(move: Move): void
 }) {
   const image = useImage(imageUrl(sessionId, item.id))
-  const select = (e: KonvaEventObject<MouseEvent | TouchEvent>) => { e.cancelBubble = true; onSelect(item.id) }
+  const select = (e: KonvaEventObject<MouseEvent | TouchEvent>) => { if (panning) return; e.cancelBubble = true; onSelect(item.id) }
   const handle = 8 / scale, line = 1 / scale
-  return <Group x={item.x} y={item.y} draggable
+  return <Group x={item.x} y={item.y} draggable={!panning}
     onMouseDown={select} onTouchStart={select}
     onMouseEnter={e => { onHover(item.id); const c = e.target.getStage()?.container(); if (c) c.style.cursor = 'move' }}
     onMouseLeave={e => { onHover(undefined); const c = e.target.getStage()?.container(); if (c) c.style.cursor = '' }}
@@ -63,16 +67,8 @@ function Picture({ item, sessionId, selected, hovered, scale, onSelect, onHover,
       <Rect key={`${x},${y}`} x={x! - handle / 2} y={y! - handle / 2} width={handle} height={handle} fill="#fff" stroke={ACCENT} strokeWidth={1.5 * line} cornerRadius={1.5 * line} listening={false}/>) : null}
   </Group>
 }
-function Artboard({ composition: c, sessionId, selected, scale, onSelect, onMove, onOpen }: {
-  composition: Composition; sessionId: string; selected: boolean; scale: number; onSelect(id: string): void; onMove(move: Move): void; onOpen(): void
-}) {
-  return <Group x={c.x} y={c.y} draggable onMouseDown={e => { e.cancelBubble = true; onSelect(c.id) }} onTouchStart={e => { e.cancelBubble = true; onSelect(c.id) }}
-    onDblClick={onOpen} onDblTap={onOpen} onDragEnd={e => { e.cancelBubble = true; onMove({ id: c.id, from: { x: c.x, y: c.y }, to: { x: e.target.x(), y: e.target.y() } }) }}>
-    <Rect width={c.width} height={c.height} fill="#fff" shadowBlur={18 / scale} shadowOpacity={0.1}/>
-    <CompositionContent composition={c} sessionId={sessionId}/>
-    {selected ? <Rect width={c.width} height={c.height} stroke={ACCENT} strokeWidth={2 / scale} listening={false}/> : null}
-  </Group>
-}
+const noSubscribe = () => () => {}, noSnapshot = () => undefined
+const NO_LAYERS: string[] = []
 const compositionBox = (c: Composition): Box => {
   const b = layersBounds(c.layers), x = Math.min(0, b?.x ?? 0), y = Math.min(0, b?.y ?? 0)
   return { x: c.x + x, y: c.y + y, width: Math.max(c.width, b ? b.x + b.width : 0) - x, height: Math.max(c.height, b ? b.y + b.height : 0) - y }
@@ -114,11 +110,15 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   const [editing, setEditing] = useState(false), [confirming, setConfirming] = useState(false)
   const [prompt, setPrompt] = useState(''), [genSize, setGenSize] = useState<SizeChoice>('')
   const [editorId, setEditorId] = useState<string>(), [splitSource, setSplitSource] = useState<CanvasItem>()
+  const [selectedLayers, setSelectedLayers] = useState<string[]>([]), [layerPanel, setLayerPanel] = useState(false)
+  const [hand, setHand] = useState(false), [space, setSpace] = useState(false)
+  const [marquee, setMarquee] = useState<Box>(), marqueeStart = useRef<{ x: number; y: number; compositionId?: string | undefined; keep: string[] }>()
+  const panning = hand || space
   const [editSource, setEditSource] = useState<CanvasItem>()
   const [splitPrompt, setSplitPrompt] = useState('将主要元素、说明文字与背景拆成独立图层，保持原有位置、颜色和细节。')
   const [maxImages, setMaxImages] = useState(30), [operationBusy, setOperationBusy] = useState(false), [operationError, setOperationError] = useState('')
   const operation = useRef(false)
-  const [history, setHistory] = useState<{ done: Move[]; undone: Move[] }>({ done: [], undone: [] })
+  const [history, setHistory] = useState<{ done: CanvasChange[]; undone: CanvasChange[] }>({ done: [], undone: [] })
   const fitted = useRef(false), seen = useRef<string | undefined>(undefined)
   useEffect(() => active ? model.hold() : undefined, [model, active])
   useLayoutEffect(() => {
@@ -151,14 +151,32 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
     if (seen.current !== undefined && key !== seen.current && entries.length) {
       const known = new Set(seen.current.split(',')), fresh = entries.filter(i => !known.has(i.id))
       // Reveal what just arrived at a readable size; the fit button still shows everything.
-      if (fresh.length) { const box = bounds(fresh); if (box && size.width) setView(fit(box, size.width, size.height, bottom, TOP)); setSelected(fresh.at(-1)!.id); setEditing(false) }
+      if (fresh.length) { const box = bounds(fresh); if (box && size.width) setView(fit(box, size.width, size.height, bottom, TOP)); setSelected(fresh.at(-1)!.id); setSelectedLayers([]); setEditing(false) }
     }
     seen.current = key
   }, [items, compositions, fitAll, state.canvas, size])
   const pendingKeys = state.pending.map(p => p.key).join(',')
   useEffect(() => { if (pendingKeys) fitAll(placeholders) }, [pendingKeys]) // eslint-disable-line react-hooks/exhaustive-deps
   const item = items.find(i => i.id === selected)
-  const composition = compositions.find(c => c.id === selected), opened = compositions.find(c => c.id === editorId)
+  const savedComposition = compositions.find(c => c.id === selected), opened = compositions.find(c => c.id === editorId)
+  const layerEditor = savedComposition ? model.editor(savedComposition) : undefined
+  const layerState = useSyncExternalStore(layerEditor?.subscribe ?? noSubscribe, layerEditor?.getSnapshot ?? noSnapshot)
+  // Scene history owns the layers; layout history owns the artboard's position.
+  const composition = layerState && savedComposition ? { ...layerState.composition, x: savedComposition.x, y: savedComposition.y } : savedComposition
+  const chosenLayers = composition?.layers.filter(l => selectedLayers.includes(l.id) && !l.hidden) ?? []
+  const editableLayers = chosenLayers.filter(l => !l.locked)
+  const selectLayer = (id: string, layerId?: string, append = false) => {
+    if (operationBusy) return
+    setSelectedLayers(previous => !layerId ? [] : append && selected === id ? previous.includes(layerId) ? previous.filter(l => l !== layerId) : [...previous, layerId] : selected === id && previous.includes(layerId) ? previous : [layerId])
+    setSelected(id); setEditing(false); host.current?.focus()
+  }
+  useEffect(() => { setSelectedLayers(previous => previous.filter(id => composition?.layers.some(l => l.id === id && !l.hidden))) }, [selected, layerState?.composition.layers])
+  useEffect(() => {
+    const reset = () => setSpace(false)
+    const warn = (e: BeforeUnloadEvent) => { if (compositions.some(c => model.editor(c).getSnapshot().dirty)) { e.preventDefault(); e.returnValue = '' } }
+    window.addEventListener('blur', reset); window.addEventListener('beforeunload', warn)
+    return () => { window.removeEventListener('blur', reset); window.removeEventListener('beforeunload', warn) }
+  }, [model, compositions])
   useEffect(() => { if (selected && !item && !composition) setSelected(undefined) }, [selected, item, composition])
   useEffect(() => { setConfirming(false) }, [selected])
   useEffect(() => { if (!item) setEditing(false) }, [item])
@@ -173,9 +191,26 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
     else setView(v => ({ ...v, x: v.x - e.evt.deltaX, y: v.y - e.evt.deltaY }))
   }
   const apply = (moves: Move[], to: 'from' | 'to') => { void model.move(moves.map(m => ({ id: m.id, ...m[to] }))) }
-  const onMove = (move: Move) => { setHistory(h => ({ done: [...h.done, move].slice(-100), undone: [] })); apply([move], 'to') }
-  const undo = () => { const m = history.done.at(-1); if (!m) return; setHistory(h => ({ done: h.done.slice(0, -1), undone: [...h.undone, m] })); apply([m], 'from') }
-  const redo = () => { const m = history.undone.at(-1); if (!m) return; setHistory(h => ({ done: [...h.done, m], undone: h.undone.slice(0, -1) })); apply([m], 'to') }
+  const recordChange = (change: CanvasChange) => setHistory(h => ({ done: [...h.done, change].slice(-50), undone: [] }))
+  const onMove = (move: Move) => { recordChange({ kind: 'move', move }); apply([move], 'to') }
+  const recordEdit = (editor: EditorModel) => recordChange({ kind: 'layers', editor })
+  const changeComposition = (update: (c: Composition) => Composition) => {
+    if (!layerEditor || operationBusy) return
+    const before = layerEditor.getSnapshot().composition; layerEditor.change(update)
+    if (layerEditor.getSnapshot().composition !== before) recordEdit(layerEditor)
+  }
+  const undo = () => {
+    if (operationBusy) return
+    const change = history.done.at(-1); if (!change) { layerEditor?.undo(); return }
+    setHistory(h => ({ done: h.done.slice(0, -1), undone: [...h.undone, change] }))
+    if (change.kind === 'layers') change.editor.undo(); else apply([change.move], 'from')
+  }
+  const redo = () => {
+    if (operationBusy) return
+    const change = history.undone.at(-1); if (!change) { layerEditor?.redo(); return }
+    setHistory(h => ({ done: [...h.done, change], undone: h.undone.slice(0, -1) }))
+    if (change.kind === 'layers') change.editor.redo(); else apply([change.move], 'to')
+  }
   const [notice, setNotice] = useState('')
   const flash = (text: string) => { setNotice(text); setTimeout(() => setNotice(n => n === text ? '' : n), 2500) }
   const handoff = async (action: (() => Promise<Outcome>) | undefined, success: string) => {
@@ -204,8 +239,43 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
     const source = splitSource
     setSplitSource(undefined)
     const created = await model.decompose({ image: `item:${source.id}`, prompt: splitPrompt, maxImages })
-    setSelected(created.id); setEditorId(created.id)
+    setSelected(created.id); setSelectedLayers([]); flash('分层完成，直接点击图层编辑；Shift 可多选')
   })
+  const removeLayers = () => {
+    if (!layerEditor || operationBusy) return
+    const ids = new Set(editableLayers.map(l => l.id))
+    changeComposition(c => ({ ...c, layers: c.layers.filter(l => !ids.has(l.id)) })); setSelectedLayers([])
+  }
+  const mergeLayers = () => operate(async () => {
+    if (!layerEditor) return
+    const id = await mergeSelectedLayers(model, layerEditor, selectedLayers)
+    recordEdit(layerEditor); setSelectedLayers([id]); flash('已合并图层，可撤销恢复')
+  })
+  const pointer = () => { const p = stage.current?.getPointerPosition(); return p ? { x: (p.x - view.x) / view.scale, y: (p.y - view.y) / view.scale } : undefined }
+  const startMarquee = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if (e.target !== e.target.getStage() || panning || operationBusy || ('button' in e.evt && e.evt.button !== 0)) return
+    const p = pointer(); if (!p) return
+    const keep = 'shiftKey' in e.evt && e.evt.shiftKey ? selectedLayers : []
+    marqueeStart.current = { ...p, compositionId: composition?.id, keep }; setMarquee({ ...p, width: 0, height: 0 })
+    setSelectedLayers(keep); setEditing(false); host.current?.focus()
+  }
+  const endMarquee = () => {
+    const start = marqueeStart.current
+    if (!start) return
+    if (marquee && (marquee.width * view.scale > 3 || marquee.height * view.scale > 3)) {
+      const hits = compositions.map(saved => {
+        const c = model.editor(saved).getSnapshot().composition
+        return { id: c.id, layers: c.layers.filter(l => {
+          if (l.locked || l.hidden) return false
+          const b = layerBounds(l), x = saved.x + b.x, y = saved.y + b.y
+          return x <= marquee.x + marquee.width && x + b.width >= marquee.x && y <= marquee.y + marquee.height && y + b.height >= marquee.y
+        }).map(l => l.id) }
+      })
+      const target = hits.find(c => c.id === start.compositionId && c.layers.length) ?? hits.findLast(c => c.layers.length)
+      if (target) { setSelected(target.id); setSelectedLayers([...new Set([...(target.id === start.compositionId ? start.keep : []), ...target.layers])]) }
+    } else if (!start.keep.length) { setSelected(undefined); setSelectedLayers([]) }
+    marqueeStart.current = undefined; setMarquee(undefined)
+  }
   const startEdit = () => {
     setConfirming(false)
     if (inConversation) { if (item) void handoff(conversation && (() => conversation.edit(item)), '已引用图片，请在对话中描述修改要求'); return }
@@ -214,18 +284,27 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   const onKey = (e: React.KeyboardEvent) => {
     if ((e.target as HTMLElement).closest('input,textarea,select,button')) return
     const mod = e.metaKey || e.ctrlKey
+    if (e.code === 'Space') { e.preventDefault(); setSpace(true); return }
+    if (operationBusy) return
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo() }
-    else if ((e.key === 'Delete' || e.key === 'Backspace') && (item || composition)) { e.preventDefault(); setConfirming(true) }
+    else if (mod && e.key.toLowerCase() === 'a' && composition) { e.preventDefault(); setSelectedLayers(composition.layers.filter(l => !l.locked && !l.hidden).map(l => l.id)) }
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && (item || composition)) { e.preventDefault(); if (chosenLayers.length) removeLayers(); else setConfirming(true) }
     else if (e.key === 'Tab' && item) { e.preventDefault(); startEdit() }
-    else if (e.key === 'Escape') { setEditing(false); setConfirming(false); setSelected(undefined) }
+    else if (e.key === 'Escape') { setEditing(false); setConfirming(false); setSelectedLayers([]); setSelected(undefined); setLayerPanel(false); setMarquee(undefined); marqueeStart.current = undefined }
     else if (e.key === '0' && mod) { e.preventDefault(); fitAll() }
+    else if (!mod && e.key.toLowerCase() === 'v') setHand(false)
+    else if (!mod && e.key.toLowerCase() === 'h') setHand(true)
+    else if (layerEditor && editableLayers.length && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+      e.preventDefault(); const step = e.shiftKey ? 10 : 1, dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0, dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0
+      const ids = new Set(editableLayers.map(l => l.id)); changeComposition(c => ({ ...c, layers: c.layers.map(l => ids.has(l.id) ? { ...l, x: l.x + dx, y: l.y + dy } : l) }))
+    }
   }
   const toolbar = useRef<HTMLDivElement>(null), [toolbarWidth, setToolbarWidth] = useState(280), [toolbarHeight, setToolbarHeight] = useState(42)
   useLayoutEffect(() => {
     const el = toolbar.current; if (!el) return
     const measure = () => { setToolbarWidth(el.offsetWidth); setToolbarHeight(el.offsetHeight) }
     measure(); const observer = new ResizeObserver(measure); observer.observe(el); return () => observer.disconnect()
-  }, [item?.id, composition?.id, confirming, inConversation, editorId])
+  }, [item?.id, composition?.id, chosenLayers.length, confirming, inConversation, editorId])
   const viewControls = useRef<HTMLDivElement>(null), [viewControlsBottom, setViewControlsBottom] = useState(58)
   useLayoutEffect(() => {
     const el = viewControls.current; if (!el) return
@@ -235,22 +314,26 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   // Floating controls stay inside the canvas even when the image extends past its edge.
   const inside = (left: number, width: number) => clamp(left, 8, Math.max(8, size.width - width - 8))
   const screen = (b: Box) => ({ left: view.x + b.x * view.scale, top: view.y + b.y * view.scale, width: b.width * view.scale, height: b.height * view.scale })
-  const box = item ? screen(item) : composition ? screen(composition) : undefined
+  const chosenBox = layersBounds(chosenLayers)
+  const box = item ? screen(item) : composition ? screen(chosenBox ? { ...chosenBox, x: composition.x + chosenBox.x, y: composition.y + chosenBox.y } : composition) : undefined
   // Keep selected-image actions below the floating view controls, including when they wrap.
   const labelTop = box ? Math.max(viewControlsBottom, box.top - 24) : 0
-  const toolbarTop = box ? (labelTop - toolbarHeight - 10 >= viewControlsBottom ? labelTop - toolbarHeight - 10 : labelTop + 26) : 0
+  const toolbarTop = composition && layerPanel ? viewControlsBottom + 6 : box ? (labelTop - toolbarHeight - 10 >= viewControlsBottom ? labelTop - toolbarHeight - 10 : Math.min(Math.max(labelTop + 26, box.top + box.height + 10), Math.max(viewControlsBottom, size.height - bottom - toolbarHeight - 12))) : 0
   const labelWidth = box ? Math.min(Math.max(box.width, 180), size.width - 16) : 0
   const waiting = state.pending.some(p => p.key.startsWith('local-'))
   const reviewWarning = item?.warnings?.join('；')
-  const error = operationError || state.error, toast = notice || (reviewWarning ? undefined : state.message)
+  const error = operationError || layerState?.error || state.error, toast = notice || (reviewWarning ? undefined : state.message)
   const dots = Math.max(8, 24 * view.scale)
   const empty = !items.length && !compositions.length && !state.pending.length && !state.loading
   if (opened) return <LayerEditor key={opened.id} model={model} initial={opened} conversation={conversation} onOpenCopy={setEditorId} onClose={() => { setEditorId(undefined); setSelected(opened.id) }}/>
   return <div className="sd-canvas-shell">
     <div className="sd-canvas-bar" ref={viewControls}>
       <div className="sd-zoom" role="toolbar" aria-label="视图">
-        <button onClick={undo} disabled={!history.done.length} title="撤销移动 (⌘Z)" aria-label="撤销"><UndoIcon/></button>
-        <button onClick={redo} disabled={!history.undone.length} title="重做 (⇧⌘Z)" aria-label="重做"><RedoIcon/></button>
+        <button onClick={() => setHand(false)} aria-pressed={!hand} title="选择与框选 (V)" aria-label="选择与框选"><SelectIcon/></button>
+        <button onClick={() => setHand(true)} aria-pressed={hand} title="抓手 (H)，按住空格临时平移" aria-label="抓手"><HandIcon/></button>
+        <span className="sd-zoom-sep"/>
+        <button onClick={undo} disabled={operationBusy || (!layerState?.canUndo && !history.done.length)} title="撤销 (⌘Z)" aria-label="撤销"><UndoIcon/></button>
+        <button onClick={redo} disabled={operationBusy || (!layerState?.canRedo && !history.undone.length)} title="重做 (⇧⌘Z)" aria-label="重做"><RedoIcon/></button>
         <span className="sd-zoom-sep"/>
         <button onClick={() => zoomAt(1 / 1.2)} title="缩小" aria-label="缩小"><MinusIcon/></button>
         <button className="sd-zoom-value" onClick={() => fitAll()} title="适应窗口 (⌘0)">{Math.round(view.scale * 100)}%</button>
@@ -258,17 +341,20 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
         <button onClick={() => fitAll()} title="适应窗口 (⌘0)" aria-label="适应窗口"><FitIcon/></button>
       </div>
     </div>
-    <div className="sd-canvas" data-mode={inConversation ? 'conversation' : 'board'} ref={host} tabIndex={0} onKeyDown={onKey}
-    style={{ backgroundSize: `${dots}px ${dots}px`, backgroundPosition: `${view.x}px ${view.y}px` }}>
+    <div className="sd-canvas" data-mode={inConversation ? 'conversation' : 'board'} ref={host} tabIndex={0} onKeyDown={onKey} onKeyUp={e => { if (e.code === 'Space') setSpace(false) }}
+    style={{ backgroundSize: `${dots}px ${dots}px`, backgroundPosition: `${view.x}px ${view.y}px`, cursor: panning ? 'grab' : 'default' }}>
     {size.width > 0 ? <Stage ref={stage} width={size.width} height={size.height} x={view.x} y={view.y} scaleX={view.scale} scaleY={view.scale}
-      draggable onWheel={onWheel}
-      onMouseDown={e => { if (e.target === e.target.getStage()) { setSelected(undefined); setEditing(false); host.current?.focus() } }}
+      draggable={panning} onWheel={onWheel}
+      onMouseDown={startMarquee} onTouchStart={startMarquee}
+      onMouseMove={() => { const start = marqueeStart.current, p = pointer(); if (start && p) setMarquee({ x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), width: Math.abs(p.x - start.x), height: Math.abs(p.y - start.y) }) }}
+      onMouseUp={endMarquee} onMouseLeave={endMarquee} onTouchEnd={endMarquee}
       onDragMove={e => { if (e.target === e.target.getStage()) setView(v => ({ ...v, x: e.target.x(), y: e.target.y() })) }}
       onDragEnd={e => { if (e.target === e.target.getStage()) setView(v => ({ ...v, x: e.target.x(), y: e.target.y() })) }}>
       <Layer>
-        {items.map(i => <Picture key={i.id} item={i} sessionId={model.sessionId} selected={i.id === selected} hovered={i.id === hovered} scale={view.scale}
-          onSelect={id => { setSelected(id); if (id !== selected) setEditing(false); host.current?.focus() }} onHover={setHovered} onMove={onMove}/>)}
-        {compositions.map(c => <Artboard key={c.id} composition={c} sessionId={model.sessionId} selected={c.id === selected} scale={view.scale} onSelect={id => { setSelected(id); setEditing(false); host.current?.focus() }} onMove={onMove} onOpen={() => setEditorId(c.id)}/>)}
+        {items.map(i => <Picture key={i.id} item={i} sessionId={model.sessionId} selected={i.id === selected} hovered={i.id === hovered} scale={view.scale} panning={panning}
+          onSelect={id => { setSelected(id); setSelectedLayers([]); if (id !== selected) setEditing(false); host.current?.focus() }} onHover={setHovered} onMove={onMove}/>)}
+        {compositions.map(c => <CanvasArtboard key={c.id} model={model} initial={c} active={c.id === selected} selected={c.id === selected ? selectedLayers : NO_LAYERS} scale={view.scale} panning={panning} busy={operationBusy} onSelect={selectLayer} onMove={onMove} onEdit={recordEdit}/>)}
+        {marquee ? <Rect {...marquee} stroke={ACCENT} strokeWidth={1 / view.scale} fill="#3b6cf622" listening={false}/> : null}
       </Layer>
     </Stage> : null}
     {placeholders.map(p => <PendingCard key={p.key} pending={p} rect={screen(p)}/>)}
@@ -303,19 +389,42 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
       </div>
     </> : null}
     {composition && box ? <>
-      <div className="sd-label" style={{ left: inside(box.left, labelWidth), top: labelTop, width: labelWidth }}><span className="sd-label-title"><LayersIcon/>{composition.title}</span><span className="sd-label-size">{composition.layers.length} 层</span></div>
-      <div className="sd-float" ref={toolbar} role="toolbar" aria-label="画板操作" style={{ left: inside(box.left, toolbarWidth), top: toolbarTop }}>
+      <div className="sd-label" style={{ left: inside(box.left, labelWidth), top: labelTop, width: labelWidth }}><span className="sd-label-title"><LayersIcon/>{chosenLayers.length === 1 ? chosenLayers[0]!.name : chosenLayers.length ? `已选择 ${chosenLayers.length} 个图层` : composition.title}</span><span className="sd-label-size">{layerState?.dirty || layerState?.saving ? '保存中…' : layerState?.error ? '尚未保存' : '已保存'}</span></div>
+      <div className="sd-float" ref={toolbar} role="toolbar" aria-label={chosenLayers.length ? '图层操作' : '画板操作'} style={{ left: inside(box.left, toolbarWidth), top: toolbarTop }}>
         {confirming ? <><span className="sd-float-text">删除画板？原图和素材会保留</span><button className="sd-float-danger" onClick={remove}>删除</button><button onClick={() => setConfirming(false)}>取消</button></> : <>
-          <button onClick={() => setEditorId(composition.id)}><LayersIcon/>编辑图层</button>
-          <button disabled={operationBusy} onClick={() => { void operate(async () => { const png = await renderLayers(model.sessionId, composition.layers, { x: 0, y: 0, width: composition.width, height: composition.height }, composition.background); downloadPng(png, composition.title) }) }} title="导出画板 PNG" aria-label="导出画板 PNG"><DownloadIcon/></button>
-          <button disabled={operationBusy} onClick={() => { void operate(async () => { const bytes = await exportPsd(model.sessionId, composition); downloadFile(bytes, composition.title, 'psd', 'image/vnd.adobe.photoshop'); flash('分层 PSD 已导出') }) }} title="导出独立图层及可编辑文字">PSD</button>
-          <button onClick={() => setConfirming(true)} title="删除画板" aria-label="删除画板"><TrashIcon/></button>
+          {chosenLayers.length > 1 ? <>
+            <button disabled={operationBusy || editableLayers.length !== chosenLayers.length} onClick={() => { void mergeLayers() }}><LayersIcon/>合并图层</button>
+            <button disabled={operationBusy || editableLayers.length < 2} onClick={() => changeComposition(c => ({ ...c, layers: alignLayers(c.layers, new Set(selectedLayers), 'grid') }))}>自动整理</button>
+          </> : null}
+          <button onClick={() => setLayerPanel(!layerPanel)} aria-pressed={layerPanel} title="在当前画布中选择、显示或锁定图层"><LayersIcon/>图层</button>
+          <button disabled={operationBusy} onClick={() => { setHistory({ done: [], undone: [] }); setEditorId(composition.id) }} title="打开详细编辑器，修改文字与属性">详细编辑</button>
+          <span className="sd-float-sep"/>
+          <button disabled={operationBusy} onClick={() => { void operate(async () => {
+            const layers = chosenLayers.length ? chosenLayers : composition.layers, bounds = chosenLayers.length ? selectionBounds(layers) : { x: 0, y: 0, width: composition.width, height: composition.height }
+            const png = await renderLayers(model.sessionId, layers, bounds, chosenLayers.length ? 'transparent' : composition.background); downloadPng(png, chosenLayers.length ? `${composition.title} · 选中图层` : composition.title)
+          }) }} title={chosenLayers.length ? '导出选中图层 PNG' : '导出画板 PNG'} aria-label={chosenLayers.length ? '导出选中图层 PNG' : '导出画板 PNG'}><DownloadIcon/></button>
+          {!chosenLayers.length ? <button disabled={operationBusy} onClick={() => { void operate(async () => { const bytes = await exportPsd(model.sessionId, composition); downloadFile(bytes, composition.title, 'psd', 'image/vnd.adobe.photoshop'); flash('分层 PSD 已导出') }) }} title="导出独立图层及可编辑文字">PSD</button> : null}
+          <button disabled={operationBusy || (chosenLayers.length > 0 && !editableLayers.length)} onClick={() => chosenLayers.length ? removeLayers() : setConfirming(true)} title={chosenLayers.length ? '删除所选图层，可撤销' : '删除画板'} aria-label={chosenLayers.length ? '删除所选图层' : '删除画板'}><TrashIcon/></button>
         </>}
       </div>
+      {layerPanel ? <aside className="sd-inline-layers" aria-label="画布图层" style={{ top: toolbarTop + toolbarHeight + 10, bottom }}>
+        <div className="sd-inline-layers-head"><strong>图层 <span>{composition.layers.length}</span></strong><button className="sd-icon-button" onClick={() => setLayerPanel(false)} aria-label="关闭图层列表"><CloseIcon/></button></div>
+        <div className="sd-layer-list" role="listbox" aria-label="图层列表" aria-multiselectable="true">
+          {[...composition.layers].reverse().map(l => <div key={l.id} className="sd-layer-row" data-selected={selectedLayers.includes(l.id)} data-hidden={l.hidden}>
+            <button className="sd-layer-select" role="option" aria-selected={selectedLayers.includes(l.id)} disabled={operationBusy || l.hidden} onClick={e => selectLayer(composition.id, l.id, e.shiftKey || e.metaKey || e.ctrlKey)} title={l.name}>
+              <span className="sd-layer-thumb">{l.kind === 'image' ? <img src={imageUrl(model.sessionId, l.assetId!)} alt="" loading="lazy"/> : l.kind === 'text' ? 'T' : l.kind === 'rect' ? '▭' : '○'}</span><span>{l.name}</span>
+            </button>
+            <button className="sd-layer-state" disabled={operationBusy} onClick={() => changeComposition(c => ({ ...c, layers: c.layers.map(value => value.id === l.id ? { ...value, hidden: !value.hidden } : value) }))} aria-label={`${l.hidden ? '显示' : '隐藏'} ${l.name}`} title={l.hidden ? '显示' : '隐藏'}>{l.hidden ? '◌' : '◉'}</button>
+            <button className="sd-layer-state" disabled={operationBusy} onClick={() => changeComposition(c => ({ ...c, layers: c.layers.map(value => value.id === l.id ? { ...value, locked: !value.locked } : value) }))} aria-label={`${l.locked ? '解锁' : '锁定'} ${l.name}`} title={l.locked ? '解锁' : '锁定'}>{l.locked ? '▣' : '◇'}</button>
+          </div>)}
+        </div>
+        <p>Shift 多选 · 拖动图层<br/>拖动底图移动整张画板</p>
+      </aside> : null}
     </> : null}
     <div className="sd-bottom">
       {toast ? <div className="sd-toast" role="status">{toast}</div> : null}
-      {error ? <div className="sd-error" role="alert"><span>{error}</span><button type="button" className="sd-icon-button sd-icon-small" onClick={() => { model.dismiss(); setOperationError('') }} aria-label="关闭"><CloseIcon size={12}/></button></div> : null}
+      {error ? <div className="sd-error" role="alert"><span>{error}</span>{layerState?.error ? <button type="button" className="sd-button" disabled={layerState.saving} onClick={() => { void layerEditor?.flush() }}>重试保存</button> : <button type="button" className="sd-icon-button sd-icon-small" onClick={() => { model.dismiss(); setOperationError('') }} aria-label="关闭"><CloseIcon size={12}/></button>}</div> : null}
+      {composition ? <div className="sd-inline-hint">{chosenLayers.length ? `已选择 ${chosenLayers.length} 个图层 · Shift 多选` : '点击图层编辑 · 从空白处拖动框选'} · 空格平移</div> : null}
       {reviewWarning ? <div className="sd-review-warning" role="status">{reviewWarning}</div> : null}
       {inConversation ? <button className="sd-conversation-link" onClick={() => { void handoff(conversation?.focus, '请在对话输入框继续描述') }}><QuoteIcon size={14}/>回到对话继续描述</button> : <Composer value={prompt} onChange={setPrompt} onSubmit={submit} onStop={() => model.cancel()} waiting={waiting} autoFocus={empty && active}
         placeholder={editing ? '描述要修改的地方，以及需要保持不变的部分…' : '描述你想生成的画面…'}

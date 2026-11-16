@@ -18,6 +18,7 @@ import { ImageEditDialog } from './ImageEditDialog.js'
 import { expandedLayerBox } from '../shared/image-edit.js'
 import type { ImageEditOperation } from '../shared/image-edit.js'
 import { exportPsd } from './psd-export.js'
+import { mergeSelectedLayers } from './layer-actions.js'
 
 const ACCENT = '#3b6cf6'
 const DEFAULT_FONT = 'Arial, PingFang SC, Microsoft YaHei, sans-serif'
@@ -197,12 +198,8 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
     flash(item.warnings?.join('；') || '已替换图层，可撤销；原图和结果均已保留')
   }
   const merge = () => task(async () => {
-    const selectedLayers = layers.filter(l => selected.includes(l.id) && !l.hidden)
-    if (selectedLayers.length < 2 || selectedLayers.some(l => l.locked)) throw new Error('请选择至少两个未锁定的可见图层。')
-    const { png, box } = await getOutput(true), item = await model.importComposite(png, '合并图层')
-    const ids = new Set(selectedLayers.map(l => l.id)), last = layers.findLastIndex(l => ids.has(l.id))
-    const merged: CanvasLayer = { id: crypto.randomUUID(), kind: 'image', name: '合并图层', assetId: item.id, ...box, opacity: 1, rotation: 0, hidden: false, locked: false }
-    changeLayers(ls => ls.flatMap((l, index) => index === last ? [merged] : ids.has(l.id) ? [] : [l])); setSelected([merged.id]); flash('已合并，原图层可撤销恢复')
+    const id = await mergeSelectedLayers(model, editor, selected)
+    setSelected([id]); flash('已合并，原图层可撤销恢复')
   })
   const reference = () => task(async () => {
     if (!conversation) return

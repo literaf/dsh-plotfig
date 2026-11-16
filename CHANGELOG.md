@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Edit decomposed layers directly on the main canvas: click, Shift/Cmd/Ctrl multi-select, marquee-select, drag, resize/rotate, and merge from the floating selection toolbar. Transparent PNG regions pass clicks through to lower layers. Keep decomposition in place, with an optional layer list and an explicit detailed-editor entry; reuse local autosave, undo and source assets.
+
 - Float canvas undo/redo and zoom controls in the upper-right corner, clear of the prompt and generate button. Keep selected-image actions below the controls, place notices with the bottom composer, and reclaim the bottom spacing in narrow and conversation canvases.
 
 - Default expansion to one side with direction shortcuts. Single-sided requests use a cropped RGB edge reference, conservative geometry alignment and a narrow exterior transition, then copy every original RGBA byte back unchanged. Keep one paid output per submission and retain multi-sided API compatibility.
