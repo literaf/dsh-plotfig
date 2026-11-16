@@ -240,7 +240,19 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   const dots = Math.max(8, 24 * view.scale)
   const empty = !items.length && !compositions.length && !state.pending.length && !state.loading
   if (opened) return <LayerEditor key={opened.id} model={model} initial={opened} conversation={conversation} onOpenCopy={setEditorId} onClose={() => { setEditorId(undefined); setSelected(opened.id) }}/>
-  return <div className="sd-canvas" data-mode={inConversation ? 'conversation' : 'board'} ref={host} tabIndex={0} onKeyDown={onKey}
+  return <div className="sd-canvas-shell">
+    <div className="sd-canvas-bar">
+      <div className="sd-zoom" role="toolbar" aria-label="视图">
+        <button onClick={undo} disabled={!history.done.length} title="撤销移动 (⌘Z)" aria-label="撤销"><UndoIcon/></button>
+        <button onClick={redo} disabled={!history.undone.length} title="重做 (⇧⌘Z)" aria-label="重做"><RedoIcon/></button>
+        <span className="sd-zoom-sep"/>
+        <button onClick={() => zoomAt(1 / 1.2)} title="缩小" aria-label="缩小"><MinusIcon/></button>
+        <button className="sd-zoom-value" onClick={() => fitAll()} title="适应窗口 (⌘0)">{Math.round(view.scale * 100)}%</button>
+        <button onClick={() => zoomAt(1.2)} title="放大" aria-label="放大"><PlusIcon/></button>
+        <button onClick={() => fitAll()} title="适应窗口 (⌘0)" aria-label="适应窗口"><FitIcon/></button>
+      </div>
+    </div>
+    <div className="sd-canvas" data-mode={inConversation ? 'conversation' : 'board'} ref={host} tabIndex={0} onKeyDown={onKey}
     style={{ backgroundSize: `${dots}px ${dots}px`, backgroundPosition: `${view.x}px ${view.y}px` }}>
     {size.width > 0 ? <Stage ref={stage} width={size.width} height={size.height} x={view.x} y={view.y} scaleX={view.scale} scaleY={view.scale}
       draggable onWheel={onWheel}
@@ -295,15 +307,6 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
         </>}
       </div>
     </> : null}
-    {splitSource ? <div className="sd-split-backdrop"><div className="sd-split-dialog" role="dialog" aria-modal="true" aria-label="拆分图层" onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') setSplitSource(undefined) }}>
-      <div className="sd-split-title"><LayersIcon/><strong>拆分图层</strong><button className="sd-icon-button" aria-label="关闭分层设置" onClick={() => setSplitSource(undefined)}><CloseIcon/></button></div>
-      <p>原图会保留，分层结果将放进新的可编辑画板。</p>
-      <label>分层说明<textarea value={splitPrompt} onChange={e => setSplitPrompt(e.target.value)} rows={3} maxLength={4000}/></label>
-      <label>最多输出图片数（含底图）<input type="number" min={2} max={100} value={maxImages} onChange={e => setMaxImages(Number(e.target.value))}/></label>
-      <p className="sd-split-cost">此操作调用 Seedream，按实际返回图片数计费。之后拖动、加字和导出均在本地完成。</p>
-      <div className="sd-split-actions"><button className="sd-button" onClick={() => setSplitSource(undefined)}>取消</button><button className="sd-button sd-button-primary" disabled={operationBusy || !Number.isInteger(maxImages) || maxImages < 2 || maxImages > 100} onClick={() => { void split() }}>开始分层</button></div>
-    </div></div> : null}
-    {editSource ? <ImageEditDialog key={editSource.id} model={model} source={editSource} initialOperation="remove-background" onClose={() => setEditSource(undefined)} onComplete={result => setSelected(result.id)}/> : null}
     {toast ? <div className="sd-toast" role="status">{toast}</div> : null}
     <div className="sd-bottom">
       {error ? <div className="sd-error" role="alert"><span>{error}</span><button type="button" className="sd-icon-button sd-icon-small" onClick={() => { model.dismiss(); setOperationError('') }} aria-label="关闭"><CloseIcon size={12}/></button></div> : null}
@@ -316,14 +319,15 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
         <SizePicker value={genSize} onChange={setGenSize} fallback={defaultSize}/>
       </Composer>}
     </div>
-    <div className="sd-zoom" role="toolbar" aria-label="视图">
-      <button onClick={undo} disabled={!history.done.length} title="撤销移动 (⌘Z)" aria-label="撤销"><UndoIcon/></button>
-      <button onClick={redo} disabled={!history.undone.length} title="重做 (⇧⌘Z)" aria-label="重做"><RedoIcon/></button>
-      <span className="sd-zoom-sep"/>
-      <button onClick={() => zoomAt(1 / 1.2)} title="缩小" aria-label="缩小"><MinusIcon/></button>
-      <button className="sd-zoom-value" onClick={() => fitAll()} title="适应窗口 (⌘0)">{Math.round(view.scale * 100)}%</button>
-      <button onClick={() => zoomAt(1.2)} title="放大" aria-label="放大"><PlusIcon/></button>
-      <button onClick={() => fitAll()} title="适应窗口 (⌘0)" aria-label="适应窗口"><FitIcon/></button>
     </div>
+    {splitSource ? <div className="sd-split-backdrop"><div className="sd-split-dialog" role="dialog" aria-modal="true" aria-label="拆分图层" onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') setSplitSource(undefined) }}>
+      <div className="sd-split-title"><LayersIcon/><strong>拆分图层</strong><button className="sd-icon-button" aria-label="关闭分层设置" onClick={() => setSplitSource(undefined)}><CloseIcon/></button></div>
+      <p>原图会保留，分层结果将放进新的可编辑画板。</p>
+      <label>分层说明<textarea value={splitPrompt} onChange={e => setSplitPrompt(e.target.value)} rows={3} maxLength={4000}/></label>
+      <label>最多输出图片数（含底图）<input type="number" min={2} max={100} value={maxImages} onChange={e => setMaxImages(Number(e.target.value))}/></label>
+      <p className="sd-split-cost">此操作调用 Seedream，按实际返回图片数计费。之后拖动、加字和导出均在本地完成。</p>
+      <div className="sd-split-actions"><button className="sd-button" onClick={() => setSplitSource(undefined)}>取消</button><button className="sd-button sd-button-primary" disabled={operationBusy || !Number.isInteger(maxImages) || maxImages < 2 || maxImages > 100} onClick={() => { void split() }}>开始分层</button></div>
+    </div></div> : null}
+    {editSource ? <ImageEditDialog key={editSource.id} model={model} source={editSource} initialOperation="remove-background" onClose={() => setEditSource(undefined)} onComplete={result => setSelected(result.id)}/> : null}
   </div>
 }

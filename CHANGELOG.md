@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Move canvas undo/redo and zoom controls into a dedicated top toolbar so they cannot cover the prompt, generate button, selected-image actions or notices. Reclaim the bottom spacing in narrow and conversation canvases.
+
 - Default expansion to one side with direction shortcuts. Single-sided requests use a cropped RGB edge reference, conservative geometry alignment and a narrow exterior transition, then copy every original RGBA byte back unchanged. Keep one paid output per submission and retain multi-sided API compatibility.
 - Flag mismatched edge overlaps, distorted model aspect ratios and unfilled exterior pixels before applying results to layers. Never use a cosmetic seam score to certify a structurally mismatched result.
 - Real follow-up: two full-image variants failed, while a 256 px left expansion of the rainforest sample passed visual review with zero original pixels changed. Three new paid outputs, no automatic retries. Other sides have synthetic and simulated UI coverage; broader live-image validation remains pending.
