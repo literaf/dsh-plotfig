@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Place detailed-editor tools in a slim vertical dock on the left, with menus opening to the right. Group undo/redo with bottom zoom controls and fit the artboard within the remaining space; keep narrow property panels clear of both control groups.
+
 - Simplify the detailed layer editor to one compact header and a floating icon toolbar. Move shapes, secondary actions and decomposition notices into dismissible menus; preserve export, autosave and keyboard shortcuts. Collapse the property panel on narrow entry and keep it clear of the toolbar.
 
 - Edit decomposed layers directly on the main canvas: click, Shift/Cmd/Ctrl multi-select, marquee-select, drag, resize/rotate, and merge from the floating selection toolbar. Transparent PNG regions pass clicks through to lower layers. Keep decomposition in place, with an optional layer list and an explicit detailed-editor entry; reuse local autosave, undo and source assets.

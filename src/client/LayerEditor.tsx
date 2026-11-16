@@ -74,9 +74,10 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
     if (!size.width || !size.height) return
     const boxes = [{ x: 0, y: 0, width: c.width, height: c.height }, ...(all ? layers.filter(l => !l.hidden).map(layerBounds) : [])]
     const x = Math.min(...boxes.map(b => b.x)), y = Math.min(...boxes.map(b => b.y)), width = Math.max(...boxes.map(b => b.x + b.width)) - x, height = Math.max(...boxes.map(b => b.y + b.height)) - y
-    const top = 88, bottom = 48, available = Math.max(1, size.height - top - bottom)
-    const scale = Math.max(0.01, Math.min((size.width - 96) / width, available / height, 1))
-    setView({ x: (size.width - width * scale) / 2 - x * scale, y: top + (available - height * scale) / 2 - y * scale, scale })
+    const left = size.width <= 420 ? 68 : 80, right = size.width <= 420 ? 24 : 40, top = 48, bottom = 60
+    const availableWidth = Math.max(1, size.width - left - right), availableHeight = Math.max(1, size.height - top - bottom)
+    const scale = Math.max(0.01, Math.min(availableWidth / width, availableHeight / height, 1))
+    setView({ x: left + (availableWidth - width * scale) / 2 - x * scale, y: top + (availableHeight - height * scale) / 2 - y * scale, scale })
   }, [size, c.width, c.height, layers])
   const fitted = useRef(false)
   useEffect(() => { if (!fitted.current && size.width) { fitted.current = true; fit(true) } }, [fit, size])
@@ -277,7 +278,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
     {state.error || localError ? <div className="sd-editor-error" role="alert"><span>{localError || state.error}</span>{state.error ? <><button className="sd-button" onClick={() => { void editor.flush() }} disabled={busy || state.saving}>重试保存</button><button className="sd-button" onClick={() => { void saveCopy() }} disabled={busy || state.saving}>另存副本</button></> : <button className="sd-button" onClick={() => setLocalError('')}>关闭</button>}</div> : null}
     <div className="sd-editor-body">
       <div className="sd-editor-stage" ref={area} tabIndex={0} style={{ cursor: panning ? 'grab' : 'default' }}>
-        <div className="sd-editor-tools" role="toolbar" aria-label="图层编辑工具">
+        <div className="sd-editor-tools" role="toolbar" aria-label="图层编辑工具" aria-orientation="vertical">
           <button onClick={() => setHand(false)} aria-pressed={!hand} aria-label="选择图层" title="选择图层"><SelectIcon/></button>
           <button onClick={() => setHand(true)} aria-pressed={hand} aria-label="抓手" title="拖动画布 · 按住空格"><HandIcon/></button><span className="sd-editor-tool-separator"/>
           <button disabled={busy} onClick={() => add('text')} aria-label="添加文字" title="添加文字"><TextIcon/></button>
@@ -289,11 +290,9 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
             </div> : null}
           </div>
           <button disabled={busy || !selectedImage || !one || one.locked || one.hidden || model.getSnapshot().pending.some(p => p.parentId === selectedImage?.id)} aria-label="AI 处理" title="AI 处理 · 去背景、消除、扩图" onClick={() => { if (one && selectedImage) setAiEdit({ layerId: one.id, source: selectedImage, operation: 'remove-background' }) }}><SparkIcon/></button><span className="sd-editor-tool-separator"/>
-          <button onClick={() => editor.undo()} disabled={busy || !state.canUndo} title="撤销 · ⌘Z" aria-label="撤销编辑"><UndoIcon/></button>
-          <button onClick={() => editor.redo()} disabled={busy || !state.canRedo} title="重做 · ⇧⌘Z" aria-label="重做编辑"><RedoIcon/></button><span className="sd-editor-tool-separator"/>
-          <div className="sd-editor-menu-anchor">
+          <div className="sd-editor-menu-anchor sd-editor-more-anchor">
             <button onClick={() => togglePopup('more')} disabled={busy} aria-label="更多操作" title="更多操作" aria-expanded={popup === 'more'} aria-haspopup="menu"><MoreIcon/></button>
-            {popup === 'more' ? <div className="sd-editor-menu" role="menu" aria-label="更多操作">
+            {popup === 'more' ? <div className="sd-editor-menu" role="menu" aria-label="更多操作" style={{ maxHeight: Math.max(96, size.height - 76) }}>
               <button role="menuitem" onClick={() => { duplicate(); setPopup(undefined) }} disabled={!editable.length}>复制图层<kbd>⌘D</kbd></button>
               <button role="menuitem" onClick={() => { void merge() }} disabled={editable.length < 2 || busy || chosen.some(l => l.locked)}>合并图层</button>
               <button role="menuitem" onClick={() => align('grid')} disabled={editable.length < 2}>自动整理</button><hr/>
@@ -330,7 +329,9 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
         </Stage> : null}
         <div className="sd-editor-frame-label" style={{ left: view.x, top: view.y - 24 }}>{c.width} × {c.height}<span>画板</span></div>
         <div className="sd-editor-hint">{compare ? '正在对照原始文字图片 · 导出使用编辑后的文字' : chosen.length ? `已选择 ${chosen.length} 个图层 · Shift 多选` : '拖动元素或框选 · 按住空格移动画布'}</div>
-        <div className="sd-zoom">
+        <div className="sd-zoom" role="toolbar" aria-label="画布视图与历史">
+          <button onClick={() => editor.undo()} disabled={busy || !state.canUndo} title="撤销 · ⌘Z" aria-label="撤销编辑"><UndoIcon/></button>
+          <button onClick={() => editor.redo()} disabled={busy || !state.canRedo} title="重做 · ⇧⌘Z" aria-label="重做编辑"><RedoIcon/></button><span className="sd-zoom-sep"/>
           <button onClick={() => zoom(1 / 1.2)} aria-label="缩小图层画布"><MinusIcon/></button><button className="sd-zoom-value" onClick={() => fit(true)} title="查看全部图层">{Math.round(view.scale * 100)}%</button><button onClick={() => zoom(1.2)} aria-label="放大图层画布"><PlusIcon/></button><button onClick={() => fit(false)} title="适应画板" aria-label="适应画板"><FitIcon/></button>
         </div>
         {notice ? <div className="sd-toast" role="status">{notice}</div> : null}
