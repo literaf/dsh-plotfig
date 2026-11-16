@@ -226,13 +226,19 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
     const measure = () => { setToolbarWidth(el.offsetWidth); setToolbarHeight(el.offsetHeight) }
     measure(); const observer = new ResizeObserver(measure); observer.observe(el); return () => observer.disconnect()
   }, [item?.id, composition?.id, confirming, inConversation, editorId])
+  const viewControls = useRef<HTMLDivElement>(null), [viewControlsBottom, setViewControlsBottom] = useState(58)
+  useLayoutEffect(() => {
+    const el = viewControls.current; if (!el) return
+    const measure = () => setViewControlsBottom(el.offsetTop + el.offsetHeight + 8)
+    measure(); const observer = new ResizeObserver(measure); observer.observe(el); return () => observer.disconnect()
+  }, [editorId])
   // Floating controls stay inside the canvas even when the image extends past its edge.
   const inside = (left: number, width: number) => clamp(left, 8, Math.max(8, size.width - width - 8))
   const screen = (b: Box) => ({ left: view.x + b.x * view.scale, top: view.y + b.y * view.scale, width: b.width * view.scale, height: b.height * view.scale })
   const box = item ? screen(item) : composition ? screen(composition) : undefined
-  // Label sits just above the image; the toolbar above the label, or inside the top edge when there is no room.
-  const labelTop = box ? Math.max(6, box.top - 24) : 0
-  const toolbarTop = box ? (labelTop - toolbarHeight - 10 >= 8 ? labelTop - toolbarHeight - 10 : Math.min(box.top + box.height - toolbarHeight - 10, Math.max(labelTop + 26, 8))) : 0
+  // Keep selected-image actions below the floating view controls, including when they wrap.
+  const labelTop = box ? Math.max(viewControlsBottom, box.top - 24) : 0
+  const toolbarTop = box ? (labelTop - toolbarHeight - 10 >= viewControlsBottom ? labelTop - toolbarHeight - 10 : labelTop + 26) : 0
   const labelWidth = box ? Math.min(Math.max(box.width, 180), size.width - 16) : 0
   const waiting = state.pending.some(p => p.key.startsWith('local-'))
   const reviewWarning = item?.warnings?.join('；')
@@ -241,7 +247,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   const empty = !items.length && !compositions.length && !state.pending.length && !state.loading
   if (opened) return <LayerEditor key={opened.id} model={model} initial={opened} conversation={conversation} onOpenCopy={setEditorId} onClose={() => { setEditorId(undefined); setSelected(opened.id) }}/>
   return <div className="sd-canvas-shell">
-    <div className="sd-canvas-bar">
+    <div className="sd-canvas-bar" ref={viewControls}>
       <div className="sd-zoom" role="toolbar" aria-label="视图">
         <button onClick={undo} disabled={!history.done.length} title="撤销移动 (⌘Z)" aria-label="撤销"><UndoIcon/></button>
         <button onClick={redo} disabled={!history.undone.length} title="重做 (⇧⌘Z)" aria-label="重做"><RedoIcon/></button>
@@ -307,8 +313,8 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
         </>}
       </div>
     </> : null}
-    {toast ? <div className="sd-toast" role="status">{toast}</div> : null}
     <div className="sd-bottom">
+      {toast ? <div className="sd-toast" role="status">{toast}</div> : null}
       {error ? <div className="sd-error" role="alert"><span>{error}</span><button type="button" className="sd-icon-button sd-icon-small" onClick={() => { model.dismiss(); setOperationError('') }} aria-label="关闭"><CloseIcon size={12}/></button></div> : null}
       {reviewWarning ? <div className="sd-review-warning" role="status">{reviewWarning}</div> : null}
       {inConversation ? <button className="sd-conversation-link" onClick={() => { void handoff(conversation?.focus, '请在对话输入框继续描述') }}><QuoteIcon size={14}/>回到对话继续描述</button> : <Composer value={prompt} onChange={setPrompt} onSubmit={submit} onStop={() => model.cancel()} waiting={waiting} autoFocus={empty && active}
