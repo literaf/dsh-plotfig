@@ -6,7 +6,8 @@ import type { LayerBox } from '../shared/layers.js'
 import { ocrTextNodes } from './ocr-layout.js'
 import type { TextMeasure } from './ocr-layout.js'
 import { psdFontName, psdFontRuns } from './psd-fonts.js'
-import { renderLayersCanvas } from './layer-render.js'
+import { nodeLabel, renderLayersCanvas } from './layer-render.js'
+import { isNode, nodeTextLayer } from '../shared/diagram.js'
 
 export const MAX_PSD_PIXELS = 80_000_000
 export type PsdRasterizer = (layers: CanvasLayer[], box: LayerBox, background: string) => Promise<PixelData>
@@ -32,7 +33,7 @@ const nativeText = (l: CanvasLayer): LayerTextData => ({
 })
 
 /** A genuine PSD: independent pixel layers, hidden layers, off-artboard content and native text records. */
-export async function buildPsdDocument(composition: Composition, rasterize: PsdRasterizer, editableText = true, measure?: TextMeasure, progress?: (done: number, total: number) => void): Promise<Psd> {
+export async function buildPsdDocument(composition: Composition, rasterize: PsdRasterizer, editableText = true, measure?: TextMeasure, progress?: (done: number, total: number) => void, labelLayout: (l: CanvasLayer) => CanvasLayer = nodeTextLayer): Promise<Psd> {
   if (composition.width > 16000 || composition.height > 16000 || composition.width * composition.height > 32_000_000) throw new Error('PSD 画板须在 3200 万像素以内，每边不超过 16000 像素。')
   let pixels = 0
   const render = async (layers: CanvasLayer[], box: LayerBox, background = 'transparent') => {
@@ -66,6 +67,12 @@ export async function buildPsdDocument(composition: Composition, rasterize: PsdR
           opacity: run.translucent ? 0.6 : 1, blendMode: 'normal', ...(run.shadow ? { effects: { dropShadow: [{ enabled: true, present: true, color: { r: 0, g: 0, b: 0 }, opacity: 0.3, blendMode: 'multiply', angle: 135, useGlobalLight: false, distance: { units: 'Pixels', value: fontSize * sy * 0.05 * Math.SQRT2 }, size: { units: 'Pixels', value: fontSize * sy * 0.08 } }] } } : {}) })
       }
       children.push({ ...base, children: spans, opened: false })
+    } else if (editableText && isNode(layer) && layer.text) {
+      const { text: _text, ...shape } = visible, label = labelLayout(visible)
+      children.push({ ...base, opened: false, children: [
+        { name: '节点', ...await render([shape], paddedBox(shape)), blendMode: 'normal' },
+        { name: layer.text, ...await render([label], paddedBox(label)), text: nativeText(label), blendMode: 'normal' },
+      ] })
     } else {
       const bitmap = await render([visible], paddedBox(visible))
       children.push({ ...base, ...bitmap, ...(editableText && layer.kind === 'text' ? { text: nativeText(layer) } : {}) })
@@ -86,6 +93,6 @@ export async function exportPsd(sessionId: string, composition: Composition, edi
     const data = ctx.getImageData(0, 0, canvas.width, canvas.height)
     canvas.width = 0; canvas.height = 0
     return data
-  }, editableText, undefined, progress)
+  }, editableText, undefined, progress, nodeLabel)
   return writePsdUint8Array(psd, { noBackground: true, trimImageData: true, invalidateTextLayers: false })
 }

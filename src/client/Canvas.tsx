@@ -25,6 +25,7 @@ import { ResearchStyleButton, ResearchStylePicker } from './ResearchStyles.js'
 import { ResearchSourcePicker, ResearchTools } from './ResearchTools.js'
 import { ResearchDialog } from './ResearchDialog.js'
 import { referenceText } from './handoff.js'
+import { DiagramTemplates, TemplateButton } from './DiagramTemplates.js'
 import { readOCR } from '../shared/ocr.js'
 
 export interface View { x: number; y: number; scale: number }
@@ -99,11 +100,12 @@ function PendingCard({ pending, rect }: { pending: PendingView; rect: { left: nu
   </div>
 }
 const EXAMPLES = ['热带雨林垂直分层剖面图，教材插画风格，标注每层高度和代表物种', '一只坐在苔藓石头上的红眼树蛙，自然博物水彩风格，浅色背景', '细胞有丝分裂各时期的示意图，扁平矢量风格，白色背景']
-export function CanvasView({ model, active = true, conversation, defaultSize, initialTool, initialStyle }: {
+export function CanvasView({ model, active = true, conversation, defaultSize, initialTool, initialStyle, initialCompositionId }: {
   model: CanvasModel; active?: boolean
   /** Absent for a standalone canvas: no conversation can read its items. */
   conversation?: ConversationActions | undefined
   defaultSize?: string | undefined
+  initialCompositionId?: string | undefined
   initialTool?: ResearchToolId | undefined; initialStyle?: GenerationStyle | undefined
 }) {
   const state = useSyncExternalStore(model.subscribe, model.getSnapshot)
@@ -116,14 +118,15 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const host = useRef<HTMLDivElement>(null), stage = useRef<Konva.Stage>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 0.3 })
-  const [selected, setSelected] = useState<string | undefined>(), [hovered, setHovered] = useState<string | undefined>()
+  const [selected, setSelected] = useState<string | undefined>(initialCompositionId), [hovered, setHovered] = useState<string | undefined>()
   const [editing, setEditing] = useState(false), [confirming, setConfirming] = useState(false)
   const [prompt, setPrompt] = useState(''), [genSize, setGenSize] = useState<SizeChoice>('')
+  const [templatePicker, setTemplatePicker] = useState(false)
   const [stylePicker, setStylePicker] = useState(false), [toolMenu, setToolMenu] = useState(false)
   const [sourceTool, setSourceTool] = useState<Exclude<ResearchToolId, 'generate'> | 'import' | undefined>(initialTool && initialTool !== 'generate' ? initialTool : undefined)
   const [referenceSource, setReferenceSource] = useState<{ item: CanvasItem; kind: 'reference' | 'sketch' }>()
   const [splitForText, setSplitForText] = useState(false), [editorFocus, setEditorFocus] = useState<string>()
-  const [editorId, setEditorId] = useState<string>(), [splitSource, setSplitSource] = useState<CanvasItem>()
+  const [editorId, setEditorId] = useState<string | undefined>(initialCompositionId), [splitSource, setSplitSource] = useState<CanvasItem>()
   const [selectedLayers, setSelectedLayers] = useState<string[]>([]), [layerPanel, setLayerPanel] = useState(false)
   const [hand, setHand] = useState(false), [space, setSpace] = useState(false)
   const [marquee, setMarquee] = useState<Box>(), marqueeStart = useRef<{ x: number; y: number; compositionId?: string | undefined; keep: string[] }>()
@@ -473,7 +476,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
         <div className="sd-layer-list" role="listbox" aria-label="图层列表" aria-multiselectable="true">
           {[...composition.layers].reverse().map(l => <div key={l.id} className="sd-layer-row" data-selected={selectedLayers.includes(l.id)} data-hidden={l.hidden}>
             <button className="sd-layer-select" role="option" aria-selected={selectedLayers.includes(l.id)} disabled={operationBusy || l.hidden} onClick={e => selectLayer(composition.id, l.id, e.shiftKey || e.metaKey || e.ctrlKey)} title={l.name}>
-              <span className="sd-layer-thumb">{l.kind === 'image' ? <img src={imageUrl(model.sessionId, l.assetId!)} alt="" loading="lazy"/> : l.kind === 'text' ? 'T' : l.kind === 'rect' ? '▭' : '○'}</span><span>{l.name}</span>
+              <span className="sd-layer-thumb">{l.kind === 'image' ? <img src={imageUrl(model.sessionId, l.assetId!)} alt="" loading="lazy"/> : l.kind === 'text' ? 'T' : l.kind === 'rect' ? '▭' : l.kind === 'diamond' ? '◇' : l.kind === 'arrow' ? '↗' : '○'}</span><span>{l.name}</span>
             </button>
             <button className="sd-layer-state" disabled={operationBusy} onClick={() => changeComposition(c => ({ ...c, layers: c.layers.map(value => value.id === l.id ? { ...value, hidden: !value.hidden } : value) }))} aria-label={`${l.hidden ? '显示' : '隐藏'} ${l.name}`} title={l.hidden ? '显示' : '隐藏'}>{l.hidden ? '◌' : '◉'}</button>
             <button className="sd-layer-state" disabled={operationBusy} onClick={() => changeComposition(c => ({ ...c, layers: c.layers.map(value => value.id === l.id ? { ...value, locked: !value.locked } : value) }))} aria-label={`${l.locked ? '解锁' : '锁定'} ${l.name}`} title={l.locked ? '解锁' : '锁定'}>{l.locked ? '▣' : '◇'}</button>
@@ -487,13 +490,14 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
       {error ? <div className="sd-error" role="alert"><span>{error}</span>{layerState?.error ? <button type="button" className="sd-button" disabled={layerState.saving} onClick={() => { void layerEditor?.flush() }}>重试保存</button> : <button type="button" className="sd-icon-button sd-icon-small" onClick={() => { model.dismiss(); setOperationError('') }} aria-label="关闭"><CloseIcon size={12}/></button>}</div> : null}
       {composition ? <div className="sd-inline-hint">{chosenLayers.length ? `已选择 ${chosenLayers.length} 个图层 · Shift 多选` : '点击图层编辑 · 从空白处拖动框选'} · 空格平移</div> : null}
       {reviewWarning ? <div className="sd-review-warning" role="status">{reviewWarning}</div> : null}
-      {inConversation ? <button className="sd-conversation-link" onClick={() => { void handoff(conversation?.focus, '请在对话输入框继续描述') }}><QuoteIcon size={14}/>回到对话继续描述</button> : <Composer value={prompt} onChange={setPrompt} onSubmit={submit} onStop={() => model.cancel()} waiting={waiting} autoFocus={empty && active}
+      {inConversation ? <><TemplateButton open={templatePicker} disabled={operationBusy} onClick={() => setTemplatePicker(true)}/><button className="sd-conversation-link" onClick={() => { void handoff(conversation?.focus, '请在对话输入框继续描述') }}><QuoteIcon size={14}/>回到对话继续描述</button></> : <Composer value={prompt} onChange={setPrompt} onSubmit={submit} onStop={() => model.cancel()} waiting={waiting} autoFocus={empty && active}
         placeholder={editing ? '描述要修改的地方，以及需要保持不变的部分…' : '描述你想生成的画面…'}
         context={referenceSource ? <span className="sd-context-chip"><img src={imageUrl(model.sessionId, referenceSource.item.id)} alt=""/>{referenceSource.kind === 'sketch' ? '草图' : '参考'} · {labelOf(referenceSource.item)}</span> : editing && item ? <span className="sd-context-chip"><img src={imageUrl(model.sessionId, item.id)} alt=""/>编辑 · {labelOf(item)}</span> : undefined}
         onClearContext={() => { setEditing(false); if (referenceSource && prompt === referencePrompt(referenceSource.kind)) setPrompt(''); setReferenceSource(undefined) }}
         disabled={state.styleBusy}
         hint={state.styleBusy ? '正在保存风格…' : waiting ? '生成中…' : '每次生成都会计费'}>
         <ResearchStyleButton value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.styleBusy} open={stylePicker} onClick={() => setStylePicker(true)}/>
+        <TemplateButton open={templatePicker} disabled={operationBusy} onClick={() => setTemplatePicker(true)}/>
         <SizePicker value={genSize} onChange={setGenSize} fallback={defaultSize}/>
       </Composer>}
     </div>
@@ -508,6 +512,10 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
     </div></div> : null}
     {editSource ? <ImageEditDialog key={editSource.id} model={model} source={editSource} initialOperation="remove-background" onClose={() => setEditSource(undefined)} onComplete={result => setSelected(result.id)}/> : null}
     {toolMenu ? <ResearchDialog title="科研工具" onClose={() => setToolMenu(false)}><ResearchTools onSelect={launchTool}/></ResearchDialog> : null}
+    {templatePicker ? <DiagramTemplates onClose={() => setTemplatePicker(false)} onCreate={async (id, palette) => {
+      const created = await model.createTemplate(id, palette)
+      setSelected(created.id); setSelectedLayers([]); setEditorId(created.id); setTemplatePicker(false)
+    }}/> : null}
     {stylePicker ? <ResearchStylePicker value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.styleBusy} error={state.error} onPick={style => { void model.setGenerationStyle(style).then(ok => { if (ok) setStylePicker(false) }) }} onClose={() => setStylePicker(false)}/> : null}
     {sourceTool ? <ResearchSourcePicker tool={sourceTool} model={model} items={items} compositions={compositions} onSelect={source => useToolSource(source, sourceTool)} onOpenComposition={id => { const c = compositions.find(c => c.id === id); if (c) openTextEditor(c) }} onClose={() => setSourceTool(undefined)}/> : null}
   </div>

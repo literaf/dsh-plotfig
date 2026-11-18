@@ -1,17 +1,26 @@
 import Konva from 'konva'
 import { useMemo } from 'react'
-import { Ellipse, Group, Image as KImage, Rect, Text } from 'react-konva'
+import { Arrow, Ellipse, Group, Image as KImage, Line, Rect, Text } from 'react-konva'
 import type { CanvasLayer, Composition } from '../shared/types.js'
 import type { LayerBox } from '../shared/layers.js'
 import { imageUrl } from './controller.js'
 import { loadImage, useImage } from './images.js'
 import { ocrTextNodes } from './ocr-layout.js'
+import { arrowPoints, isNode, nodeTextLayer } from '../shared/diagram.js'
+
+export const diamondPoints = (l: CanvasLayer) => [l.width / 2, 0, l.width, l.height / 2, l.width / 2, l.height, 0, l.height / 2]
+export const arrowAttributes = (l: CanvasLayer) => ({ points: arrowPoints(l), pointerLength: Math.max(10, (l.strokeWidth ?? 3) * 3), pointerWidth: Math.max(10, (l.strokeWidth ?? 3) * 3) * 0.9, hitStrokeWidth: 14, lineJoin: 'round' as const })
 
 export const textAttributes = (l: CanvasLayer) => ({
   text: l.text ?? '', width: l.width, height: l.height, fontSize: l.fontSize ?? 36,
   fontFamily: l.fontFamily ?? 'Arial', fontStyle: [l.bold ? 'bold' : '', l.italic ? 'italic' : ''].filter(Boolean).join(' ') || 'normal',
   fill: l.fill ?? '#222222', align: l.align ?? 'left', lineHeight: 1.2, wrap: 'word',
 })
+/** Measure wrapping once so labels remain centered even after editing. */
+export function nodeLabel(l: CanvasLayer): CanvasLayer {
+  const first = nodeTextLayer(l), probe = new Konva.Text({ ...textAttributes(first), height: Math.max(1, l.height - 12) })
+  try { return nodeTextLayer(l, Math.max(1, probe.textArr.length)) } finally { probe.destroy() }
+}
 /** Small hit masks let transparent PNG regions pass clicks to lower layers without caching the visible image. */
 const hitMasks = new WeakMap<HTMLImageElement, { width: number; height: number; runs: number[][] }>()
 function alphaMask(image: HTMLImageElement) {
@@ -48,7 +57,14 @@ export function LayerContent({ layer: l, sessionId, alphaHit = false }: { layer:
   if (l.kind === 'text' && l.ocr) return <><Rect width={l.width} height={l.height} fill="rgba(0,0,0,0)"/><Group scaleX={l.width / l.ocr.width} scaleY={l.height / l.ocr.height}>{ocrTextNodes(l.ocr).map((attrs, i) => <Text key={i} {...attrs}/>)}</Group></>
   if (l.kind === 'text') return <Text {...textAttributes(l)}/>
   const shape = { fill: l.fill ?? 'transparent', stroke: l.stroke ?? 'transparent', strokeWidth: l.strokeWidth ?? 0 }
-  return l.kind === 'rect' ? <Rect width={l.width} height={l.height} {...shape}/> : <Ellipse x={l.width / 2} y={l.height / 2} radiusX={l.width / 2} radiusY={l.height / 2} {...shape}/>
+  const label = isNode(l) && l.text ? nodeLabel({ ...l, x: 0, y: 0, rotation: 0 }) : undefined
+  return <>
+    {l.kind === 'arrow' ? <Arrow {...shape} fill={l.stroke ?? '#507b8b'} {...arrowAttributes(l)}/>
+      : l.kind === 'diamond' ? <Line points={diamondPoints(l)} closed {...shape}/>
+      : l.kind === 'rect' ? <Rect width={l.width} height={l.height} cornerRadius={l.cornerRadius ?? 0} {...shape}/>
+      : <Ellipse x={l.width / 2} y={l.height / 2} radiusX={l.width / 2} radiusY={l.height / 2} {...shape}/>}
+    {label ? <Text {...textAttributes(label)} x={label.x} y={label.y} listening={false}/> : null}
+  </>
 }
 export function CompositionContent({ composition, sessionId }: { composition: Composition; sessionId: string }) {
   return <>
@@ -82,7 +98,11 @@ export async function renderLayersCanvas(sessionId: string, layers: CanvasLayer[
       else if (l.kind === 'text') group.add(new Konva.Text(textAttributes(l)))
       else {
         const attrs = { fill: l.fill ?? 'transparent', stroke: l.stroke ?? 'transparent', strokeWidth: l.strokeWidth ?? 0 }
-        group.add(l.kind === 'rect' ? new Konva.Rect({ width: l.width, height: l.height, ...attrs }) : new Konva.Ellipse({ x: l.width / 2, y: l.height / 2, radiusX: l.width / 2, radiusY: l.height / 2, ...attrs }))
+        group.add(l.kind === 'arrow' ? new Konva.Arrow({ ...attrs, fill: l.stroke ?? '#507b8b', ...arrowAttributes(l) })
+          : l.kind === 'diamond' ? new Konva.Line({ ...attrs, points: diamondPoints(l), closed: true })
+          : l.kind === 'rect' ? new Konva.Rect({ width: l.width, height: l.height, cornerRadius: l.cornerRadius ?? 0, ...attrs })
+          : new Konva.Ellipse({ x: l.width / 2, y: l.height / 2, radiusX: l.width / 2, radiusY: l.height / 2, ...attrs }))
+        if (isNode(l) && l.text) { const label = nodeLabel({ ...l, x: 0, y: 0, rotation: 0 }); group.add(new Konva.Text({ ...textAttributes(label), x: label.x, y: label.y })) }
       }
       plane.add(group)
     }

@@ -1,6 +1,7 @@
 import { isRecord, ITEM_ID, MAX_PROMPT, SIZE_TIERS } from './types.js'
 import type { CanvasLayer, Composition, LayerKind, OCRText } from './types.js'
 import { ocrPlainText, parseOCR } from './ocr.js'
+import { isNode, updateConnectors } from './diagram.js'
 
 export const LAYER_ID = /^[a-zA-Z0-9_-]{1,80}$/
 export const MAX_LAYERS = 500
@@ -34,7 +35,7 @@ export function parseCompositionEdit(raw: unknown, assets: ReadonlySet<string>):
   const layers: CanvasLayer[] = raw.layers.map(value => {
     if (!isRecord(value) || typeof value.id !== 'string' || !LAYER_ID.test(value.id) || ids.has(value.id)) throw new Error('图层 ID 无效或重复。')
     ids.add(value.id)
-    if (!['image', 'text', 'rect', 'ellipse'].includes(String(value.kind))) throw new Error('图层类型无效。')
+    if (!['image', 'text', 'rect', 'ellipse', 'diamond', 'arrow'].includes(String(value.kind))) throw new Error('图层类型无效。')
     const kind = value.kind as LayerKind
     for (const k of ['hidden', 'locked']) if (typeof value[k] !== 'boolean') throw new Error('图层状态无效。')
     const layer: CanvasLayer = {
@@ -55,11 +56,35 @@ export function parseCompositionEdit(raw: unknown, assets: ReadonlySet<string>):
         if (typeof value.bold !== 'boolean' || typeof value.italic !== 'boolean' || !['left', 'center', 'right'].includes(String(value.align))) throw new Error('文字样式无效。')
         layer.bold = value.bold; layer.italic = value.italic; layer.align = value.align as NonNullable<CanvasLayer['align']>
         if (value.ocr !== undefined) { layer.ocr = parseOCR(value.ocr, assets); layer.text = ocrPlainText(layer.ocr) }
-      } else { layer.stroke = color(value.stroke); layer.strokeWidth = num(value.strokeWidth, 0, 1000, '描边') }
+      } else {
+        layer.stroke = color(value.stroke); layer.strokeWidth = num(value.strokeWidth, 0, 1000, '描边')
+        if (isNode(layer)) {
+          if (value.cornerRadius !== undefined) layer.cornerRadius = num(value.cornerRadius, 0, 16000, '圆角')
+          if (value.text !== undefined) {
+            layer.text = str(value.text, 10000, '节点文字'); layer.textColor = color(value.textColor)
+            layer.fontSize = num(value.fontSize, 1, 2000, '字号'); layer.fontFamily = str(value.fontFamily, 100, '字体')
+            if (typeof value.bold !== 'boolean' || typeof value.italic !== 'boolean' || !['left', 'center', 'right'].includes(String(value.align))) throw new Error('节点文字样式无效。')
+            layer.bold = value.bold; layer.italic = value.italic; layer.align = value.align as NonNullable<CanvasLayer['align']>
+          }
+        }
+        if (kind === 'arrow') {
+          if (!Array.isArray(value.points) || value.points.length < 4 || value.points.length > 64 || value.points.length % 2) throw new Error('箭头路径无效。')
+          layer.points = value.points.map(p => num(p, 0, 1, '路径坐标'))
+          if (value.routing !== undefined) {
+            if (!['straight', 'horizontal', 'vertical'].includes(String(value.routing))) throw new Error('连线方式无效。')
+            layer.routing = value.routing as NonNullable<CanvasLayer['routing']>
+          }
+          for (const key of ['startBinding', 'endBinding'] as const) if (value[key] !== undefined) {
+            const b = value[key]
+            if (!isRecord(b) || typeof b.layerId !== 'string' || !LAYER_ID.test(b.layerId) || !['top', 'right', 'bottom', 'left'].includes(String(b.side))) throw new Error('连线节点无效。')
+            layer[key] = { layerId: b.layerId, side: b.side as 'top' | 'right' | 'bottom' | 'left' }
+          }
+        }
+      }
     }
     return layer
   })
-  return { title: str(raw.title, 200, '画板标题'), width: num(raw.width, 1, 16000, '画板宽度'), height: num(raw.height, 1, 16000, '画板高度'), background: color(raw.background), layers }
+  return { title: str(raw.title, 200, '画板标题'), width: num(raw.width, 1, 16000, '画板宽度'), height: num(raw.height, 1, 16000, '画板高度'), background: color(raw.background), layers: updateConnectors(layers) }
 }
 export interface LayerBox { x: number; y: number; width: number; height: number }
 /** Axis-aligned bounds after rotation, shared by selection, alignment and export. */

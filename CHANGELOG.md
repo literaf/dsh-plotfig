@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add eight original, local diagram templates in four categories with three palettes, available through a compact composer button. Keep browsing separate from explicit creation, and allow templates without Ark credentials.
+- Support rounded nodes, diamond decisions, editable node labels and attached arrows. Recompute endpoints after edits; preserve connection-aware copy, detach, autosave and undo/redo. Include source-free artboards in recent/all-canvas lists and allow conflict recovery as a separate copy.
+- Export vector/text artboards as SVG using canvas text wrapping; retain editable node labels in PSD groups. Existing raster/OCR artboards keep their export paths. New diagram primitives require this build or later.
+
+
 - Limit the home gallery to eight recent canvases and add an All canvases entry with the total count. Open the complete gallery in its own view, preserve the home draft and return destination when browsing, and remove the catalog’s 200-item truncation.
 
 - Refine the home and standalone prompt boxes with clearer text spacing, lightweight style/size controls, a fixed model label and hints below the field. Keep size menus within narrow input bounds and measure the growing composer so canvas image actions remain clear of it.

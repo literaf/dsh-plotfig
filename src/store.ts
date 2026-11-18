@@ -6,6 +6,7 @@ import type { Canvas, CanvasEntry, CanvasItem, CanvasLayer, Composition } from '
 import type { ArkImage } from './ark.js'
 import { parseCompositionEdit } from './shared/layers.js'
 import { parseGenerationStyle } from './shared/research.js'
+import { createDiagramTemplate } from './shared/templates.js'
 export const GAP = 80
 async function atomic(path: string, data: string | Uint8Array): Promise<void> {
   const temp = `${path}.${randomUUID()}.tmp`
@@ -103,14 +104,18 @@ export class CanvasStore {
   }
   async createComposition(sessionId: string, sourceId: string, edit?: unknown): Promise<{ canvas: Canvas; composition: Composition }> {
     return this.serial(sessionId, async () => {
-      const canvas = await this.get(sessionId), source = canvas.items.find(i => i.id === checkItem(sourceId))
-      if (!source) throw new Error('原图不存在。')
-      const composition: Composition = { id: randomBytes(6).toString('hex'), sourceId, title: `${source.title} · 图层画板`, x: rightEdge(canvas), y: source.y,
-        width: source.width, height: source.height, background: 'transparent', version: 0, layers: [imageLayer(source)] }
+      const canvas = await this.get(sessionId), source = sourceId ? canvas.items.find(i => i.id === checkItem(sourceId)) : undefined
+      if (sourceId ? !source : edit === undefined) throw new Error('原图不存在。')
+      const composition: Composition = { id: randomBytes(6).toString('hex'), sourceId, title: source ? `${source.title} · 图层画板` : '图形画板', x: rightEdge(canvas), y: source?.y ?? 0,
+        width: source?.width ?? 1200, height: source?.height ?? 760, background: 'transparent', version: 0, layers: source ? [imageLayer(source)] : [] }
       if (edit !== undefined) Object.assign(composition, parseCompositionEdit(edit, new Set(canvas.items.map(i => i.id))))
       ;(canvas.compositions ??= []).push(composition)
+      if (!canvas.title) canvas.title = composition.title
       return { canvas: await this.commit(canvas), composition }
     })
+  }
+  async createTemplate(sessionId: string, templateId: string, palette: string) {
+    return this.createComposition(sessionId, '', createDiagramTemplate(templateId, palette))
   }
   /** Raw assets remain immutable; scene edits are versioned separately from new generations. */
   async editComposition(sessionId: string, id: string, version: unknown, edit: unknown): Promise<{ canvas: Canvas; composition: Composition }> {
@@ -161,7 +166,7 @@ export class CanvasStore {
     let names: string[]
     try { names = await readdir(this.root) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; names = [] }
     const wanted = new Set(include), all = [...new Set([...names, ...include])].filter(n => SESSION_ID.test(n))
-    const entries = await Promise.all(all.map(async n => { try { const c = await this.get(n); return c.items.length || wanted.has(n) ? entryOf(c) : undefined } catch { return undefined } }))
+    const entries = await Promise.all(all.map(async n => { try { const c = await this.get(n); return c.items.length || c.compositions?.length || wanted.has(n) ? entryOf(c) : undefined } catch { return undefined } }))
     return entries.filter((e): e is CanvasEntry => !!e).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 }

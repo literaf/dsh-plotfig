@@ -34,13 +34,13 @@ describe('saved canvas access without model credentials', () => {
       expect(vi.mocked(fetcher).mock.calls.every(([url]) => !String(url).includes('/generate') && !String(url).includes('/decompose'))).toBe(true)
     } finally { await act(async () => root.unmount()); controller.dispose() }
   })
-  it('still introduces key setup when there are no saved canvases', async () => {
+  it('offers local templates without credentials when there are no saved canvases', async () => {
     const fetcher = vi.fn(async () => ({ ok: true, value: { version: '0.1.0', configured: false, canvases: [], defaultSize: '2K', watermark: false } })) as unknown as Fetcher
     const controller = new Controller(() => { throw new Error('No credential read expected') }, fetcher)
     const node = document.createElement('div'), root = createRoot(node)
     try {
       await act(async () => { await controller.attach(); root.render(<Workspace controller={controller} openConversation={() => false} conversation={vi.fn()}/>) })
-      expect(node.querySelector('input[type="password"]')).not.toBeNull()
+      expect(node.querySelector('[aria-label="选择图形模板"]')).not.toBeNull()
       expect(node.querySelector('.sd-gallery')).toBeNull()
     } finally { await act(async () => root.unmount()); controller.dispose() }
   })

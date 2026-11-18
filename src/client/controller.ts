@@ -169,6 +169,11 @@ export class CanvasModel extends Emitter<CanvasState> {
     if (!reply.ok) throw new Error(reply.error)
     this.accept(reply.value.canvas); this.onChange(); return reply.value.composition
   }
+  async createTemplate(templateId: string, palette: string): Promise<Composition> {
+    const reply = await this.fetcher<{ canvas: Canvas; composition: Composition }>(`${ROUTE}/composition?session=${encodeURIComponent(this.sessionId)}`, new AbortController().signal, { templateId, palette })
+    if (!reply.ok) throw new Error(reply.error)
+    this.accept(reply.value.canvas); this.onChange(); return reply.value.composition
+  }
   editor(composition: Composition): EditorModel {
     let editor = this.editors.get(composition.id)
     if (!editor) { editor = new EditorModel(composition, (c, v) => this.saveComposition(c, v)); this.editors.set(composition.id, editor) }

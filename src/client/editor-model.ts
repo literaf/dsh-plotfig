@@ -1,4 +1,5 @@
 import type { Composition } from '../shared/types.js'
+import { updateConnectors } from '../shared/diagram.js'
 
 export interface EditorState {
   composition: Composition
@@ -31,7 +32,8 @@ export class EditorModel {
     this.listeners.forEach(fn => fn())
   }
   change(update: (composition: Composition) => Composition, group?: string): void {
-    const next = update(this.state.composition)
+    const changed = update(this.state.composition)
+    const next = { ...changed, layers: updateConnectors(changed.layers) }
     if (JSON.stringify(next) === JSON.stringify(this.state.composition)) return
     if (!group || this.group?.key !== group || Date.now() - this.group.at > 600) this.done = [...this.done.slice(-49), this.state.composition]
     this.group = group ? { key: group, at: Date.now() } : undefined

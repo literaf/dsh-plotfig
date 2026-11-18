@@ -5,7 +5,8 @@ import { ArkError, imageInfo, MAX_BYTES } from './ark.js'
 import { entryOf, isRecord, parseGenerate, parseSize, ROUTE } from './shared/types.js'
 import type { Status } from './shared/types.js'
 import type { Preferences } from './preferences.js'
-import { parseDecompose } from './shared/layers.js'
+import { parseCompositionEdit, parseDecompose } from './shared/layers.js'
+import { diagramSvg } from './shared/diagram-svg.js'
 import { MAX_MASK_BYTES, parseImageEdit } from './shared/image-edit.js'
 import { decodePixels, encodePixels } from './pixels.js'
 
@@ -55,6 +56,12 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
     async image(request: Request): Promise<Response> {
       try {
         const url = new URL(request.url), id = session(url), item = checkItem(url.searchParams.get('id') ?? '')
+        if (url.searchParams.get('diagram') === '1') {
+          const canvas = await service.store.get(id), composition = canvas.compositions?.find(c => c.id === item)
+          if (!composition) throw new Error('画板不存在。')
+          const svg = diagramSvg(parseCompositionEdit(composition, new Set(canvas.items.map(i => i.id))))
+          return new Response(svg, { headers: { ...HEADERS, 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'private, no-cache', 'Content-Security-Policy': "default-src 'none'; sandbox" } })
+        }
         const data = await service.store.readImage(id, item)
         return new Response(new Uint8Array(data), { headers: { 'Content-Type': 'image/png', ...HEADERS, 'Cache-Control': 'private, max-age=31536000, immutable',
           'Content-Disposition': `${url.searchParams.has('download') ? 'attachment' : 'inline'}; filename="seedream-${item}.png"`, 'Content-Security-Policy': "default-src 'none'; sandbox" } })
@@ -66,7 +73,11 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
         if (request.method === 'DELETE') return json({ ok: true, value: { canvas: await service.store.removeComposition(sid, checkItem(url.searchParams.get('id') ?? '')) } })
         const raw = await body(request, 2 * 1024 * 1024)
         if (!isRecord(raw)) throw new Error('无效的画板数据。')
-        if (request.method === 'POST') return json({ ok: true, value: await service.store.createComposition(sid, checkItem(String(raw.sourceId ?? '')), raw.composition) })
+        if (request.method === 'POST') {
+          if (typeof raw.templateId === 'string') return json({ ok: true, value: await service.store.createTemplate(sid, raw.templateId, String(raw.palette ?? 'ocean')) })
+          const sourceId = raw.sourceId === '' && raw.composition !== undefined ? '' : checkItem(String(raw.sourceId ?? ''))
+          return json({ ok: true, value: await service.store.createComposition(sid, sourceId, raw.composition) })
+        }
         return json({ ok: true, value: await service.store.editComposition(sid, checkItem(String(raw.id ?? '')), raw.version, raw.composition) })
       } catch (error) { return fail(error, '保存画板失败。') }
     },

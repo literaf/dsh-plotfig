@@ -69,7 +69,8 @@ export interface Canvas {
   /** Persisted per canvas; changing this does not generate or alter any image. */
   generationStyle?: GenerationStyle
 }
-export type LayerKind = 'image' | 'text' | 'rect' | 'ellipse'
+export type LayerKind = 'image' | 'text' | 'rect' | 'ellipse' | 'diamond' | 'arrow'
+export interface ConnectorBinding { layerId: string; side: 'top' | 'right' | 'bottom' | 'left' }
 export interface TextRun {
   text: string
   fontFamily: string
@@ -119,6 +120,14 @@ export interface CanvasLayer {
   fill?: string
   stroke?: string
   strokeWidth?: number
+  cornerRadius?: number
+  /** Labels belong to their shape; moving a node also moves its text. */
+  textColor?: string
+  /** Arrow vertices normalized to this layer's width and height. */
+  points?: number[]
+  startBinding?: ConnectorBinding
+  endBinding?: ConnectorBinding
+  routing?: 'straight' | 'horizontal' | 'vertical'
   ocr?: OCRText
 }
 /** Layer coordinates are relative to the artboard, and may extend beyond it. */
@@ -144,6 +153,7 @@ export interface CanvasEntry {
   revision: number
   updatedAt: string
   cover?: string
+  diagramCover?: string
 }
 export interface Status {
   version: string
@@ -159,9 +169,9 @@ export const labelOf = (item: Pick<CanvasItem, 'title' | 'prompt'>): string =>
   item.title === item.prompt.replace(/\s+/g, ' ').slice(0, 24) ? titleFrom(item.prompt) : item.title
 export const entryOf = (canvas: Canvas): CanvasEntry => {
   const originals = canvas.items.filter(i => i.role !== 'layer')
-  const first = originals[0], last = originals.at(-1)
+  const first = originals[0], last = originals.at(-1), diagram = canvas.compositions?.at(-1)
   const title = first && (canvas.title === undefined || canvas.title === first.title) ? labelOf(first) : canvas.title ?? '未命名画布'
-  return { sessionId: canvas.sessionId, title, count: originals.length + (canvas.compositions?.length ?? 0), revision: canvas.revision, updatedAt: canvas.updatedAt, ...(last ? { cover: last.id } : {}) }
+  return { sessionId: canvas.sessionId, title, count: originals.length + (canvas.compositions?.length ?? 0), revision: canvas.revision, updatedAt: canvas.updatedAt, ...(last ? { cover: last.id } : diagram && diagram.layers.every(l => l.kind !== 'image' && !l.ocr) ? { diagramCover: diagram.id } : {}) }
 }
 /**
  * A short, readable label from a prompt: the first clause, cut at a word

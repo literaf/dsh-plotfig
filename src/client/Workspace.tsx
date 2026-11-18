@@ -8,6 +8,7 @@ import type { ConversationActions } from './handoff.js'
 import { ResearchTools } from './ResearchTools.js'
 import { ResearchStyleButton, ResearchStylePicker } from './ResearchStyles.js'
 import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
+import { DiagramTemplates, TemplateButton } from './DiagramTemplates.js'
 import { Composer, SizePicker } from './Composer.js'
 import type { SizeChoice } from './Composer.js'
 const RECENT_CANVASES = 8
@@ -52,6 +53,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
   const [library, setLibrary] = useState(false)
   const [launch, setLaunch] = useState<{ tool: ResearchToolId; style?: GenerationStyle }>()
   const [prompt, setPrompt] = useState(''), [style, setStyle] = useState<GenerationStyle>('auto'), [genSize, setGenSize] = useState<SizeChoice>('')
+  const [templatePicker, setTemplatePicker] = useState(false), [templateComposition, setTemplateComposition] = useState<string>()
   const [stylePicker, setStylePicker] = useState(false), [starting, setStarting] = useState(false)
   const homeInput = useRef<HTMLDivElement>(null), submitting = useRef(false)
   const galleryScroll = useRef<HTMLDivElement>(null), scrollPositions = useRef({ recent: 0, all: 0 })
@@ -70,7 +72,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
   const visibleCanvases = library ? canvases : canvases.slice(0, RECENT_CANVASES)
   // Choosing a style on the home page only updates its draft. A new canvas is
   // created when the user starts a tool or explicitly submits generation.
-  const start = (tool: ResearchToolId) => { setLaunch({ tool, ...(style === 'auto' ? {} : { style }) }); setSettings(false); setOpen(BOARD_PREFIX + crypto.randomUUID()) }
+  const start = (tool: ResearchToolId) => { setTemplateComposition(undefined); setLaunch({ tool, ...(style === 'auto' ? {} : { style }) }); setSettings(false); setOpen(BOARD_PREFIX + crypto.randomUUID()) }
   const create = () => start('generate')
   const generate = async () => {
     const submitted = prompt, text = submitted.trim()
@@ -80,14 +82,14 @@ export function Workspace({ controller, openConversation, conversation }: { cont
     try {
       const id = BOARD_PREFIX + crypto.randomUUID(), model = controller.canvas(id)
       if (!await model.setGenerationStyle(style)) { controller.notify(model.getSnapshot().error ?? '保存风格失败，请稍后再试。'); return }
-      setLaunch(undefined); setOpen(id)
+      setTemplateComposition(undefined); setLaunch(undefined); setOpen(id)
       // Dispatch only from this explicit submit, never from a mount effect.
       // Keep the home draft if the request fails so it can be recovered on return.
       void model.generate({ prompt: text, style, ...(genSize ? { size: genSize } : {}) }).then(ok => { if (ok) setPrompt(value => value === submitted ? '' : value) })
     } finally { submitting.current = false; setStarting(false) }
   }
   const openCanvas = (id: string) => {
-    setLaunch(undefined)
+    setTemplateComposition(undefined); setLaunch(undefined)
     try { if (isBoard(id) || !openConversation(id)) setOpen(id) }
     catch (error) { controller.notify(error instanceof Error ? error.message : '无法打开原对话') }
   }
@@ -116,8 +118,8 @@ export function Workspace({ controller, openConversation, conversation }: { cont
         {!settings ? <button className="sd-icon-button" onClick={() => setSettings(true)} aria-label="设置" title="设置"><GearIcon/></button> : null}
       </div>
     </header>
-    {settings || (c && !c.configured && !open && !canvases.length) ? <div className="sd-scroll"><Settings controller={controller}/></div>
-      : open ? <CanvasView key={open} model={controller.canvas(open)} defaultSize={c?.defaultSize} conversation={isBoard(open) ? undefined : conversation(open)} initialTool={launch?.tool} initialStyle={launch?.style}/>
+    {settings ? <div className="sd-scroll"><Settings controller={controller}/></div>
+      : open ? <CanvasView key={open} model={controller.canvas(open)} defaultSize={c?.defaultSize} conversation={isBoard(open) ? undefined : conversation(open)} initialTool={launch?.tool} initialStyle={launch?.style} initialCompositionId={templateComposition}/>
       : <div className="sd-scroll" key={library ? 'all' : 'home'} ref={galleryScroll} onScroll={e => { scrollPositions.current[library ? 'all' : 'recent'] = e.currentTarget.scrollTop }}>
         {c && !c.configured ? <div className="sd-alert" role="status">已保存的画布可继续编辑和导出。生成或分图层前，请在设置中配置方舟 API Key。</div> : null}
         {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}
@@ -127,6 +129,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
             <h1>想画些什么？</h1>
             <Composer value={prompt} onChange={setPrompt} onSubmit={() => { void generate() }} disabled={starting || !c} placeholder="描述你想生成的图片…" hint={starting ? '准备画布…' : '每次生成都会计费'}>
               <ResearchStyleButton value={style} busy={starting} open={stylePicker} onClick={() => setStylePicker(true)}/>
+              <TemplateButton open={templatePicker} disabled={starting || !c} onClick={() => setTemplatePicker(true)}/>
               <SizePicker value={genSize} onChange={setGenSize} fallback={c?.defaultSize}/>
             </Composer>
           </div>
@@ -136,7 +139,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
         {canvases.length ? <ul className="sd-gallery" aria-label={library ? '全部画布' : '最近画布'} data-view={library ? 'all' : 'recent'}>
           {visibleCanvases.map(x => { const running = c?.active?.[x.sessionId]?.length ?? 0
             return <li key={x.sessionId}><button className="sd-card" onClick={() => openCanvas(x.sessionId)}>
-              <span className="sd-card-cover">{x.cover ? <img src={imageUrl(x.sessionId, x.cover)} alt="" loading="lazy"/> : <ImageIcon size={22}/>}
+              <span className="sd-card-cover">{x.cover ? <img src={imageUrl(x.sessionId, x.cover)} alt="" loading="lazy"/> : x.diagramCover ? <img data-diagram src={`${imageUrl(x.sessionId, x.diagramCover)}&diagram=1&v=${x.revision}`} alt="" loading="lazy"/> : <ImageIcon size={22}/>}
                 {running ? <span className="sd-card-badge"><span className="sd-spinner sd-spinner-small"/>生成中</span> : x.count > 1 ? <span className="sd-card-badge">{x.count} 张</span> : null}</span>
               <strong>{x.title}</strong>
               <span className="sd-card-meta"><span className="sd-tag" data-kind={isBoard(x.sessionId) ? 'board' : 'chat'}>{isBoard(x.sessionId) ? '独立' : '对话'}</span>{relative(x.updatedAt)}</span>
@@ -144,6 +147,10 @@ export function Workspace({ controller, openConversation, conversation }: { cont
         </ul>
           : <div className="sd-home-empty">{library ? '还没有画布，点击“新建画布”开始第一张图。' : '还没有画布。在上方输入描述，开始第一张图。'}</div>}
       </div>}
+    {templatePicker ? <DiagramTemplates onClose={() => setTemplatePicker(false)} onCreate={async (id, palette) => {
+      const session = BOARD_PREFIX + crypto.randomUUID(), composition = await controller.canvas(session).createTemplate(id, palette)
+      setLaunch(undefined); setTemplateComposition(composition.id); setOpen(session); setTemplatePicker(false)
+    }}/> : null}
     {stylePicker ? <ResearchStylePicker newCanvas value={style} busy={false} onPick={value => { setStyle(value); setStylePicker(false) }} onClose={() => setStylePicker(false)}/> : null}
   </main>
 }

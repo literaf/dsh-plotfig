@@ -66,6 +66,20 @@ describe('PSD binary roundtrip', () => {
     expect(text.text).toBe('AI研究2')
     expect(text.styleRuns?.map(run => [run.length, run.style.font?.name])).toEqual([[2, 'ArialMT'], [2, 'PingFangSC-Regular'], [1, 'ArialMT']])
   })
+  it('keeps shape labels as editable text within node groups, including rotated nodes', async () => {
+    const node = shape('实验步骤', { text: '研究 A', textColor: '#334455', fontSize: 8, fontFamily: 'Arial', width: 50, height: 30, rotation: 30, opacity: 0.7 })
+    const out = roundtrip(await buildPsdDocument(scene([node]), rasterize))
+    const group = out.children![0]!
+    expect(group.name).toBe('实验步骤'); expect(group.opacity).toBeCloseTo(0.7, 2)
+    expect(group.children).toHaveLength(2)
+    expect(group.children![0]!.text).toBeUndefined()
+    expect(group.children![1]!.text!.text).toBe('研究 A')
+    const color = group.children![1]!.text!.style!.fillColor as { r: number; g: number; b: number }
+    expect(color.r).toBeCloseTo(51, 2); expect(color.g).toBeCloseTo(68, 2); expect(color.b).toBeCloseTo(85, 2)
+    expect(group.children![1]!.text!.transform![1]).toBeCloseTo(0.5)
+    const raster = roundtrip(await buildPsdDocument(scene([node]), rasterize, false))
+    expect(raster.children![0]!.children).toBeUndefined(); expect(raster.children![0]!.text).toBeUndefined()
+  })
   it('rejects excessive raster allocation and mismatched pixel buffers', async () => {
     await expect(buildPsdDocument({ ...scene([]), width: 16001 }, rasterize)).rejects.toThrow('画板')
     await expect(buildPsdDocument(scene([shape('huge', { width: 16001 })]), rasterize)).rejects.toThrow('内容过大')

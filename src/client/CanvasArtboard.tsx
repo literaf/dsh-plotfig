@@ -6,6 +6,8 @@ import type { CanvasModel } from './controller.js'
 import type { EditorModel } from './editor-model.js'
 import { LayerContent } from './layer-render.js'
 
+import { isConnected } from '../shared/diagram.js'
+
 const ACCENT = '#3b6cf6'
 const normalAngle = (value: number) => ((value + 180) % 360 + 360) % 360 - 180
 
@@ -25,7 +27,7 @@ export function CanvasArtboard({ model, initial, active, selected, scale, pannin
     if (!current.dirty && initial.version > current.composition.version) editor.reload(initial)
   }, [editor, initial])
   useEffect(() => {
-    transformer.current?.nodes(editable.map(l => nodes.current.get(l.id)).filter((n): n is Konva.Group => !!n))
+    transformer.current?.nodes(editable.filter(l => !isConnected(l)).map(l => nodes.current.get(l.id)).filter((n): n is Konva.Group => !!n))
     transformer.current?.getLayer()?.batchDraw()
   }, [c.layers, selected, panning, busy])
   useEffect(() => () => { if (transformFrame.current !== undefined) cancelAnimationFrame(transformFrame.current); if (dragFrame.current !== undefined) cancelAnimationFrame(dragFrame.current) }, [])
@@ -65,7 +67,7 @@ export function CanvasArtboard({ model, initial, active, selected, scale, pannin
     onDragEnd={e => { if (e.target !== e.currentTarget) return; e.cancelBubble = true; const to = { x: e.target.x(), y: e.target.y() }; if (to.x !== initial.x || to.y !== initial.y) onMove({ id: c.id, from: { x: initial.x, y: initial.y }, to }) }}>
     <Rect width={c.width} height={c.height} fill={c.background === 'transparent' ? '#fff' : c.background} shadowBlur={18 / scale} shadowOpacity={0.1}/>
     {c.layers.filter(l => !l.hidden).map(l => <Group key={l.id} id={l.id} ref={n => { if (n) nodes.current.set(l.id, n); else nodes.current.delete(l.id) }}
-      x={l.x} y={l.y} rotation={l.rotation} opacity={l.opacity} draggable={!panning && !busy && !l.locked}
+      x={l.x} y={l.y} rotation={l.rotation} opacity={l.opacity} draggable={!panning && !busy && !l.locked && !isConnected(l)}
       onMouseDown={e => { if (panning || l.locked || busy) return; e.cancelBubble = true; onSelect(c.id, l.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey) }}
       onTouchStart={e => { if (panning || l.locked || busy) return; e.cancelBubble = true; onSelect(c.id, l.id) }}
       onMouseEnter={e => { const container = e.target.getStage()?.container(); if (container) container.style.cursor = panning ? 'grab' : l.locked ? 'default' : 'move' }}
