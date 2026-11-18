@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep saved canvases accessible for local layer editing and export without an Ark key. Show setup initially only when there are no saved canvases; model calls still require credentials. Add regression coverage and support the current host's minified slot declarations in native-page checks.
+- Complete one live OCR decomposition acceptance on 2026-11-18: 13 paid outputs, seven usable OCR layers, no automatic retries. Validate conversion, mixed Chinese/English edits, restore/undo, movement/order, reload and PNG/PSD exports; independent PSD parsing retains 13 top-level objects and 13 text records. Decorative titles can remain raster-only and model stacking can need manual adjustment. Fresh external-editor validation remains unavailable; outpainting is deferred from the initial-release acceptance scope.
+
 - Place detailed-editor tools in a slim vertical dock on the left, with menus opening to the right. Group undo/redo with bottom zoom controls and fit the artboard within the remaining space; keep narrow property panels clear of both control groups.
 
 - Simplify the detailed layer editor to one compact header and a floating icon toolbar. Move shapes, secondary actions and decomposition notices into dismissible menus; preserve export, autosave and keyboard shortcuts. Collapse the property panel on narrow entry and keep it clear of the toolbar.

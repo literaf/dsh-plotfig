@@ -6,10 +6,12 @@ Volcengine Ark **Seedream 5.5** (`doubao-seedream-5-5-261028`) image generation 
 - **Standalone canvas**: created from the Seedream panel with "新建画布". It belongs to no conversation.
 
 ```bash
-dsh plugin add dsh-seedream
+dsh plugin --profile desktop add dsh-seedream
 ```
 
 Save an Ark API key under Settings → Seedream (credential `ARK_API_KEY`). Then use `/seedream <description>`, ask the assistant to draw, or create a canvas and type into its prompt box. The size menu offers seven aspect ratios at 2K, or a resolution tier that lets the model choose the shape. Select an image to edit it (Tab), reference it into the conversation draft (conversation canvases only), download it, or delete it.
+
+Use `--profile web` for the web host. Previously saved canvases remain available for local editing and export when the Ark key is missing or removed; model operations require a configured key.
 
 Conversation canvases share the native DSH composer: examples, edits and references append to the same Session's draft without submitting it or replacing structured references and attachments. Opening a conversation canvas from the gallery returns to its original conversation with the canvas on the right. Only standalone canvases have a direct-generation prompt box. Older hosts without structured draft initialization fall back to copying the prompt/reference for manual pasting.
 
@@ -30,3 +32,5 @@ Limits: 500 objects per artboard and 32 million pixels per PNG export. Undo hist
 Validation includes synthetic pixel tests, mocked UI requests, cached decomposition assets and the public [Volcengine OCR sample](https://docs.volcengine.com/docs/ark/seedream-5-5?lang=zh). Real API checks on 2026-11-14 used three initial images and four further candidate images, without automatic retries: the turbine cutout improved; the erase transition was checked by locally recomposing the cached result; the complex rainforest infographic still did not pass visual outpainting review. PSD text editing, saving and reopening were checked in Photopea; Photoshop itself has not been tested. See [README_CN.md](README_CN.md) for the full guide and shortcuts.
 
 The 2026-11-14/15 outpainting follow-up used three additional real outputs with no automatic retries: both full-image variants failed visual review; the single-sided rainforest left expansion passed whole-image and three magnified boundary inspections, with zero changed original pixels. Other sides have synthetic pixel and simulated interaction checks only. A preceding desktop erase check used one further real output and saved a mixed Chinese/English title, PNG and editable PSD.
+
+On 2026-11-18, one real decomposition request with OCR enabled and a 16-image limit returned 13 images, including seven usable OCR layers. All files and the original were retained, with no automatic retries. The installed-host browser flow verified all seven conversions, Chinese/English edits, original comparison/restoration, undo/redo, layer movement and stacking, full-page reload, and PNG plus both PSD export modes. Independent PSD parsing retained all 13 top-level objects and 13 editable text records. Model stacking required a manual correction, and large decorative titles remained raster layers without OCR. Five earlier real examples (125 layers) also passed local response/asset replay; this was not a new API test. The new PSD files were independently recomposited, but Photopea was unreachable for a fresh external-editor check; the prior Photopea result does not certify these new files or Photoshop compatibility.

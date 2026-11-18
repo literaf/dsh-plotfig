@@ -77,9 +77,10 @@ export function Workspace({ controller, openConversation, conversation }: { cont
         {!settings ? <button className="sd-icon-button" onClick={() => setSettings(true)} aria-label="设置" title="设置"><GearIcon/></button> : null}
       </div>
     </header>
-    {settings || (c && !c.configured) ? <div className="sd-scroll"><Settings controller={controller}/></div>
+    {settings || (c && !c.configured && !open && !canvases.length) ? <div className="sd-scroll"><Settings controller={controller}/></div>
       : open ? <CanvasView key={open} model={controller.canvas(open)} defaultSize={c?.defaultSize} conversation={isBoard(open) ? undefined : conversation(open)}/>
       : <div className="sd-scroll">
+        {c && !c.configured ? <div className="sd-alert" role="status">已保存的画布可继续编辑和导出。生成或分图层前，请在设置中配置方舟 API Key。</div> : null}
         {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}
         {state.message ? <div className="sd-alert" role="status">{state.message}</div> : null}
         {canvases.length ? <ul className="sd-gallery">

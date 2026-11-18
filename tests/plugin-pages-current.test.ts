@@ -45,7 +45,9 @@ describe.skipIf(!compatRoot)('native pages in the current published Harness', ()
         ['plugins.bundle.config', 'plugin-manager'], ['plugins.row.config', 'plugin-manager'], ['main', 'layout'], ['sidebar.panellist', 'sidebar'],
       ] as const) {
         const source = readFileSync(sdk.resolve(`@deepseek-ai/dsh-client-ui-${pkg}/client`), 'utf8')
-        const found = source.match(new RegExp(`"${name.replaceAll('.', '\\.')}":\\s*(\\{\\s*kind:\\s*"\\w+",\\s*scope:\\s*"[\\w-]+"\\s*\\})`))
+        // Published hosts may minify string values to single quotes or backticks.
+        const quote = '[\\x22\\x27\\x60]'
+        const found = source.match(new RegExp(`"${name.replaceAll('.', '\\.')}":\\s*(\\{\\s*kind:\\s*${quote}\\w+${quote},\\s*scope:\\s*${quote}[\\w-]+${quote}\\s*\\})`))
         expect(found, name).not.toBeNull(); children[name] = new Function(`return (${found![1]})`)() as object
       }
       owner = slots.register({ name: 'root', children }, () => null)
