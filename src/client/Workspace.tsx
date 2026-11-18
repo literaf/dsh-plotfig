@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, useSyncExternalStore } from 'react'
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { BOARD_PREFIX, isBoard, SIZE_TIERS } from '../shared/types.js'
 import { BackIcon, GearIcon, ImageIcon, NewIcon } from './icons.js'
 import type { Controller, State } from './controller.js'
@@ -6,8 +6,10 @@ import { imageUrl } from './controller.js'
 import { CanvasView } from './Canvas.js'
 import type { ConversationActions } from './handoff.js'
 import { ResearchTools } from './ResearchTools.js'
-import { StyleChoices } from './ResearchStyles.js'
+import { ResearchStyleButton, ResearchStylePicker } from './ResearchStyles.js'
 import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
+import { Composer, SizePicker } from './Composer.js'
+import type { SizeChoice } from './Composer.js'
 export function Icon({ size = 20 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
     <rect width="100" height="100" rx="22" fill="#0a0a0a"/>
@@ -46,6 +48,9 @@ export function Workspace({ controller, openConversation, conversation }: { cont
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
   const [open, setOpen] = useState<string | undefined>(), [settings, setSettings] = useState(false)
   const [launch, setLaunch] = useState<{ tool: ResearchToolId; style?: GenerationStyle }>()
+  const [prompt, setPrompt] = useState(''), [style, setStyle] = useState<GenerationStyle>('auto'), [genSize, setGenSize] = useState<SizeChoice>('')
+  const [stylePicker, setStylePicker] = useState(false), [starting, setStarting] = useState(false)
+  const homeInput = useRef<HTMLDivElement>(null), submitting = useRef(false)
   useEffect(() => { void controller.attach() }, [controller])
   // The list changes while conversations generate; refresh it while it is on screen.
   useEffect(() => {
@@ -55,9 +60,24 @@ export function Workspace({ controller, openConversation, conversation }: { cont
   }, [controller, open, settings])
   const c = state.catalog, canvases = c?.canvases ?? []
   const current = canvases.find(x => x.sessionId === open)
-  // An empty canvas is kept only in memory; it is saved with its first image.
-  const start = (tool: ResearchToolId, style?: GenerationStyle) => { setLaunch({ tool, ...(style ? { style } : {}) }); setSettings(false); setOpen(BOARD_PREFIX + crypto.randomUUID()) }
+  // Choosing a style on the home page only updates its draft. A new canvas is
+  // created when the user starts a tool or explicitly submits generation.
+  const start = (tool: ResearchToolId) => { setLaunch({ tool, ...(style === 'auto' ? {} : { style }) }); setSettings(false); setOpen(BOARD_PREFIX + crypto.randomUUID()) }
   const create = () => start('generate')
+  const generate = async () => {
+    const submitted = prompt, text = submitted.trim()
+    if (!text || submitting.current) return
+    if (!c?.configured) { setSettings(true); return }
+    submitting.current = true; setStarting(true)
+    try {
+      const id = BOARD_PREFIX + crypto.randomUUID(), model = controller.canvas(id)
+      if (!await model.setGenerationStyle(style)) { controller.notify(model.getSnapshot().error ?? '保存风格失败，请稍后再试。'); return }
+      setLaunch(undefined); setOpen(id)
+      // Dispatch only from this explicit submit, never from a mount effect.
+      // Keep the home draft if the request fails so it can be recovered on return.
+      void model.generate({ prompt: text, style, ...(genSize ? { size: genSize } : {}) }).then(ok => { if (ok) setPrompt(value => value === submitted ? '' : value) })
+    } finally { submitting.current = false; setStarting(false) }
+  }
   const openCanvas = (id: string) => {
     setLaunch(undefined)
     try { if (isBoard(id) || !openConversation(id)) setOpen(id) }
@@ -90,15 +110,17 @@ export function Workspace({ controller, openConversation, conversation }: { cont
         {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}
         {state.message ? <div className="sd-alert" role="status">{state.message}</div> : null}
         <section className="sd-research-home">
-          <div className="sd-research-intro"><span>SEEDREAM · 科研插图</span><h1>从研究想法，到可编辑的图。</h1><p>选择一个工具开始，或从视觉风格出发。生成后的图片可以继续分层、改字和导出。</p></div>
-          <div className="sd-research-section-title"><h2>常用工具</h2><span>选择图片后再确认处理</span></div>
-          <ResearchTools onSelect={start}/>
-          <div className="sd-research-section-title"><h2>选择风格开始</h2><span>六种视觉表达 · 同一主题示意</span></div>
-          <StyleChoices onPick={style => start('generate', style)}/>
+          <div className="sd-home-input" ref={homeInput}>
+            <h1>想画些什么？</h1>
+            <Composer value={prompt} onChange={setPrompt} onSubmit={() => { void generate() }} disabled={starting || !c} placeholder="描述你想生成的图片…" hint={starting ? '准备画布…' : '每次生成都会计费'}>
+              <ResearchStyleButton value={style} busy={starting} open={stylePicker} onClick={() => setStylePicker(true)}/>
+              <SizePicker value={genSize} onChange={setGenSize} fallback={c?.defaultSize}/>
+            </Composer>
+          </div>
+          <nav className="sd-home-shortcuts" aria-label="常用工具"><ResearchTools compact disabled={starting} onSelect={tool => { if (tool === 'generate') homeInput.current?.querySelector('textarea')?.focus(); else start(tool) }}/></nav>
         </section>
         {canvases.length ? <div className="sd-recent-title"><h2>最近画布</h2><span>{canvases.length} 个</span></div> : null}
         {canvases.length ? <ul className="sd-gallery">
-          {c?.configured ? <li><button className="sd-card sd-card-new" onClick={create}><span className="sd-card-new-icon"><NewIcon size={22}/></span><strong>新建画布</strong><span>不属于任何对话，直接画图</span></button></li> : null}
           {canvases.map(x => { const running = c?.active?.[x.sessionId]?.length ?? 0
             return <li key={x.sessionId}><button className="sd-card" onClick={() => openCanvas(x.sessionId)}>
               <span className="sd-card-cover">{x.cover ? <img src={imageUrl(x.sessionId, x.cover)} alt="" loading="lazy"/> : <ImageIcon size={22}/>}
@@ -107,7 +129,8 @@ export function Workspace({ controller, openConversation, conversation }: { cont
               <span className="sd-card-meta"><span className="sd-tag" data-kind={isBoard(x.sessionId) ? 'board' : 'chat'}>{isBoard(x.sessionId) ? '独立' : '对话'}</span>{relative(x.updatedAt)}</span>
             </button></li> })}
         </ul>
-          : <div className="sd-empty sd-empty-static"><div className="sd-empty-icon"><ImageIcon size={22}/></div><strong>还没有画布</strong><p>新建一块画布直接画图；或者在对话里输入 <code>/seedream 画一张…</code>，图片会放进那个对话自己的画布。</p>{c?.configured ? <button className="sd-button sd-button-primary" onClick={create}><NewIcon size={14}/>新建画布</button> : null}</div>}
+          : <div className="sd-home-empty">还没有画布。在上方输入描述，开始第一张图。</div>}
       </div>}
+    {stylePicker ? <ResearchStylePicker newCanvas value={style} busy={false} onPick={value => { setStyle(value); setStylePicker(false) }} onClose={() => setStylePicker(false)}/> : null}
   </main>
 }

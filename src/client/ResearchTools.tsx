@@ -16,8 +16,8 @@ function ToolGlyph({ tool }: { tool: ResearchToolId }) {
     {tool === 'decompose' ? <><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></> : <><rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="2 3"/><path d="M7 16c1-6 2-9 5-9s4 3 5 9H7Z"/><path d="m3 21 18-18"/></>}
   </svg>
 }
-export function ResearchTools({ onSelect }: { onSelect(tool: ResearchToolId): void }) {
-  return <div className="sd-research-tools">{RESEARCH_TOOLS.map(tool => <button type="button" className="sd-research-tool" key={tool.id} onClick={() => onSelect(tool.id)}>
+export function ResearchTools({ onSelect, compact = false, disabled = false }: { onSelect(tool: ResearchToolId): void; compact?: boolean; disabled?: boolean }) {
+  return <div className="sd-research-tools" data-compact={compact}>{RESEARCH_TOOLS.map(tool => <button type="button" className="sd-research-tool" key={tool.id} disabled={disabled} aria-label={tool.title} title={compact ? tool.description : undefined} onClick={() => onSelect(tool.id)}>
     <span className="sd-tool-glyph" data-tool={tool.id}><ToolGlyph tool={tool.id}/></span><span><strong>{tool.title}</strong><small>{tool.description}</small></span><span className="sd-tool-arrow" aria-hidden="true">↗</span>
   </button>)}</div>
 }

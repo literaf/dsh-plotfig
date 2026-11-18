@@ -2,7 +2,13 @@ import { useId } from 'react'
 import { RESEARCH_STYLES, styleName } from '../shared/research.js'
 import type { GenerationStyle, ResearchStyleId } from '../shared/research.js'
 import { ResearchDialog } from './ResearchDialog.js'
-import { CheckIcon } from './icons.js'
+import { CheckIcon, ChevronIcon } from './icons.js'
+
+export function ResearchStyleButton({ value, busy = false, open = false, onClick }: { value: GenerationStyle; busy?: boolean; open?: boolean; onClick(): void }) {
+  return <button type="button" className="sd-chip sd-current-style" disabled={busy} onClick={onClick} aria-haspopup="dialog" aria-expanded={open} aria-label="选择生图风格" title={`生图风格：${styleName(value)}`}>
+    <span className="sd-style-dot"/>{busy ? '保存风格…' : value === 'auto' ? '风格' : styleName(value)}<ChevronIcon size={12}/>
+  </button>
+}
 
 /** Original vector swatches: the same abstract signal/cell/response scene in six visual treatments. */
 export function StylePreview({ style }: { style: ResearchStyleId }) {
@@ -47,9 +53,9 @@ export function StyleChoices({ value, onPick, disabled = false }: { value?: Gene
   </button>)}</div>
 }
 
-export function ResearchStylePicker({ value, busy, error, onPick, onClose }: { value: GenerationStyle; busy: boolean; error?: string | undefined; onPick(style: GenerationStyle): void; onClose(): void }) {
+export function ResearchStylePicker({ value, busy, error, onPick, onClose, newCanvas = false }: { value: GenerationStyle; busy: boolean; error?: string | undefined; onPick(style: GenerationStyle): void; onClose(): void; newCanvas?: boolean }) {
   return <ResearchDialog title="科研插图风格" wide onClose={onClose}>
-    <p className="sd-research-lede">为这张画布的后续生图选择视觉风格。选择不会生成图片，也不会修改已有作品。</p>
+    <p className="sd-research-lede">{newCanvas ? '为新图片选择视觉风格，填写描述后再生成。' : '为这张画布的后续生图选择视觉风格。选择不会生成图片，也不会修改已有作品。'}</p>
     {error ? <p className="sd-research-error" role="alert">{error}</p> : null}
     <button type="button" className="sd-style-auto" disabled={busy} aria-pressed={value === 'auto'} onClick={() => onPick('auto')}><span><strong>跟随描述</strong><small>根据你的提示词决定风格</small></span>{value === 'auto' ? <CheckIcon size={16}/> : null}</button>
     <StyleChoices value={value} onPick={onPick} disabled={busy}/>

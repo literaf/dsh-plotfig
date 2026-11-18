@@ -19,9 +19,9 @@ import { mergeSelectedLayers, selectionBounds } from './layer-actions.js'
 import type { EditorModel } from './editor-model.js'
 import { ImageEditDialog } from './ImageEditDialog.js'
 import { exportPsd } from './psd-export.js'
-import { referencePrompt, styleName } from '../shared/research.js'
+import { referencePrompt } from '../shared/research.js'
 import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
-import { ResearchStylePicker } from './ResearchStyles.js'
+import { ResearchStyleButton, ResearchStylePicker } from './ResearchStyles.js'
 import { ResearchSourcePicker, ResearchTools } from './ResearchTools.js'
 import { ResearchDialog } from './ResearchDialog.js'
 import { referenceText } from './handoff.js'
@@ -374,7 +374,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
     <div className="sd-canvas-bar" ref={viewControls}>
       <div className="sd-research-actions">
         <button type="button" className="sd-button" disabled={operationBusy} onClick={() => setToolMenu(true)} aria-haspopup="dialog">科研工具</button>
-        <button type="button" className="sd-button sd-current-style" disabled={!!state.styleBusy} onClick={() => setStylePicker(true)} aria-haspopup="dialog" aria-label="选择生图风格"><span className="sd-style-dot"/>{state.styleBusy ? '保存风格…' : styleName(state.canvas?.generationStyle ?? 'auto')}</button>
+        {inConversation ? <ResearchStyleButton value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.styleBusy} open={stylePicker} onClick={() => setStylePicker(true)}/> : null}
         <button type="button" className="sd-icon-button sd-import-button" disabled={operationBusy} onClick={() => setSourceTool('import')} aria-label="导入图片" title="导入图片"><ImageIcon/></button>
       </div>
       <div className="sd-zoom" role="toolbar" aria-label="视图">
@@ -481,6 +481,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
         onClearContext={() => { setEditing(false); if (referenceSource && prompt === referencePrompt(referenceSource.kind)) setPrompt(''); setReferenceSource(undefined) }}
         disabled={state.styleBusy}
         hint={state.styleBusy ? '正在保存风格…' : waiting ? '生成中…' : '每次生成都会计费'}>
+        <ResearchStyleButton value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.styleBusy} open={stylePicker} onClick={() => setStylePicker(true)}/>
         <SizePicker value={genSize} onChange={setGenSize} fallback={defaultSize}/>
       </Composer>}
     </div>
