@@ -5,6 +5,9 @@ import type { Controller, State } from './controller.js'
 import { imageUrl } from './controller.js'
 import { CanvasView } from './Canvas.js'
 import type { ConversationActions } from './handoff.js'
+import { ResearchTools } from './ResearchTools.js'
+import { StyleChoices } from './ResearchStyles.js'
+import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
 export function Icon({ size = 20 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
     <rect width="100" height="100" rx="22" fill="#0a0a0a"/>
@@ -42,6 +45,7 @@ export function Settings({ controller }: { controller: Controller }) {
 export function Workspace({ controller, openConversation, conversation }: { controller: Controller; openConversation(id: string): boolean; conversation(id: string): ConversationActions }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
   const [open, setOpen] = useState<string | undefined>(), [settings, setSettings] = useState(false)
+  const [launch, setLaunch] = useState<{ tool: ResearchToolId; style?: GenerationStyle }>()
   useEffect(() => { void controller.attach() }, [controller])
   // The list changes while conversations generate; refresh it while it is on screen.
   useEffect(() => {
@@ -52,8 +56,10 @@ export function Workspace({ controller, openConversation, conversation }: { cont
   const c = state.catalog, canvases = c?.canvases ?? []
   const current = canvases.find(x => x.sessionId === open)
   // An empty canvas is kept only in memory; it is saved with its first image.
-  const create = () => { setSettings(false); setOpen(BOARD_PREFIX + crypto.randomUUID()) }
+  const start = (tool: ResearchToolId, style?: GenerationStyle) => { setLaunch({ tool, ...(style ? { style } : {}) }); setSettings(false); setOpen(BOARD_PREFIX + crypto.randomUUID()) }
+  const create = () => start('generate')
   const openCanvas = (id: string) => {
+    setLaunch(undefined)
     try { if (isBoard(id) || !openConversation(id)) setOpen(id) }
     catch (error) { controller.notify(error instanceof Error ? error.message : '无法打开原对话') }
   }
@@ -78,11 +84,19 @@ export function Workspace({ controller, openConversation, conversation }: { cont
       </div>
     </header>
     {settings || (c && !c.configured && !open && !canvases.length) ? <div className="sd-scroll"><Settings controller={controller}/></div>
-      : open ? <CanvasView key={open} model={controller.canvas(open)} defaultSize={c?.defaultSize} conversation={isBoard(open) ? undefined : conversation(open)}/>
+      : open ? <CanvasView key={open} model={controller.canvas(open)} defaultSize={c?.defaultSize} conversation={isBoard(open) ? undefined : conversation(open)} initialTool={launch?.tool} initialStyle={launch?.style}/>
       : <div className="sd-scroll">
         {c && !c.configured ? <div className="sd-alert" role="status">已保存的画布可继续编辑和导出。生成或分图层前，请在设置中配置方舟 API Key。</div> : null}
         {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}
         {state.message ? <div className="sd-alert" role="status">{state.message}</div> : null}
+        <section className="sd-research-home">
+          <div className="sd-research-intro"><span>SEEDREAM · 科研插图</span><h1>从研究想法，到可编辑的图。</h1><p>选择一个工具开始，或从视觉风格出发。生成后的图片可以继续分层、改字和导出。</p></div>
+          <div className="sd-research-section-title"><h2>常用工具</h2><span>选择图片后再确认处理</span></div>
+          <ResearchTools onSelect={start}/>
+          <div className="sd-research-section-title"><h2>选择风格开始</h2><span>六种视觉表达 · 同一主题示意</span></div>
+          <StyleChoices onPick={style => start('generate', style)}/>
+        </section>
+        {canvases.length ? <div className="sd-recent-title"><h2>最近画布</h2><span>{canvases.length} 个</span></div> : null}
         {canvases.length ? <ul className="sd-gallery">
           {c?.configured ? <li><button className="sd-card sd-card-new" onClick={create}><span className="sd-card-new-icon"><NewIcon size={22}/></span><strong>新建画布</strong><span>不属于任何对话，直接画图</span></button></li> : null}
           {canvases.map(x => { const running = c?.active?.[x.sessionId]?.length ?? 0

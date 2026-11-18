@@ -1,4 +1,6 @@
 import type { ImageEditReceipt } from './image-edit.js'
+import { parseGenerationStyle } from './research.js'
+import type { GenerationStyle } from './research.js'
 
 export const ROUTE = '/api/seedream'
 export const PANEL = 'seedream'
@@ -23,6 +25,8 @@ export interface GenerateInput {
   size: string
   watermark: boolean
   title?: string
+  /** Omitted inherits the canvas choice; auto leaves the prompt unchanged. */
+  style?: GenerationStyle
 }
 export interface CanvasItem {
   id: string
@@ -43,6 +47,8 @@ export interface CanvasItem {
   layerMetadata?: LayerMetadata
   edit?: ImageEditReceipt
   warnings?: string[]
+  generationStyle?: GenerationStyle
+  imported?: boolean
 }
 export interface LayerMetadata {
   zIndex: number
@@ -60,6 +66,8 @@ export interface Canvas {
   updatedAt: string
   items: CanvasItem[]
   compositions?: Composition[]
+  /** Persisted per canvas; changing this does not generate or alter any image. */
+  generationStyle?: GenerationStyle
 }
 export type LayerKind = 'image' | 'text' | 'rect' | 'ellipse'
 export interface TextRun {
@@ -198,5 +206,5 @@ export function parseGenerate(raw: unknown, defaults: { size: string; watermark:
   if (images.length > MAX_REFS) throw new Error(`参考图最多 ${MAX_REFS} 张。`)
   if (raw.watermark !== undefined && typeof raw.watermark !== 'boolean') throw new Error('watermark 必须是布尔值。')
   const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim().slice(0, 80) : undefined
-  return { prompt, images: (images as string[]).map(x => x.trim()), size: parseSize(raw.size, defaults.size), watermark: raw.watermark ?? defaults.watermark, ...(title ? { title } : {}) }
+  return { prompt, images: (images as string[]).map(x => x.trim()), size: parseSize(raw.size, defaults.size), watermark: raw.watermark ?? defaults.watermark, ...(title ? { title } : {}), ...(raw.style === undefined ? {} : { style: parseGenerationStyle(raw.style) }) }
 }

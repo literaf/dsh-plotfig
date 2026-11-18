@@ -19,6 +19,13 @@ import { mergeSelectedLayers, selectionBounds } from './layer-actions.js'
 import type { EditorModel } from './editor-model.js'
 import { ImageEditDialog } from './ImageEditDialog.js'
 import { exportPsd } from './psd-export.js'
+import { referencePrompt, styleName } from '../shared/research.js'
+import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
+import { ResearchStylePicker } from './ResearchStyles.js'
+import { ResearchSourcePicker, ResearchTools } from './ResearchTools.js'
+import { ResearchDialog } from './ResearchDialog.js'
+import { referenceText } from './handoff.js'
+import { readOCR } from '../shared/ocr.js'
 
 export interface View { x: number; y: number; scale: number }
 interface Move { id: string; from: { x: number; y: number }; to: { x: number; y: number } }
@@ -92,11 +99,12 @@ function PendingCard({ pending, rect }: { pending: PendingView; rect: { left: nu
   </div>
 }
 const EXAMPLES = ['热带雨林垂直分层剖面图，教材插画风格，标注每层高度和代表物种', '一只坐在苔藓石头上的红眼树蛙，自然博物水彩风格，浅色背景', '细胞有丝分裂各时期的示意图，扁平矢量风格，白色背景']
-export function CanvasView({ model, active = true, conversation, defaultSize }: {
+export function CanvasView({ model, active = true, conversation, defaultSize, initialTool, initialStyle }: {
   model: CanvasModel; active?: boolean
   /** Absent for a standalone canvas: no conversation can read its items. */
   conversation?: ConversationActions | undefined
   defaultSize?: string | undefined
+  initialTool?: ResearchToolId | undefined; initialStyle?: GenerationStyle | undefined
 }) {
   const state = useSyncExternalStore(model.subscribe, model.getSnapshot)
   const inConversation = !isBoard(model.sessionId), bottom = inConversation ? 72 : BOTTOM
@@ -109,6 +117,10 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   const [selected, setSelected] = useState<string | undefined>(), [hovered, setHovered] = useState<string | undefined>()
   const [editing, setEditing] = useState(false), [confirming, setConfirming] = useState(false)
   const [prompt, setPrompt] = useState(''), [genSize, setGenSize] = useState<SizeChoice>('')
+  const [stylePicker, setStylePicker] = useState(false), [toolMenu, setToolMenu] = useState(false)
+  const [sourceTool, setSourceTool] = useState<Exclude<ResearchToolId, 'generate'> | 'import' | undefined>(initialTool && initialTool !== 'generate' ? initialTool : undefined)
+  const [referenceSource, setReferenceSource] = useState<{ item: CanvasItem; kind: 'reference' | 'sketch' }>()
+  const [splitForText, setSplitForText] = useState(false), [editorFocus, setEditorFocus] = useState<string>()
   const [editorId, setEditorId] = useState<string>(), [splitSource, setSplitSource] = useState<CanvasItem>()
   const [selectedLayers, setSelectedLayers] = useState<string[]>([]), [layerPanel, setLayerPanel] = useState(false)
   const [hand, setHand] = useState(false), [space, setSpace] = useState(false)
@@ -121,6 +133,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   const [history, setHistory] = useState<{ done: CanvasChange[]; undone: CanvasChange[] }>({ done: [], undone: [] })
   const fitted = useRef(false), seen = useRef<string | undefined>(undefined)
   useEffect(() => active ? model.hold() : undefined, [model, active])
+  useEffect(() => { if (initialStyle !== undefined) void model.setGenerationStyle(initialStyle) }, [model, initialStyle])
   useLayoutEffect(() => {
     const el = host.current
     if (!el) return
@@ -221,10 +234,40 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   }
   const submit = () => {
     const text = prompt.trim()
-    if (!text || inConversation) return
-    if (editing && item) void model.generate({ prompt: text, images: [`item:${item.id}`], title: `${labelOf(item)} · 编辑`, ...(genSize ? { size: genSize } : {}) }, item.id)
+    if (!text || inConversation || state.styleBusy) return
+    if (referenceSource) void model.generate({ prompt: text, images: [`item:${referenceSource.item.id}`], ...(genSize ? { size: genSize } : {}) }, referenceSource.item.id)
+    else if (editing && item) void model.generate({ prompt: text, images: [`item:${item.id}`], title: `${labelOf(item)} · 编辑`, style: 'auto', ...(genSize ? { size: genSize } : {}) }, item.id)
     else void model.generate({ prompt: text, ...(genSize ? { size: genSize } : {}) })
-    setPrompt(''); setEditing(false)
+    setPrompt(''); setEditing(false); setReferenceSource(undefined)
+  }
+  const openTextEditor = (c: Composition) => {
+    const assets = model.getSnapshot().canvas?.items ?? []
+    const available = c.layers.filter(l => !l.hidden && !l.locked)
+    setEditorFocus((available.find(l => l.kind === 'text' || readOCR(assets.find(a => a.id === l.assetId), c)) ?? available[0])?.id)
+    setSourceTool(undefined); setEditorId(c.id)
+  }
+  const useToolSource = (source: CanvasItem, tool: Exclude<ResearchToolId, 'generate'> | 'import') => {
+    setSourceTool(undefined); setSelected(source.id); setSelectedLayers([]); setEditing(false)
+    if (tool === 'decompose' || tool === 'text') {
+      const existing = (model.getSnapshot().canvas?.compositions ?? []).find(c => c.sourceId === source.id)
+      if (tool === 'text' && existing) { openTextEditor(existing); return }
+      setSplitForText(tool === 'text'); setSplitSource(source)
+    } else if (tool === 'remove-background') setEditSource(source)
+    else if (tool === 'reference' || tool === 'sketch') {
+      const description = referencePrompt(tool)
+      if (inConversation) void handoff(conversation ? () => conversation.prompt(`${referenceText(source)}\n${description}`) : undefined, '参考图已加入对话，请补充内容后发送')
+      else { setReferenceSource({ item: source, kind: tool }); setPrompt(description); requestAnimationFrame(() => host.current?.querySelector<HTMLTextAreaElement>('.sd-composer textarea')?.focus()) }
+    }
+  }
+  const launchTool = (tool: ResearchToolId) => {
+    setToolMenu(false)
+    if (tool === 'generate') {
+      setReferenceSource(undefined); setEditing(false)
+      if (inConversation) void handoff(conversation?.focus, '请在对话输入框描述科研插图')
+      else host.current?.querySelector<HTMLTextAreaElement>('.sd-composer textarea')?.focus()
+    } else if (tool === 'text' && composition) openTextEditor(composition)
+    else if (item) useToolSource(item, tool)
+    else setSourceTool(tool)
   }
   const remove = () => { if (item) void model.remove(item.id); else if (composition) void model.deleteComposition(composition.id); setConfirming(false) }
   const operate = async (action: () => Promise<void>) => {
@@ -236,10 +279,11 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   const createBoard = () => operate(async () => { if (item) { const created = await model.createComposition(item.id); setSelected(created.id); setEditorId(created.id) } })
   const split = () => operate(async () => {
     if (!splitSource) return
-    const source = splitSource
+    const source = splitSource, forText = splitForText
     setSplitSource(undefined)
     const created = await model.decompose({ image: `item:${source.id}`, prompt: splitPrompt, maxImages })
     setSelected(created.id); setSelectedLayers([]); flash('分层完成，直接点击图层编辑；Shift 可多选')
+    if (forText) openTextEditor(created)
   })
   const removeLayers = () => {
     if (!layerEditor || operationBusy) return
@@ -325,9 +369,14 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
   const error = operationError || layerState?.error || state.error, toast = notice || (reviewWarning ? undefined : state.message)
   const dots = Math.max(8, 24 * view.scale)
   const empty = !items.length && !compositions.length && !state.pending.length && !state.loading
-  if (opened) return <LayerEditor key={opened.id} model={model} initial={opened} conversation={conversation} onOpenCopy={setEditorId} onClose={() => { setEditorId(undefined); setSelected(opened.id) }}/>
+  if (opened) return <LayerEditor key={opened.id} model={model} initial={opened} initialSelectedId={editorFocus} conversation={conversation} onOpenCopy={setEditorId} onClose={() => { setEditorId(undefined); setEditorFocus(undefined); setSelected(opened.id) }}/>
   return <div className="sd-canvas-shell">
     <div className="sd-canvas-bar" ref={viewControls}>
+      <div className="sd-research-actions">
+        <button type="button" className="sd-button" disabled={operationBusy} onClick={() => setToolMenu(true)} aria-haspopup="dialog">科研工具</button>
+        <button type="button" className="sd-button sd-current-style" disabled={!!state.styleBusy} onClick={() => setStylePicker(true)} aria-haspopup="dialog" aria-label="选择生图风格"><span className="sd-style-dot"/>{state.styleBusy ? '保存风格…' : styleName(state.canvas?.generationStyle ?? 'auto')}</button>
+        <button type="button" className="sd-icon-button sd-import-button" disabled={operationBusy} onClick={() => setSourceTool('import')} aria-label="导入图片" title="导入图片"><ImageIcon/></button>
+      </div>
       <div className="sd-zoom" role="toolbar" aria-label="视图">
         <button onClick={() => setHand(false)} aria-pressed={!hand} title="选择与框选 (V)" aria-label="选择与框选"><SelectIcon/></button>
         <button onClick={() => setHand(true)} aria-pressed={hand} title="抓手 (H)，按住空格临时平移" aria-label="抓手"><HandIcon/></button>
@@ -378,7 +427,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
           <button onClick={() => setConfirming(false)}>取消</button>
         </> : <>
           <button onClick={() => editing ? setEditing(false) : startEdit()} aria-pressed={editing}><EditIcon/>编辑<kbd>Tab</kbd></button>
-          <button disabled={operationBusy || state.pending.some(p => p.parentId === item.id)} onClick={() => { setSplitSource(item); setOperationError('') }}><LayersIcon/>分图层</button>
+          <button disabled={operationBusy || state.pending.some(p => p.parentId === item.id)} onClick={() => { setSplitForText(false); setSplitSource(item); setOperationError('') }}><LayersIcon/>分图层</button>
           <button disabled={operationBusy || state.pending.some(p => p.parentId === item.id)} onClick={() => setEditSource(item)} title="去背景、涂抹消除、扩图">AI 处理</button>
           <button disabled={operationBusy} onClick={() => { void createBoard() }} title="创建可添加文字与图形的画板，不调用模型">加文字 / 图形</button>
           {inConversation ? <button onClick={() => { void handoff(conversation && (() => conversation.reference(item)), '已引用到对话输入框') }} title="引用到对话输入框"><QuoteIcon/>引用</button> : null}
@@ -428,21 +477,25 @@ export function CanvasView({ model, active = true, conversation, defaultSize }: 
       {reviewWarning ? <div className="sd-review-warning" role="status">{reviewWarning}</div> : null}
       {inConversation ? <button className="sd-conversation-link" onClick={() => { void handoff(conversation?.focus, '请在对话输入框继续描述') }}><QuoteIcon size={14}/>回到对话继续描述</button> : <Composer value={prompt} onChange={setPrompt} onSubmit={submit} onStop={() => model.cancel()} waiting={waiting} autoFocus={empty && active}
         placeholder={editing ? '描述要修改的地方，以及需要保持不变的部分…' : '描述你想生成的画面…'}
-        context={editing && item ? <span className="sd-context-chip"><img src={imageUrl(model.sessionId, item.id)} alt=""/>编辑 · {labelOf(item)}</span> : undefined}
-        onClearContext={() => setEditing(false)}
-        hint={waiting ? '生成中…' : '每次生成都会计费'}>
+        context={referenceSource ? <span className="sd-context-chip"><img src={imageUrl(model.sessionId, referenceSource.item.id)} alt=""/>{referenceSource.kind === 'sketch' ? '草图' : '参考'} · {labelOf(referenceSource.item)}</span> : editing && item ? <span className="sd-context-chip"><img src={imageUrl(model.sessionId, item.id)} alt=""/>编辑 · {labelOf(item)}</span> : undefined}
+        onClearContext={() => { setEditing(false); if (referenceSource && prompt === referencePrompt(referenceSource.kind)) setPrompt(''); setReferenceSource(undefined) }}
+        disabled={state.styleBusy}
+        hint={state.styleBusy ? '正在保存风格…' : waiting ? '生成中…' : '每次生成都会计费'}>
         <SizePicker value={genSize} onChange={setGenSize} fallback={defaultSize}/>
       </Composer>}
     </div>
     </div>
     {splitSource ? <div className="sd-split-backdrop"><div className="sd-split-dialog" role="dialog" aria-modal="true" aria-label="拆分图层" onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') setSplitSource(undefined) }}>
       <div className="sd-split-title"><LayersIcon/><strong>拆分图层</strong><button className="sd-icon-button" aria-label="关闭分层设置" onClick={() => setSplitSource(undefined)}><CloseIcon/></button></div>
-      <p>原图会保留，分层结果将放进新的可编辑画板。</p>
+      <p>{splitForText ? '先拆分并识别图中文字，再进入文字编辑。部分装饰文字可能没有识别结果。' : '原图会保留，分层结果将放进新的可编辑画板。'}</p>
       <label>分层说明<textarea value={splitPrompt} onChange={e => setSplitPrompt(e.target.value)} rows={3} maxLength={4000}/></label>
       <label>最多输出图片数（含底图）<input type="number" min={2} max={100} value={maxImages} onChange={e => setMaxImages(Number(e.target.value))}/></label>
       <p className="sd-split-cost">此操作调用 Seedream，按实际返回图片数计费。之后拖动、加字和导出均在本地完成。</p>
       <div className="sd-split-actions"><button className="sd-button" onClick={() => setSplitSource(undefined)}>取消</button><button className="sd-button sd-button-primary" disabled={operationBusy || !Number.isInteger(maxImages) || maxImages < 2 || maxImages > 100} onClick={() => { void split() }}>开始分层</button></div>
     </div></div> : null}
     {editSource ? <ImageEditDialog key={editSource.id} model={model} source={editSource} initialOperation="remove-background" onClose={() => setEditSource(undefined)} onComplete={result => setSelected(result.id)}/> : null}
+    {toolMenu ? <ResearchDialog title="科研工具" onClose={() => setToolMenu(false)}><ResearchTools onSelect={launchTool}/></ResearchDialog> : null}
+    {stylePicker ? <ResearchStylePicker value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.styleBusy} error={state.error} onPick={style => { void model.setGenerationStyle(style).then(ok => { if (ok) setStylePicker(false) }) }} onClose={() => setStylePicker(false)}/> : null}
+    {sourceTool ? <ResearchSourcePicker tool={sourceTool} model={model} items={items} compositions={compositions} onSelect={source => useToolSource(source, sourceTool)} onOpenComposition={id => { const c = compositions.find(c => c.id === id); if (c) openTextEditor(c) }} onClose={() => setSourceTool(undefined)}/> : null}
   </div>
 }

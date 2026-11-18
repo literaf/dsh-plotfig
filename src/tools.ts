@@ -9,6 +9,7 @@ import type { Canvas, CanvasItem } from './shared/types.js'
 import { parseDecompose } from './shared/layers.js'
 import { randomUUID } from 'node:crypto'
 import { parseImageEdit, IMAGE_EDIT_LABELS } from './shared/image-edit.js'
+import { STYLE_IDS, styleName } from './shared/research.js'
 
 const ITEM = { type: 'object', additionalProperties: false, properties: {
   id: { type: 'string', required: true }, ref: { type: 'string', required: true }, title: { type: 'string', required: true },
@@ -20,6 +21,7 @@ const OUTPUT = { type: 'object', additionalProperties: false, properties: {
   items: { type: 'array', required: true, items: ITEM },
   composition_id: { type: 'string' },
   warnings: { type: 'array', items: { type: 'string' } },
+  generation_style: { type: 'string' },
 } } as const
 type Value = InferValue<typeof OUTPUT>
 type Defaults = () => Promise<{ size: string; watermark: boolean }>
@@ -30,14 +32,14 @@ function sessionOf(exec: { agent?: { id: unknown } }): string {
 }
 function valueOf(service: Seedream, canvas: Canvas, created: CanvasItem[]): Value {
   const view = (i: CanvasItem) => ({ id: i.id, ref: `item:${i.id}`, title: i.title, path: service.store.imagePath(canvas.sessionId, i.id), width: i.width, height: i.height, prompt: i.prompt, refs: i.refs.map(r => `item:${r}`) })
-  return { session_id: canvas.sessionId, created: created.map(view), items: canvas.items.map(view) }
+  return { session_id: canvas.sessionId, created: created.map(view), items: canvas.items.map(view), generation_style: canvas.generationStyle ?? 'auto' }
 }
 function render(value: Value, generated: boolean) {
   const line = (i: Value['items'][number]) => `- ${i.title} · ${i.ref} · ${i.width}×${i.height}\n  [${i.path}](<${i.path}>)${i.refs.length ? `\n  参考：${i.refs.join(', ')}` : ''}`
   return [{ type: 'text' as const, text: (generated
     ? [`已生成 ${value.created.length} 张图片，并放到当前对话的 Seedream 画布上。`, ...value.created.map(line), `画布共有 ${value.items.length} 张图片。修改其中一张时，把它的 item 引用放进 images。`]
     : [value.items.length ? `当前对话的 Seedream 画布共有 ${value.items.length} 张图片（读取画布不计费）：` : '当前对话的 Seedream 画布还是空的。', ...value.items.map(line)]
-  ).concat(value.warnings ?? []).join('\n') }]
+  ).concat(value.generation_style && value.generation_style !== 'auto' ? [`当前画布生图风格：${styleName(value.generation_style as Parameters<typeof styleName>[0])}。后续 seedream_generate 默认应用，style: auto 可单次关闭。`] : [], value.warnings ?? []).join('\n') }]
 }
 export function applyTools(ctx: Context, service: Seedream, defaults: Defaults): void {
   ctx.tools.register(defineTool({
@@ -90,6 +92,7 @@ export function applyTools(ctx: Context, service: Seedream, defaults: Defaults):
       images: { type: 'array', items: { type: 'string' }, description: 'Up to 10 reference images: item:<id> from this canvas, https URLs, or absolute local file paths. Omit for text-to-image.' },
       size: { type: 'string', description: '1K, 1.5K, 2K (default from settings), or WxH with 921600–4624220 total pixels, e.g. 2560x1440.' },
       title: { type: 'string', description: 'Short Chinese label shown on the canvas, e.g. 雨林垂直分层剖面图.' },
+      style: { type: 'string', enum: STYLE_IDS, description: 'Optional scientific illustration appearance. Omit to inherit the style selected on this Session canvas. auto uses only the supplied prompt; flat, 2.5d, 3d, line-art, hand-drawn, journal apply a visual preset. This is not a scientific accuracy or journal-compliance guarantee.' },
     },
     output: { schema: OUTPUT, render: (_a, v) => render(v, true) }, timeoutMs: 240_000, isConcurrencySafe: () => false,
     presentCall: a => ({ card: 'generic', title: `Seedream · ${a.title ?? String(a.prompt).slice(0, 30)}`, kind: 'other' }),

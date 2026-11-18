@@ -1,3 +1,5 @@
+import { researchStyles } from './research-styles.js'
+
 export function installStyles(): () => void {
   const tag = document.createElement('style')
   tag.dataset.plugin = 'dsh-seedream'
@@ -83,6 +85,7 @@ export function installStyles(): () => void {
 .sd-image-edit-controls{width:248px;flex:none;padding:16px;border-left:1px solid var(--sd-line);overflow:auto;display:flex;flex-direction:column;gap:14px}.sd-image-edit-controls p{font-size:12px;line-height:1.8;color:var(--sd-muted);margin:0}.sd-image-edit-controls label{display:flex;flex-direction:column;gap:7px;font-size:11px;color:var(--sd-muted)}.sd-image-edit-controls input:not([type=range]),.sd-image-edit-controls textarea{border:1px solid var(--sd-line);background:var(--sd-fill);color:var(--sd-text);border-radius:7px;padding:8px;width:100%;min-width:0;font-size:12px;box-sizing:border-box}.sd-image-edit-controls input[type=range]{width:100%;accent-color:var(--sd-accent)}.sd-image-edit-controls textarea{resize:vertical}.sd-image-edit-controls fieldset{border:0;padding:0;margin:0;gap:12px;min-width:0}.sd-image-edit-brushes,.sd-image-edit-mask-actions,.sd-image-edit-ratios{display:flex;gap:5px;flex-wrap:wrap}.sd-image-edit-mask-actions button{padding:5px 7px;font-size:10px}.sd-image-edit-ratios button{padding:5px 9px;font-size:11px}.sd-image-edit-cost{font-size:11px;line-height:1.8;color:var(--sd-muted);padding:10px;background:var(--sd-fill);border-radius:8px}.sd-image-edit-cost p{font-size:11px}.sd-image-edit-controls .sd-image-edit-error{color:var(--sd-danger,#e24b4b)}.sd-image-edit-controls>.sd-button-primary{margin-top:auto;min-height:36px;justify-content:center}
 @container sdimageedit (max-width:640px){.sd-image-edit-body{flex-direction:column;overflow:auto}.sd-image-edit-preview{flex:none;min-height:230px;height:45%}.sd-image-edit-controls{width:auto;border-left:0;border-top:1px solid var(--sd-line);overflow:visible;padding:12px;gap:10px}.sd-image-edit-dialog header{padding:12px}.sd-image-edit-tabs{padding:8px 12px}}
 `
+  tag.textContent += researchStyles
   document.head.appendChild(tag)
   return () => tag.remove()
 }

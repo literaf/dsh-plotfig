@@ -5,7 +5,8 @@ import type { ArkClient } from './ark.js'
 import { MAX_BYTES } from './ark.js'
 import type { CanvasStore } from './store.js'
 import type { Canvas, CanvasItem, GenerateInput, PendingGeneration } from './shared/types.js'
-import { ITEM_ID, titleFrom } from './shared/types.js'
+import { ITEM_ID, MAX_PROMPT, titleFrom } from './shared/types.js'
+import { parseGenerationStyle, styledPrompt } from './shared/research.js'
 import type { DecomposeInput } from './shared/layers.js'
 import { IMAGE_EDIT_LABELS } from './shared/image-edit.js'
 import type { ImageEditInput } from './shared/image-edit.js'
@@ -54,15 +55,18 @@ export class Seedream {
     return { images, items, external }
   }
   async generate(sessionId: string, input: GenerateInput, signal: AbortSignal, allowLocal = false): Promise<GenerateResult> {
+    const style = parseGenerationStyle(input.style ?? (await this.store.get(sessionId)).generationStyle ?? 'auto')
+    const prompt = styledPrompt(input.prompt, style)
+    if (prompt.length > MAX_PROMPT) throw new Error('提示词与风格要求合计超过 4000 个字符，请缩短描述或选择“跟随描述”。')
     const refs = await this.resolve(sessionId, input.images, allowLocal)
     signal.throwIfAborted()
     const entry: PendingGeneration = { key: randomUUID(), prompt: input.prompt, size: input.size, startedAt: new Date().toISOString(), ...(refs.items[0] ? { parentId: refs.items[0] } : {}) }
     this.inflight.set(sessionId, [...this.pending(sessionId), entry])
     try {
-      const result = await this.ark.generate({ prompt: input.prompt, images: refs.images, size: input.size, watermark: input.watermark }, signal)
+      const result = await this.ark.generate({ prompt, images: refs.images, size: input.size, watermark: input.watermark }, signal)
       // Billed output is saved even if the caller stopped waiting meanwhile.
       return await this.store.add(sessionId, result.images, {
-        title: input.title ?? titleFrom(input.prompt), prompt: input.prompt, refs: refs.items, externalRefs: refs.external, size: input.size,
+        title: input.title ?? titleFrom(input.prompt), prompt, refs: refs.items, externalRefs: refs.external, size: input.size, ...(style === 'auto' ? {} : { generationStyle: style }),
       }, refs.items[0])
     } finally {
       const rest = this.pending(sessionId).filter(p => p.key !== entry.key)

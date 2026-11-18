@@ -7,6 +7,7 @@ import type { Status } from './shared/types.js'
 import type { Preferences } from './preferences.js'
 import { parseDecompose } from './shared/layers.js'
 import { MAX_MASK_BYTES, parseImageEdit } from './shared/image-edit.js'
+import { decodePixels, encodePixels } from './pixels.js'
 
 interface Route { path: string; methods: readonly string[]; requestBody: 'buffered'; fetch(request: Request): Promise<Response> }
 interface Connection { fetch?: { register(route: Route): () => Promise<void> } }
@@ -31,6 +32,7 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
         const url = new URL(request.url), id = session(url)
         if (request.method === 'PATCH') {
           const raw = await body(request, 256 * 1024)
+          if (isRecord(raw) && raw.generationStyle !== undefined && raw.positions === undefined) return json({ ok: true, value: await service.store.setGenerationStyle(id, raw.generationStyle) })
           if (!isRecord(raw) || !Array.isArray(raw.positions)) throw new Error('无效的布局数据。')
           const positions = raw.positions.filter(isRecord).map(p => ({ id: String(p.id), x: Number(p.x), y: Number(p.y) }))
           return json({ ok: true, value: await service.store.move(id, positions) })
@@ -82,6 +84,25 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
         return json({ ok: true, value: result })
       } catch (error) { return fail(error, '图片编辑失败。') }
     },
+    /** Explicit file uploads, no API charge and no arbitrary local paths or remote reads. */
+    async importImage(request: Request): Promise<Response> {
+      try {
+        const sid = session(new URL(request.url)), raw = await body(request, Math.ceil(MAX_BYTES * 4 / 3) + 4096)
+        if (!isRecord(raw) || typeof raw.image !== 'string') throw new Error('请选择 PNG 或 JPEG 图片。')
+        const match = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/.exec(raw.image)
+        if (!match) throw new Error('请选择 PNG 或 JPEG 图片。')
+        const original = Buffer.from(match[2]!, 'base64')
+        if (!original.length || original.length > MAX_BYTES) throw new Error('导入图片不能超过 30 MB。')
+        const info = imageInfo(original)
+        if (!info || info.mime !== `image/${match[1]}`) throw new Error('图片格式与内容不一致。')
+        const pixels = decodePixels(original)
+        const bytes = info.mime === 'image/png' ? original : encodePixels(pixels)
+        if (bytes.length > MAX_BYTES) throw new Error('转换后的 PNG 超过 30 MB，请缩小图片后导入。')
+        const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim().slice(0, 80) : '导入图片'
+        const result = await service.store.add(sid, [{ bytes, width: pixels.width, height: pixels.height }], { title, prompt: '本地导入图片', refs: [], externalRefs: 0, size: `${pixels.width}x${pixels.height}`, imported: true })
+        return json({ ok: true, value: { canvas: result.canvas, item: result.items[0] } })
+      } catch (error) { return fail(error, '导入图片失败。') }
+    },
     /** Browser-created PNG composites; no filesystem path or remote URL is accepted. */
     async composite(request: Request): Promise<Response> {
       try {
@@ -128,6 +149,7 @@ export function applyRoutes(ctx: Context, service: Seedream, prefs: Preferences,
     bridge.register({ path: `${ROUTE}/composition`, methods: ['POST', 'PATCH', 'DELETE'], requestBody: 'buffered', fetch: r => h.composition(r) })
     bridge.register({ path: `${ROUTE}/decompose`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.decompose(r) })
     bridge.register({ path: `${ROUTE}/edit-image`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.editImage(r) })
+    bridge.register({ path: `${ROUTE}/import-image`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.importImage(r) })
     bridge.register({ path: `${ROUTE}/composite`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.composite(r) })
     bridge.register({ path: `${ROUTE}/image`, methods: ['GET'], requestBody: 'buffered', fetch: r => h.image(r) })
     bridge.register({ path: `${ROUTE}/item`, methods: ['DELETE'], requestBody: 'buffered', fetch: r => h.removeItem(r) })

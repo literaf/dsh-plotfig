@@ -1,7 +1,7 @@
 {
   "name": "dsh-seedream",
   "version": "0.1.0",
-  "description": "Seedream 5.5 for DeepSeek Harness: image generation and editing tools with a per-conversation canvas workspace.",
+  "description": "Scientific illustration with Seedream 5.5 for DeepSeek Harness: visual presets, image generation, layer editing and per-conversation canvases.",
   "type": "module",
   "license": "MIT",
   "author": "ai4scholar",
@@ -35,7 +35,8 @@
     "seedream",
     "volcengine",
     "image-generation",
-    "canvas"
+    "canvas",
+    "scientific-illustration"
   ],
   "engines": {
     "node": ">=22.19.0"

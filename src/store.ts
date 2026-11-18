@@ -5,6 +5,7 @@ import { entryOf, isRecord, ITEM_ID, SESSION_ID } from './shared/types.js'
 import type { Canvas, CanvasEntry, CanvasItem, CanvasLayer, Composition } from './shared/types.js'
 import type { ArkImage } from './ark.js'
 import { parseCompositionEdit } from './shared/layers.js'
+import { parseGenerationStyle } from './shared/research.js'
 export const GAP = 80
 async function atomic(path: string, data: string | Uint8Array): Promise<void> {
   const temp = `${path}.${randomUUID()}.tmp`
@@ -51,6 +52,14 @@ export class CanvasStore {
     return canvas
   }
   readImage(sessionId: string, itemId: string): Promise<Buffer> { return readFile(this.imagePath(sessionId, itemId)) }
+  async setGenerationStyle(sessionId: string, style: unknown): Promise<Canvas> {
+    const generationStyle = parseGenerationStyle(style)
+    return this.serial(sessionId, async () => {
+      const canvas = await this.get(sessionId)
+      canvas.generationStyle = generationStyle
+      return this.commit(canvas)
+    })
+  }
   /** Place new images to the right of the parent (or the rightmost item), matching the workspace's left-to-right flow. */
   async add(sessionId: string, images: Array<{ bytes: Uint8Array; width: number; height: number }>, meta: Omit<CanvasItem, 'id' | 'x' | 'y' | 'width' | 'height' | 'createdAt'>, parentId?: string): Promise<{ canvas: Canvas; items: CanvasItem[] }> {
     return this.serial(sessionId, async () => {

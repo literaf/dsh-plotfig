@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a scientific-illustration home with six tool entry points, original same-theme style swatches and six persistent visual presets. Apply per-canvas styles to browser and native-tool generation, with an explicit `auto` override; retain ordinary standalone edit appearance.
+- Import PNG/JPEG locally without a model call, preserving PNG bytes and alpha. Route tools to split/cutout confirmation, existing OCR text properties, or a reference/sketch draft. Keep native conversation drafts intact and avoid automatic submission on tool or style selection.
+- Validate request forwarding, per-canvas isolation, file validation, persistence, confirmations, native drafts and narrow layouts with automated, mocked-request and isolated-host checks. No new paid outputs were used for this iteration; style and sketch output quality remain unvalidated.
+
 - Keep saved canvases accessible for local layer editing and export without an Ark key. Show setup initially only when there are no saved canvases; model calls still require credentials. Add regression coverage and support the current host's minified slot declarations in native-page checks.
 - Complete one live OCR decomposition acceptance on 2026-11-18: 13 paid outputs, seven usable OCR layers, no automatic retries. Validate conversion, mixed Chinese/English edits, restore/undo, movement/order, reload and PNG/PSD exports; independent PSD parsing retains 13 top-level objects and 13 text records. Decorative titles can remain raster-only and model stacking can need manual adjustment. Fresh external-editor validation remains unavailable; outpainting is deferred from the initial-release acceptance scope.
 

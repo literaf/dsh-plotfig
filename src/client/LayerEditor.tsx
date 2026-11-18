@@ -26,15 +26,16 @@ const normalAngle = (value: number) => ((value + 180) % 360 + 360) % 360 - 180
 const copy = (l: CanvasLayer): CanvasLayer => ({ ...l, id: crypto.randomUUID(), name: `${l.name} 副本`, x: l.x + 32, y: l.y + 32, locked: false })
 const selectedBox = (layers: CanvasLayer[], selected: string[]) => layersBounds(layers.filter(l => selected.includes(l.id)))
 
-export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation }: {
+export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation, initialSelectedId }: {
   model: CanvasModel; initial: Composition; onClose(): void; onOpenCopy(id: string): void; conversation?: ConversationActions | undefined
+  initialSelectedId?: string | undefined
 }) {
   const editor = model.editor(initial), state = useSyncExternalStore(editor.subscribe, editor.getSnapshot)
   const c = state.composition, layers = c.layers
   const host = useRef<HTMLDivElement>(null), area = useRef<HTMLDivElement>(null), stage = useRef<Konva.Stage>(null), transformer = useRef<Konva.Transformer>(null)
   const nodes = useRef(new Map<string, Konva.Group>()), transformFrame = useRef<number>()
   const [size, setSize] = useState({ width: 0, height: 0 }), [view, setView] = useState({ x: 0, y: 0, scale: 0.3 })
-  const [selected, setSelected] = useState<string[]>([]), [hand, setHand] = useState(false), [space, setSpace] = useState(false)
+  const [selected, setSelected] = useState<string[]>(initialSelectedId ? [initialSelectedId] : []), [hand, setHand] = useState(false), [space, setSpace] = useState(false)
   const [panel, setPanel] = useState(true), [popup, setPopup] = useState<'shapes' | 'more' | 'export' | 'warnings'>()
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState(''), [localError, setLocalError] = useState('')
   const [compare, setCompare] = useState(false)
@@ -64,7 +65,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation 
     if (!current.dirty && initial.version > current.composition.version) editor.reload(initial)
   }, [editor, initial])
   useEffect(() => () => { clearTimeout(noticeTimer.current); if (transformFrame.current !== undefined) cancelAnimationFrame(transformFrame.current) }, [])
-  useLayoutEffect(() => { if (host.current && host.current.clientWidth < 680) setPanel(false) }, [])
+  useLayoutEffect(() => { if (!initialSelectedId && host.current && host.current.clientWidth < 680) setPanel(false) }, [])
   useLayoutEffect(() => {
     const element = area.current; if (!element) return
     const resize = () => setSize({ width: element.clientWidth, height: element.clientHeight }), observer = new ResizeObserver(resize)

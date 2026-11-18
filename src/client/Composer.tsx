@@ -48,11 +48,12 @@ export function SizePicker({ value, onChange, fallback }: { value: SizeChoice; o
  * line, IME composition respected), and turns its send button into a stop
  * button while this view waits on a request.
  */
-export function Composer({ value, onChange, onSubmit, onStop, waiting, placeholder, autoFocus, children, context, onClearContext, hint }: {
+export function Composer({ value, onChange, onSubmit, onStop, waiting, placeholder, autoFocus, children, context, onClearContext, hint, disabled }: {
   value: string; onChange(v: string): void; onSubmit(): void; onStop?: (() => void) | undefined
   waiting?: boolean; placeholder: string; autoFocus?: boolean; children?: ReactNode
   /** A chip above the text naming what the prompt applies to (e.g. the image being edited). */
   context?: ReactNode; onClearContext?: (() => void) | undefined; hint?: string
+  disabled?: boolean | undefined
 }) {
   const area = useRef<HTMLTextAreaElement>(null)
   useLayoutEffect(() => {
@@ -61,7 +62,7 @@ export function Composer({ value, onChange, onSubmit, onStop, waiting, placehold
     el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'
   }, [value])
   useEffect(() => { if (autoFocus) area.current?.focus() }, [autoFocus])
-  const ready = value.trim().length > 0
+  const ready = !disabled && value.trim().length > 0
   return <form className="sd-composer" data-focus-within onSubmit={e => { e.preventDefault(); if (ready) onSubmit() }}>
     {context ? <div className="sd-composer-context">{context}{onClearContext ? <button type="button" className="sd-icon-button sd-icon-small" onClick={onClearContext} aria-label="取消"><CloseIcon size={12}/></button> : null}</div> : null}
     <textarea ref={area} rows={1} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)}
