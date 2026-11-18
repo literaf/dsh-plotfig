@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Refine the home and standalone prompt boxes with clearer text spacing, lightweight style/size controls, a fixed model label and hints below the field. Keep size menus within narrow input bounds and measure the growing composer so canvas image actions remain clear of it.
+
 - Simplify the home page around a working prompt box, compact tool shortcuts and recent canvases. Show style previews only after opening the composer's style button; move the standalone canvas style control into its composer too. Submit once with the selected style/size, keep the draft on failure, and remove the duplicate new-canvas gallery tile. Verify theme/narrow layouts and generation handoff with a simulated local result, without model calls.
 
 - Add a scientific-illustration home with six tool entry points, original same-theme style swatches and six persistent visual presets. Apply per-canvas styles to browser and native-tool generation, with an explicit `auto` override; retain ordinary standalone edit appearance.

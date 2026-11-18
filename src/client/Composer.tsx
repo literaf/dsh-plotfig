@@ -6,7 +6,7 @@ import { CheckIcon, ChevronIcon, CloseIcon, SendIcon, StopIcon } from './icons.j
 /** '' means the default size from settings; otherwise a tier or one of RATIOS' WxH. */
 export type SizeChoice = string
 export function sizeLabel(size: SizeChoice, fallback?: string): string {
-  if (!size) return fallback ? `默认 · ${fallback}` : '默认尺寸'
+  if (!size) return fallback || '尺寸'
   return RATIOS.find(r => r.size === size)?.id ?? size
 }
 /** Rectangle preview for a ratio chip, scaled into a 16px box. */
@@ -30,7 +30,7 @@ export function SizePicker({ value, onChange, fallback }: { value: SizeChoice; o
   // Focus goes back to the prompt so Enter submits right after choosing.
   const pick = (v: SizeChoice) => { onChange(v); setOpen(false); root.current?.closest('.sd-composer')?.querySelector('textarea')?.focus() }
   return <div className="sd-size" ref={root}>
-    <button type="button" className="sd-chip" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} title="尺寸与比例">
+    <button type="button" className="sd-chip" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} title="尺寸与比例" aria-label={`尺寸与比例：${value ? sizeLabel(value) : `默认${fallback ? ` ${fallback}` : ''}`}`}>
       <RatioGlyph size={value || '1x1'}/>{sizeLabel(value, fallback)}<ChevronIcon size={12}/>
     </button>
     {open ? <div className="sd-menu" role="menu">
@@ -63,16 +63,20 @@ export function Composer({ value, onChange, onSubmit, onStop, waiting, placehold
   }, [value])
   useEffect(() => { if (autoFocus) area.current?.focus() }, [autoFocus])
   const ready = !disabled && value.trim().length > 0
-  return <form className="sd-composer" data-focus-within onSubmit={e => { e.preventDefault(); if (ready) onSubmit() }}>
+  return <div className="sd-composer-shell"><form className="sd-composer" data-focus-within onSubmit={e => { e.preventDefault(); if (ready) onSubmit() }}>
     {context ? <div className="sd-composer-context">{context}{onClearContext ? <button type="button" className="sd-icon-button sd-icon-small" onClick={onClearContext} aria-label="取消"><CloseIcon size={12}/></button> : null}</div> : null}
-    <textarea ref={area} rows={1} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)}
+    <textarea ref={area} rows={2} aria-label="图片描述" placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)}
       onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (ready) onSubmit() } }}/>
     <div className="sd-composer-bar">
       <div className="sd-composer-tools">{children}</div>
-      {hint ? <span className="sd-composer-hint">{hint}</span> : null}
+      <div className="sd-composer-submit"><span className="sd-composer-model" title="当前绘图模型">Seedream 5.5</span>
       {waiting && onStop && !ready
         ? <button type="button" className="sd-send sd-send-stop" onClick={onStop} title="停止等待（已发出的请求仍可能计费）" aria-label="停止等待"><StopIcon size={14}/></button>
         : <button type="submit" className="sd-send" disabled={!ready} title="生成（Enter）" aria-label="生成"><SendIcon size={16}/></button>}
+      </div>
     </div>
-  </form>
+  </form><div className="sd-composer-footer">
+    {hint ? <span className="sd-composer-hint">{hint}</span> : null}
+    <span className="sd-composer-keyboard">Enter 生成 · Shift + Enter 换行</span>
+  </div></div>
 }

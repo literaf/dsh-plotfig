@@ -107,7 +107,9 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   initialTool?: ResearchToolId | undefined; initialStyle?: GenerationStyle | undefined
 }) {
   const state = useSyncExternalStore(model.subscribe, model.getSnapshot)
-  const inConversation = !isBoard(model.sessionId), bottom = inConversation ? 72 : BOTTOM
+  const inConversation = !isBoard(model.sessionId)
+  const bottomControls = useRef<HTMLDivElement>(null), [bottomSpace, setBottomSpace] = useState(0)
+  const bottom = Math.max(inConversation ? 72 : BOTTOM, bottomSpace)
   const items = useMemo(() => state.canvas?.items.filter(i => i.role !== 'layer') ?? [], [state.canvas])
   const compositions = useMemo(() => state.canvas?.compositions ?? [], [state.canvas])
   const allBoxes = useMemo(() => [...items, ...compositions.map(compositionBox)], [items, compositions])
@@ -139,6 +141,16 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
     if (!el) return
     const observer = new ResizeObserver(() => setSize({ width: el.clientWidth, height: el.clientHeight }))
     observer.observe(el); setSize({ width: el.clientWidth, height: el.clientHeight })
+    return () => observer.disconnect()
+  }, [editorId])
+  // The prompt grows with text, references and notices; keep floating image
+  // actions clear of its measured height rather than relying on a fixed gap.
+  useLayoutEffect(() => {
+    const el = bottomControls.current
+    if (!el) return
+    const measure = () => setBottomSpace(Math.ceil(el.offsetHeight + (Number.parseFloat(getComputedStyle(el).bottom) || 0) + 12))
+    measure(); const observer = new ResizeObserver(measure); observer.observe(el)
+    if (host.current) observer.observe(host.current)
     return () => observer.disconnect()
   }, [editorId])
   const slot = allBoxes.length ? Math.max(...allBoxes.map(i => i.height)) : 1024
@@ -470,7 +482,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
         <p>Shift 多选 · 拖动图层<br/>拖动底图移动整张画板</p>
       </aside> : null}
     </> : null}
-    <div className="sd-bottom">
+    <div className="sd-bottom" ref={bottomControls}>
       {toast ? <div className="sd-toast" role="status">{toast}</div> : null}
       {error ? <div className="sd-error" role="alert"><span>{error}</span>{layerState?.error ? <button type="button" className="sd-button" disabled={layerState.saving} onClick={() => { void layerEditor?.flush() }}>重试保存</button> : <button type="button" className="sd-icon-button sd-icon-small" onClick={() => { model.dismiss(); setOperationError('') }} aria-label="关闭"><CloseIcon size={12}/></button>}</div> : null}
       {composition ? <div className="sd-inline-hint">{chosenLayers.length ? `已选择 ${chosenLayers.length} 个图层 · Shift 多选` : '点击图层编辑 · 从空白处拖动框选'} · 空格平移</div> : null}
