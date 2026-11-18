@@ -162,6 +162,6 @@ export class CanvasStore {
     try { names = await readdir(this.root) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; names = [] }
     const wanted = new Set(include), all = [...new Set([...names, ...include])].filter(n => SESSION_ID.test(n))
     const entries = await Promise.all(all.map(async n => { try { const c = await this.get(n); return c.items.length || wanted.has(n) ? entryOf(c) : undefined } catch { return undefined } }))
-    return entries.filter((e): e is CanvasEntry => !!e).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 200)
+    return entries.filter((e): e is CanvasEntry => !!e).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 }

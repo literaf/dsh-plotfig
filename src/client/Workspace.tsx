@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { BOARD_PREFIX, isBoard, SIZE_TIERS } from '../shared/types.js'
-import { BackIcon, GearIcon, ImageIcon, NewIcon } from './icons.js'
+import { BackIcon, ChevronIcon, GearIcon, ImageIcon, NewIcon } from './icons.js'
 import type { Controller, State } from './controller.js'
 import { imageUrl } from './controller.js'
 import { CanvasView } from './Canvas.js'
@@ -10,6 +10,8 @@ import { ResearchStyleButton, ResearchStylePicker } from './ResearchStyles.js'
 import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
 import { Composer, SizePicker } from './Composer.js'
 import type { SizeChoice } from './Composer.js'
+const RECENT_CANVASES = 8
+
 export function Icon({ size = 20 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
     <rect width="100" height="100" rx="22" fill="#0a0a0a"/>
@@ -47,10 +49,15 @@ export function Settings({ controller }: { controller: Controller }) {
 export function Workspace({ controller, openConversation, conversation }: { controller: Controller; openConversation(id: string): boolean; conversation(id: string): ConversationActions }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
   const [open, setOpen] = useState<string | undefined>(), [settings, setSettings] = useState(false)
+  const [library, setLibrary] = useState(false)
   const [launch, setLaunch] = useState<{ tool: ResearchToolId; style?: GenerationStyle }>()
   const [prompt, setPrompt] = useState(''), [style, setStyle] = useState<GenerationStyle>('auto'), [genSize, setGenSize] = useState<SizeChoice>('')
   const [stylePicker, setStylePicker] = useState(false), [starting, setStarting] = useState(false)
   const homeInput = useRef<HTMLDivElement>(null), submitting = useRef(false)
+  const galleryScroll = useRef<HTMLDivElement>(null), scrollPositions = useRef({ recent: 0, all: 0 })
+  useLayoutEffect(() => {
+    if (galleryScroll.current) galleryScroll.current.scrollTop = scrollPositions.current[library ? 'all' : 'recent']
+  }, [library, open, settings])
   useEffect(() => { void controller.attach() }, [controller])
   // The list changes while conversations generate; refresh it while it is on screen.
   useEffect(() => {
@@ -60,6 +67,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
   }, [controller, open, settings])
   const c = state.catalog, canvases = c?.canvases ?? []
   const current = canvases.find(x => x.sessionId === open)
+  const visibleCanvases = library ? canvases : canvases.slice(0, RECENT_CANVASES)
   // Choosing a style on the home page only updates its draft. A new canvas is
   // created when the user starts a tool or explicitly submits generation.
   const start = (tool: ResearchToolId) => { setLaunch({ tool, ...(style === 'auto' ? {} : { style }) }); setSettings(false); setOpen(BOARD_PREFIX + crypto.randomUUID()) }
@@ -90,11 +98,16 @@ export function Workspace({ controller, openConversation, conversation }: { cont
     if (minutes < 60 * 24) return `${Math.round(minutes / 60)} 小时前`
     return new Date(iso).toLocaleDateString()
   }
-  const heading = settings ? '设置' : open ? current?.title ?? (isBoard(open) ? '新画布' : '画布') : '全部画布'
+  const heading = settings ? '设置' : open ? current?.title ?? (isBoard(open) ? '新画布' : '画布') : library ? '全部画布' : '科研绘图'
+  const backLabel = (open || settings) && library ? '返回全部画布' : '返回首页'
+  const back = () => {
+    if (open || settings) { setOpen(undefined); setSettings(false) } else setLibrary(false)
+    void controller.attach()
+  }
   return <main className="sd sd-workspace">
     <header className="sd-head">
       <div className="sd-title">
-        {open || settings ? <button className="sd-icon-button" onClick={() => { setOpen(undefined); setSettings(false); void controller.attach() }} aria-label="返回全部画布" title="全部画布"><BackIcon/></button> : <Icon size={22}/>}
+        {open || settings || library ? <button className="sd-icon-button" onClick={back} aria-label={backLabel} title={backLabel}><BackIcon/></button> : <Icon size={22}/>}
         <div className="sd-title-text"><strong>{heading}</strong>
           <span className="sd-brand">{open && current ? `${isBoard(open) ? '独立画布' : '对话画布'} · ${current.count} 张` : open ? (isBoard(open) ? '独立画布' : '对话画布') : `Seedream 5.5 · ${canvases.length} 个画布`}</span></div>
       </div>
@@ -105,11 +118,11 @@ export function Workspace({ controller, openConversation, conversation }: { cont
     </header>
     {settings || (c && !c.configured && !open && !canvases.length) ? <div className="sd-scroll"><Settings controller={controller}/></div>
       : open ? <CanvasView key={open} model={controller.canvas(open)} defaultSize={c?.defaultSize} conversation={isBoard(open) ? undefined : conversation(open)} initialTool={launch?.tool} initialStyle={launch?.style}/>
-      : <div className="sd-scroll">
+      : <div className="sd-scroll" key={library ? 'all' : 'home'} ref={galleryScroll} onScroll={e => { scrollPositions.current[library ? 'all' : 'recent'] = e.currentTarget.scrollTop }}>
         {c && !c.configured ? <div className="sd-alert" role="status">已保存的画布可继续编辑和导出。生成或分图层前，请在设置中配置方舟 API Key。</div> : null}
         {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}
         {state.message ? <div className="sd-alert" role="status">{state.message}</div> : null}
-        <section className="sd-research-home">
+        {!library ? <section className="sd-research-home">
           <div className="sd-home-input" ref={homeInput}>
             <h1>想画些什么？</h1>
             <Composer value={prompt} onChange={setPrompt} onSubmit={() => { void generate() }} disabled={starting || !c} placeholder="描述你想生成的图片…" hint={starting ? '准备画布…' : '每次生成都会计费'}>
@@ -118,10 +131,10 @@ export function Workspace({ controller, openConversation, conversation }: { cont
             </Composer>
           </div>
           <nav className="sd-home-shortcuts" aria-label="常用工具"><ResearchTools compact disabled={starting} onSelect={tool => { if (tool === 'generate') homeInput.current?.querySelector('textarea')?.focus(); else start(tool) }}/></nav>
-        </section>
-        {canvases.length ? <div className="sd-recent-title"><h2>最近画布</h2><span>{canvases.length} 个</span></div> : null}
-        {canvases.length ? <ul className="sd-gallery">
-          {canvases.map(x => { const running = c?.active?.[x.sessionId]?.length ?? 0
+        </section> : null}
+        {!library && canvases.length ? <div className="sd-recent-title"><h2>最近画布</h2><button type="button" className="sd-all-canvases" onClick={() => setLibrary(true)} aria-label="全部画布"><span>全部画布</span><span className="sd-canvas-count">{canvases.length}</span><ChevronIcon size={14}/></button></div> : null}
+        {canvases.length ? <ul className="sd-gallery" aria-label={library ? '全部画布' : '最近画布'} data-view={library ? 'all' : 'recent'}>
+          {visibleCanvases.map(x => { const running = c?.active?.[x.sessionId]?.length ?? 0
             return <li key={x.sessionId}><button className="sd-card" onClick={() => openCanvas(x.sessionId)}>
               <span className="sd-card-cover">{x.cover ? <img src={imageUrl(x.sessionId, x.cover)} alt="" loading="lazy"/> : <ImageIcon size={22}/>}
                 {running ? <span className="sd-card-badge"><span className="sd-spinner sd-spinner-small"/>生成中</span> : x.count > 1 ? <span className="sd-card-badge">{x.count} 张</span> : null}</span>
@@ -129,7 +142,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
               <span className="sd-card-meta"><span className="sd-tag" data-kind={isBoard(x.sessionId) ? 'board' : 'chat'}>{isBoard(x.sessionId) ? '独立' : '对话'}</span>{relative(x.updatedAt)}</span>
             </button></li> })}
         </ul>
-          : <div className="sd-home-empty">还没有画布。在上方输入描述，开始第一张图。</div>}
+          : <div className="sd-home-empty">{library ? '还没有画布，点击“新建画布”开始第一张图。' : '还没有画布。在上方输入描述，开始第一张图。'}</div>}
       </div>}
     {stylePicker ? <ResearchStylePicker newCanvas value={style} busy={false} onPick={value => { setStyle(value); setStylePicker(false) }} onClose={() => setStylePicker(false)}/> : null}
   </main>

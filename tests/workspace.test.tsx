@@ -29,7 +29,7 @@ describe('saved canvas access without model credentials', () => {
       expect(node.querySelector('[data-saved-canvas]')).not.toBeNull()
       await act(async () => { node.querySelector<HTMLButtonElement>('[aria-label="设置"]')!.click() })
       expect(node.querySelector('.sd-settings')).not.toBeNull()
-      await act(async () => { node.querySelector<HTMLButtonElement>('[aria-label="返回全部画布"]')!.click() })
+      await act(async () => { node.querySelector<HTMLButtonElement>('[aria-label="返回首页"]')!.click() })
       expect(node.querySelector('.sd-card')).not.toBeNull()
       expect(vi.mocked(fetcher).mock.calls.every(([url]) => !String(url).includes('/generate') && !String(url).includes('/decompose'))).toBe(true)
     } finally { await act(async () => root.unmount()); controller.dispose() }
@@ -96,7 +96,7 @@ describe('home generation entry', () => {
       expect(saved[0].split('?')[1]).toBe(generated[0]![0].split('?')[1])
       expect(h.node.querySelector('[data-saved-canvas]')).not.toBeNull()
       // Failure does not retry, and returning home recovers the original draft.
-      await act(async () => h.node.querySelector<HTMLButtonElement>('[aria-label="返回全部画布"]')!.click())
+      await act(async () => h.node.querySelector<HTMLButtonElement>('[aria-label="返回首页"]')!.click())
       expect(h.node.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('绘制 A → B 的信号通路')
       expect(vi.mocked(h.fetcher).mock.calls.filter(([url]) => url.includes('/generate?'))).toHaveLength(1)
     } finally { await h.cleanup() }

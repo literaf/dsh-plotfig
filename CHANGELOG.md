@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Limit the home gallery to eight recent canvases and add an All canvases entry with the total count. Open the complete gallery in its own view, preserve the home draft and return destination when browsing, and remove the catalog’s 200-item truncation.
+
 - Refine the home and standalone prompt boxes with clearer text spacing, lightweight style/size controls, a fixed model label and hints below the field. Keep size menus within narrow input bounds and measure the growing composer so canvas image actions remain clear of it.
 
 - Simplify the home page around a working prompt box, compact tool shortcuts and recent canvases. Show style previews only after opening the composer's style button; move the standalone canvas style control into its composer too. Submit once with the selected style/size, keep the draft on failure, and remove the duplicate new-canvas gallery tile. Verify theme/narrow layouts and generation handoff with a simulated local result, without model calls.
