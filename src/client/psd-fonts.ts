@@ -1,4 +1,5 @@
 import type { TextStyle } from 'ag-psd'
+import { fontPostScript } from '../shared/fonts.js'
 
 const aliases: Record<string, string> = {
   Arial: 'ArialMT', Helvetica: 'Helvetica', 'Helvetica Neue': 'HelveticaNeue',
@@ -17,6 +18,11 @@ const cjkFont = /PingFang|Songti|YaHei|SimSun|SimHei|Noto.*(?:SC|TC|CJK|JP|KR)|S
 export function psdFontName(family: string, text = ''): string {
   const families = family.split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
   let chosen = families[0] || 'Arial'
+  // A stack that names its own CJK fallback keeps it; otherwise Ark OCR names, including
+  // Chinese names such as 苹方 or 思源黑体, map through the font list.
+  const ownFallback = cjk.test(text) && !cjkFont.test(chosen) && families.slice(1).some(f => cjkFont.test(f))
+  const listed = ownFallback || aliases[chosen] ? undefined : fontPostScript(chosen, cjk.test(text))
+  if (listed) return listed
   if (cjk.test(text) && !cjkFont.test(chosen)) {
     chosen = families.find(f => cjkFont.test(f)) ?? (/serif/i.test(chosen) && !/sans/i.test(chosen) || /Georgia|Times/i.test(chosen) ? 'Songti SC' : 'PingFang SC')
   }

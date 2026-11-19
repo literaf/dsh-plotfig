@@ -1,8 +1,10 @@
+import { fontStack } from '../shared/fonts.js'
 import type Konva from 'konva'
 import type { OCRText, TextRun } from '../shared/types.js'
 
 export type TextMeasure = (run: TextRun, fontSize: number) => number
-export const ocrFontFamily = (name: string) => `"${name.replace(/[^\p{L}\p{N} _.-]/gu, '').trim() || 'Arial'}", Arial, "PingFang SC", "Microsoft YaHei", sans-serif`
+/** OCR font names use the Ark font list; missing fonts fall back to the closest category. */
+export const ocrFontFamily = (name: string) => fontStack(name.replace(/[^\p{L}\p{N} _.&-]/gu, '').trim() || 'Arial')
 let measureContext: CanvasRenderingContext2D | null | undefined
 export const measureTextRun: TextMeasure = (run, size) => {
   measureContext ??= document.createElement('canvas').getContext('2d')

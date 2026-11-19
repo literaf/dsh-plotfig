@@ -9,7 +9,7 @@ const validNumber = (v: unknown, min: number, max: number): v is number => typeo
 const string = (v: unknown, max: number): v is string => typeof v === 'string' && v.length <= max
 const color = (v: unknown): v is string => typeof v === 'string' && /^#[\da-f]{6}$/i.test(v)
 const font = (v: unknown) => typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'unknown'
-  ? v.replace(/[^\p{L}\p{N} _.-]/gu, '').trim().slice(0, 100) || 'Arial' : 'Arial'
+  ? v.replace(/[^\p{L}\p{N} _.&-]/gu, '').trim().slice(0, 100) || 'Arial' : 'Arial'
 const box = (v: unknown): [number, number, number, number] | undefined =>
   Array.isArray(v) && v.length === 4 && v.every(n => validNumber(n, -1e7, 1e7)) && v[2]! > v[0]! && v[3]! > v[1]! ? v as [number, number, number, number] : undefined
 const bounds = (raw: unknown, width: number, height: number) => {
