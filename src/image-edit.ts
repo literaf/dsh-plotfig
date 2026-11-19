@@ -10,30 +10,54 @@ import type { ExpansionContext } from './outpaint.js'
 
 const dataUrl = (image: Pixels) => `data:image/png;base64,${Buffer.from(encodePixels(image)).toString('base64')}`
 const hasAlpha = (image: Pixels) => image.data.some((v, i) => i % 4 === 3 && v < 250)
-/**
- * Compare at the original resolution: an upscale must reduce to the source. Content drift
- * (redrawn text, moved parts) is flagged, never silently accepted. Transparency follows the source.
- */
-export function finishEnhance(source: Pixels, generated: Pixels): { image: ArkImage; warnings: string[] } {
-  const reduced = resizePixels(generated, source.width, source.height), warnings: string[] = []
-  let difference = 0, samples = 0, worst = 0
-  // Cells near glyph size: a rewritten word changes a few small cells, which larger cells average away.
-  const cell = Math.max(6, Math.round(Math.min(source.width, source.height) / 80)), cells = new Map<number, number[]>()
-  for (let y = 0; y < source.height; y++) for (let x = 0; x < source.width; x++) {
-    const i = (y * source.width + x) * 4
-    if (source.data[i + 3]! < 240) continue
-    let d = 0
-    for (let c = 0; c < 3; c++) d += Math.abs(source.data[i + c]! - reduced.data[i + c]!)
-    difference += d / 3; samples++
-    const key = Math.floor(y / cell) * 10_000 + Math.floor(x / cell), sum = cells.get(key) ?? [0, 0]
-    sum[0]! += d / 3; sum[1]!++; cells.set(key, sum)
+const luminance = (image: Pixels) => Float32Array.from({ length: image.width * image.height }, (_, p) => 0.299 * image.data[p * 4]! + 0.587 * image.data[p * 4 + 1]! + 0.114 * image.data[p * 4 + 2]!)
+/** Separable box blur (radius r) or, with `max`, binary dilation over a rx × ry window. */
+function filter(values: Float32Array, width: number, height: number, rx: number, ry: number, max = false): Float32Array {
+  const pass = (input: Float32Array, horizontal: boolean, r: number) => {
+    const out = new Float32Array(input.length), length = horizontal ? width : height, lines = horizontal ? height : width
+    for (let line = 0; line < lines; line++) {
+      const at = (k: number) => horizontal ? line * width + k : k * width + line
+      let sum = 0, count = 0
+      for (let k = 0; k < Math.min(r, length); k++) { sum += input[at(k)]!; count++ }
+      for (let k = 0; k < length; k++) {
+        if (k + r < length) { sum += input[at(k + r)]!; count++ }
+        if (k - r - 1 >= 0) { sum -= input[at(k - r - 1)]!; count-- }
+        out[at(k)] = max ? (sum > 0 ? 1 : 0) : sum / count
+      }
+    }
+    return out
   }
-  for (const [sum, count] of cells.values()) if (count! >= cell * cell / 2) worst = Math.max(worst, sum! / count!)
-  // Real tests show the model can rewrite small words while the overall difference stays low,
-  // so every result is held for review; strong local drift gets the more specific warning.
-  warnings.push(samples && (difference / samples > 14 || worst > 30)
-    ? '变清晰需检查：结果与原图存在局部差异，可能改写了文字、细节或位置。结果已另存，原图保留，不自动替换图层。'
-    : '变清晰结果需核对：AI 可能改写小字或细节，请对照原图检查后再使用。结果已另存，原图保留，不自动替换图层。')
+  return pass(pass(values, true, rx), false, ry)
+}
+/**
+ * The model can rewrite words or reshape details while sharpening. Compare blurred luminance at
+ * the source resolution, so sharper edges do not count as change; widen each changed spot to
+ * cover its word, and fill it from the upscaled source. Correct wording wins over sharpness.
+ */
+export function restoreDrift(source: Pixels, generated: Pixels): { image: Pixels; restored: number } {
+  const { width, height } = source, reduced = resizePixels(generated, width, height)
+  const a = filter(luminance(source), width, height, 1, 1), b = filter(luminance(reduced), width, height, 1, 1)
+  const changed = Float32Array.from(a, (v, p) => source.data[p * 4 + 3]! >= 240 && Math.abs(v - b[p]!) > 16 ? 1 : 0)
+  const grown = filter(changed, width, height, Math.max(4, Math.round(width / 64)), Math.max(1, Math.round(height / 480)), true)
+  const soft = filter(grown, width, height, 1, 1)
+  let restored = 0
+  for (const v of grown) restored += v
+  if (!restored) return { image: generated, restored: 0 }
+  const mask = resizePixels({ width, height, data: Uint8Array.from({ length: width * height * 4 }, (_, i) => i % 4 === 3 ? 255 : Math.round(soft[i >> 2]! * 255)) }, generated.width, generated.height)
+  const up = resizePixels(source, generated.width, generated.height), data = new Uint8Array(generated.data)
+  for (let p = 0; p < generated.width * generated.height; p++) {
+    const t = mask.data[p * 4]! / 255
+    if (t) for (let c = 0; c < 3; c++) data[p * 4 + c] = Math.round(generated.data[p * 4 + c]! * (1 - t) + up.data[p * 4 + c]! * t)
+  }
+  return { image: { ...generated, data }, restored: restored / (width * height) }
+}
+/** Restore drifted regions from the source, keep the source silhouette, and always hold for review. */
+export function finishEnhance(source: Pixels, raw: Pixels): { image: ArkImage; warnings: string[] } {
+  const { image: generated, restored } = restoreDrift(source, raw), warnings: string[] = []
+  const percent = restored * 100
+  warnings.push(restored
+    ? `变清晰需核对：模型改动了约 ${percent < 0.1 ? '不到 0.1' : percent.toFixed(1)}% 的区域（常见于小字），这些位置已用原图放大还原，会比其他区域略模糊。请对照原图检查；结果已另存，不自动替换图层。`
+    : '变清晰需核对：未检测到明显改动，但 AI 仍可能改写细小文字或细节，请对照原图检查。结果已另存，不自动替换图层。')
   const data = new Uint8Array(generated.data)
   if (hasAlpha(source)) {
     // Keep the source silhouette exactly; only sharpen colour inside it.

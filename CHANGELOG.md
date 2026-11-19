@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Run multi-sided expansion as chained single-sided passes, one billed image per side, saving completed passes when a later one fails. Original pixels stay byte-identical; real three-side test passed.
-- Add 变清晰 (enhance): upscale to the ~4.62 MP model limit, keep source transparency, and always hold results for review because small text can be rewritten.
+- Add 变清晰 (enhance): upscale to the ~4.62 MP model limit, keep source transparency, refill areas the model changed (such as rewritten words) from the upscaled source, and always hold results for review.
 - Add single-page lossless PDF export from the editor menu and the artboard toolbar, with no new dependencies.
 - Standardize six base appearance presets with explicit visual rules; add naturalistic illustration and keep the former journal preset as a backwards-compatible saved value, without silently remapping existing canvases. Keep subject, figure type, viewpoint, layout, palette and effects independent.
 - Use cross-disciplinary representative references in the style picker and keep six saved microscope outputs as a separate controlled visual audit. Record provenance and limitations: views and proportions drift, naturalistic and 3D are still close, and cross-subject stability is unverified. The picker update makes no model calls; the audit retains its six real paid outputs with no automatic retries.

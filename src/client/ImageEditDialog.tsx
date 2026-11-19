@@ -117,7 +117,7 @@ export function ImageEditDialog({ model, source, initialOperation, onClose, onCo
         <aside className="sd-image-edit-controls">
           {operation === 'remove-background' ? <p>抠出主要主体，默认去除旁注、图表及背景。需要保留的文字或物体可在下方说明。AI 可能微调细节，原图会保留。</p> : operation === 'enhance' ? <>
             <p>提高分辨率并锐化线条和文字，输出约 {width} × {height}，模型最大输出约 460 万像素。透明区域按原图保留。</p>
-            <p>AI 可能改写细小文字或细节，结果一律标记“需核对”，另存到画布，不自动替换图层。含大量小字的图建议对照原图检查。</p>
+            <p>AI 可能改写小字。与原图明显不同的位置会用原图放大还原，这些位置略模糊但内容正确。结果标记“需核对”，另存到画布，不自动替换图层。</p>
           </> : operation === 'erase' ? <>
             <p>涂抹或框选要移除的部分，覆盖边缘、阴影并留出过渡空间。未选中的像素会从原图保留。</p>
             <div className="sd-image-edit-brushes">{([['brush', '涂抹'], ['rect', '框选'], ['eraser', '减选']] as const).map(([id, label]) => <button key={id} aria-pressed={tool === id} disabled={busy} onClick={() => setTool(id)}>{label}</button>)}</div>

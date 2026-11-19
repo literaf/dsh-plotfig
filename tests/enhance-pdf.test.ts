@@ -5,7 +5,7 @@ import { deflateSync, inflateSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ArkClient } from '../src/ark.js'
 import type { ArkImage, ArkRequest } from '../src/ark.js'
-import { decodePixels, encodePixels, finishEnhance, prepareImageEdit, resizePixels } from '../src/image-edit.js'
+import { decodePixels, encodePixels, finishEnhance, prepareImageEdit, resizePixels, restoreDrift } from '../src/image-edit.js'
 import type { Pixels } from '../src/pixels.js'
 import { enhanceDimensions, expansionSteps, parseImageEdit } from '../src/shared/image-edit.js'
 import { parseSize } from '../src/shared/types.js'
@@ -94,14 +94,25 @@ describe('enhance', () => {
     expect([prepared.width, prepared.height]).toEqual([1600, 1200])
     expect(() => parseImageEdit({ operation: 'enhance', image: 'item:aaaaaaaaaaaa', requestId: 'enhance-001', expand: { left: 1, right: 0, top: 0, bottom: 0 } }, false)).toThrow()
   })
-  it('accepts a faithful upscale, flags drifted content and keeps the source silhouette', () => {
+  it('keeps a faithful upscale untouched but still holds it for review', () => {
     const source = scene(120, 90), faithful = resizePixels(source, 480, 360)
     const ok = finishEnhance(source, faithful)
-    // Even a faithful upscale is held for review: small text may be rewritten without large pixel drift.
-    expect(ok.warnings.join()).toContain('变清晰结果需核对')
-    expect([ok.image.width, ok.image.height]).toEqual([480, 360])
-    expect(finishEnhance(source, scene(480, 360, 200, 0)).warnings.join()).toContain('变清晰需检查')
-    const cut = { ...source, data: new Uint8Array(source.data) }
+    expect(ok.warnings.join()).toContain('未检测到明显改动')
+    expect(decodePixels(ok.image.bytes).data).toEqual(Buffer.from(faithful.data))
+  })
+  it('restores a rewritten region from the source and leaves the rest of the sharpened output alone', () => {
+    const source = scene(240, 160), generated = resizePixels(source, 960, 640)
+    // Simulate a rewritten word: invert a small patch.
+    for (let y = 200; y < 240; y++) for (let x = 400; x < 520; x++) for (let c = 0; c < 3; c++) generated.data[(y * 960 + x) * 4 + c] = 255 - generated.data[(y * 960 + x) * 4 + c]!
+    const { image, restored } = restoreDrift(source, generated), up = resizePixels(source, 960, 640)
+    expect(restored).toBeGreaterThan(0); expect(restored).toBeLessThan(0.1)
+    const at = (img: Pixels, x: number, y: number) => [...img.data.subarray((y * 960 + x) * 4, (y * 960 + x) * 4 + 3)]
+    for (const [x, y] of [[420, 210], [500, 230]] as const) at(image, x, y).forEach((v, c) => expect(Math.abs(v - at(up, x, y)[c]!)).toBeLessThanOrEqual(2))
+    expect(at(image, 50, 50)).toEqual(at(generated, 50, 50))
+    expect(finishEnhance(source, generated).warnings.join()).toContain('已用原图放大还原')
+  })
+  it('keeps the source silhouette on transparent images', () => {
+    const source = scene(120, 90), faithful = resizePixels(source, 480, 360), cut = { ...source, data: new Uint8Array(source.data) }
     for (let y = 0; y < 90; y++) for (let x = 0; x < 40; x++) cut.data[(y * 120 + x) * 4 + 3] = 0
     const out = decodePixels(finishEnhance(cut, faithful).image.bytes)
     expect(out.data[(180 * 480 + 20) * 4 + 3]).toBe(0)
