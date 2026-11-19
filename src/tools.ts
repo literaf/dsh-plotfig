@@ -44,13 +44,13 @@ function render(value: Value, generated: boolean) {
 export function applyTools(ctx: Context, service: Seedream, defaults: Defaults): void {
   ctx.tools.register(defineTool({
     name: 'seedream_edit',
-    description: 'Remove an image background, erase selected regions, extend the canvas, or enhance (upscale and sharpen) an image with Seedream 5.5. Billed per generated image: one, except multi-sided expansion which bills one per side. Use only when requested; never retry automatically. The original stays intact and results are saved to this Session. Erase protects pixels outside the supplied rectangles; expansion preserves all pixels of the original rectangle. Enhance outputs up to ~4.62 MP and flags results that drift from the source. Inspect dimensions with seedream_canvas first. UI users can paint masks in AI 处理 instead.',
+    description: 'Remove an image background, erase selected regions, redraw selected regions from a description (inpaint), extend the canvas, or enhance (upscale and sharpen) an image with Seedream 5.5. Billed per generated image: one, except multi-sided expansion which bills one per side. Use only when requested; never retry automatically. The original stays intact and results are saved to this Session. Erase and inpaint protect pixels outside the supplied rectangles; inpaint requires a prompt describing what to draw; expansion preserves all pixels of the original rectangle. Enhance outputs up to ~4.62 MP and flags results that drift from the source. Inspect dimensions with seedream_canvas first. UI users can paint masks in AI 处理 instead.',
     parameters: {
-      operation: { type: 'string', required: true, enum: ['remove-background', 'erase', 'expand', 'enhance'] },
+      operation: { type: 'string', required: true, enum: ['remove-background', 'erase', 'inpaint', 'expand', 'enhance'] },
       image: { type: 'string', required: true, description: 'One item:<id> from this Session; local paths and external URLs are not accepted.' },
-      prompt: { type: 'string', description: 'Optional description of which foreground to keep, what object to erase, or what scene to extend.' },
-      feather: { type: 'number', description: 'Erase only: inward edge transition in pixels, integer 0–64. Default adapts to resolution; 0 keeps a hard edge. Include some background around the object in the selection.' },
-      regions: { type: 'array', description: 'Required for erase: 1–64 rectangles in original-image pixel coordinates. Must stay within the source image.', items: { type: 'object', additionalProperties: false, properties: {
+      prompt: { type: 'string', description: 'Which foreground to keep, what to erase, what to draw inside the regions (required for inpaint), or what scene to extend.' },
+      feather: { type: 'number', description: 'Erase and inpaint: inward edge transition in pixels, integer 0–64. Default adapts to resolution; 0 keeps a hard edge. Include some background around the object in the selection.' },
+      regions: { type: 'array', description: 'Required for erase (1–64) and inpaint (1–16): rectangles in original-image pixel coordinates. Must stay within the source image.', items: { type: 'object', additionalProperties: false, properties: {
         x: { type: 'integer', required: true }, y: { type: 'integer', required: true }, width: { type: 'integer', required: true }, height: { type: 'integer', required: true },
       } } },
       expand: { type: 'object', description: 'Required for expand: nonnegative added pixels on each side. Each positive side is one local-context pass that preserves original pixels; several sides run left, right, top, bottom in sequence, one billed image per side. If a later pass fails, the completed part is saved; never retry automatically.', additionalProperties: false, properties: {
@@ -92,6 +92,7 @@ export function applyTools(ctx: Context, service: Seedream, defaults: Defaults):
       images: { type: 'array', items: { type: 'string' }, description: 'Up to 10 reference images: item:<id> from this canvas, https URLs, or absolute local file paths. Omit for text-to-image.' },
       size: { type: 'string', description: '1K, 1.5K, 2K (default from settings), or WxH with 921600–4624220 total pixels, e.g. 2560x1440.' },
       title: { type: 'string', description: 'Short Chinese label shown on the canvas, e.g. 雨林垂直分层剖面图.' },
+      transparent: { type: 'boolean', description: 'Output a PNG with a transparent background: only the subject, nothing behind it. Suits icons, devices and parts to place in figures. Works with or without reference images.' },
       style: { type: 'string', enum: STYLE_IDS, description: 'Optional scientific illustration appearance. Omit to inherit the style selected on this Session canvas. auto uses only the supplied prompt; flat, 2.5d, line-art, naturalistic, 3d, hand-drawn apply an appearance preset; journal is accepted only for legacy compatibility. Subject, figure type, viewpoint and palette are independent. This is not a scientific accuracy or journal-compliance guarantee.' },
     },
     output: { schema: OUTPUT, render: (_a, v) => render(v, true) }, timeoutMs: 240_000, isConcurrencySafe: () => false,

@@ -7,7 +7,7 @@ import { isBoard, labelOf } from '../shared/types.js'
 import type { CanvasModel, PendingView } from './controller.js'
 import { imageUrl } from './controller.js'
 import type { ConversationActions, Outcome } from './handoff.js'
-import { Composer, SizePicker } from './Composer.js'
+import { Composer, SizePicker, TransparentToggle } from './Composer.js'
 import type { SizeChoice } from './Composer.js'
 import { CloseIcon, DownloadIcon, EditIcon, FitIcon, HandIcon, ImageIcon, MinusIcon, PlusIcon, QuoteIcon, RedoIcon, SelectIcon, TrashIcon, UndoIcon } from './icons.js'
 import { useImage } from './images.js'
@@ -27,6 +27,9 @@ import { ResearchSourcePicker, ResearchTools } from './ResearchTools.js'
 import { ResearchDialog } from './ResearchDialog.js'
 import { referenceText } from './handoff.js'
 import { DiagramTemplates, TemplateButton } from './DiagramTemplates.js'
+import { RegionPicker } from './RegionPicker.js'
+import { decomposePrompt } from '../shared/regions.js'
+import type { PixelBox } from '../shared/regions.js'
 import { readOCR } from '../shared/ocr.js'
 
 export interface View { x: number; y: number; scale: number }
@@ -121,7 +124,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 0.3 })
   const [selected, setSelected] = useState<string | undefined>(initialCompositionId), [hovered, setHovered] = useState<string | undefined>()
   const [editing, setEditing] = useState(false), [confirming, setConfirming] = useState(false)
-  const [prompt, setPrompt] = useState(''), [genSize, setGenSize] = useState<SizeChoice>('')
+  const [prompt, setPrompt] = useState(''), [genSize, setGenSize] = useState<SizeChoice>(''), [transparent, setTransparent] = useState(false)
   const [templatePicker, setTemplatePicker] = useState(false)
   const [stylePicker, setStylePicker] = useState(false), [toolMenu, setToolMenu] = useState(false)
   const [sourceTool, setSourceTool] = useState<Exclude<ResearchToolId, 'generate'> | 'import' | undefined>(initialTool && initialTool !== 'generate' ? initialTool : undefined)
@@ -133,7 +136,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const [marquee, setMarquee] = useState<Box>(), marqueeStart = useRef<{ x: number; y: number; compositionId?: string | undefined; keep: string[] }>()
   const panning = hand || space
   const [editSource, setEditSource] = useState<CanvasItem>()
-  const [splitPrompt, setSplitPrompt] = useState('将主要元素、说明文字与背景拆成独立图层，保持原有位置、颜色和细节。')
+  const [splitPrompt, setSplitPrompt] = useState('将主要元素、说明文字与背景拆成独立图层，保持原有位置、颜色和细节。'), [splitRegions, setSplitRegions] = useState<PixelBox[]>([])
   const [maxImages, setMaxImages] = useState(30), [operationBusy, setOperationBusy] = useState(false), [operationError, setOperationError] = useState('')
   const operation = useRef(false)
   const [history, setHistory] = useState<{ done: CanvasChange[]; undone: CanvasChange[] }>({ done: [], undone: [] })
@@ -251,9 +254,10 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const submit = () => {
     const text = prompt.trim()
     if (!text || inConversation || state.styleBusy) return
-    if (referenceSource) void model.generate({ prompt: text, images: [`item:${referenceSource.item.id}`], ...(genSize ? { size: genSize } : {}) }, referenceSource.item.id)
-    else if (editing && item) void model.generate({ prompt: text, images: [`item:${item.id}`], title: `${labelOf(item)} · 编辑`, style: 'auto', ...(genSize ? { size: genSize } : {}) }, item.id)
-    else void model.generate({ prompt: text, ...(genSize ? { size: genSize } : {}) })
+    const options = { ...(genSize ? { size: genSize } : {}), ...(transparent ? { transparent } : {}) }
+    if (referenceSource) void model.generate({ prompt: text, images: [`item:${referenceSource.item.id}`], ...options }, referenceSource.item.id)
+    else if (editing && item) void model.generate({ prompt: text, images: [`item:${item.id}`], title: `${labelOf(item)} · 编辑`, style: 'auto', ...options }, item.id)
+    else void model.generate({ prompt: text, ...options })
     setPrompt(''); setEditing(false); setReferenceSource(undefined)
   }
   const openTextEditor = (c: Composition) => {
@@ -297,7 +301,8 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
     if (!splitSource) return
     const source = splitSource, forText = splitForText
     setSplitSource(undefined)
-    const created = await model.decompose({ image: `item:${source.id}`, prompt: splitPrompt, maxImages })
+    const created = await model.decompose({ image: `item:${source.id}`, prompt: decomposePrompt(splitPrompt, splitRegions, source.width, source.height), maxImages })
+    setSplitRegions([])
     setSelected(created.id); setSelectedLayers([]); flash('分层完成，直接点击图层编辑；Shift 可多选')
     if (forText) openTextEditor(created)
   })
@@ -500,13 +505,16 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
         <ResearchStyleButton value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.styleBusy} open={stylePicker} onClick={() => setStylePicker(true)}/>
         <TemplateButton open={templatePicker} disabled={operationBusy} onClick={() => setTemplatePicker(true)}/>
         <SizePicker value={genSize} onChange={setGenSize} fallback={defaultSize}/>
+        <TransparentToggle value={transparent} onChange={setTransparent}/>
       </Composer>}
     </div>
     </div>
     {splitSource ? <div className="sd-split-backdrop"><div className="sd-split-dialog" role="dialog" aria-modal="true" aria-label="拆分图层" onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') setSplitSource(undefined) }}>
       <div className="sd-split-title"><LayersIcon/><strong>拆分图层</strong><button className="sd-icon-button" aria-label="关闭分层设置" onClick={() => setSplitSource(undefined)}><CloseIcon/></button></div>
       <p>{splitForText ? '先拆分并识别图中文字，再进入文字编辑。部分装饰文字可能没有识别结果。' : '原图会保留，分层结果将放进新的可编辑画板。'}</p>
+      <RegionPicker src={imageUrl(model.sessionId, splitSource.id)} width={splitSource.width} height={splitSource.height} value={splitRegions} onChange={setSplitRegions} maxHeight={260} label="框选要单独拆分的区域"/>
       <label>分层说明<textarea value={splitPrompt} onChange={e => setSplitPrompt(e.target.value)} rows={3} maxLength={4000}/></label>
+      {splitRegions.length ? <p className="sd-split-cost">框选区域会以坐标写入分层说明，模型优先把每个区域内的元素拆成独立图层。</p> : null}
       <label>最多输出图片数（含底图）<input type="number" min={2} max={100} value={maxImages} onChange={e => setMaxImages(Number(e.target.value))}/></label>
       <p className="sd-split-cost">此操作调用 Seedream，按实际返回图片数计费。之后拖动、加字和导出均在本地完成。</p>
       <div className="sd-split-actions"><button className="sd-button" onClick={() => setSplitSource(undefined)}>取消</button><button className="sd-button sd-button-primary" disabled={operationBusy || !Number.isInteger(maxImages) || maxImages < 2 || maxImages > 100} onClick={() => { void split() }}>开始分层</button></div>

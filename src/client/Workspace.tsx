@@ -9,7 +9,7 @@ import { ResearchTools } from './ResearchTools.js'
 import { ResearchStyleButton, ResearchStylePicker } from './ResearchStyles.js'
 import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
 import { DiagramTemplates, TemplateButton } from './DiagramTemplates.js'
-import { Composer, SizePicker } from './Composer.js'
+import { Composer, SizePicker, TransparentToggle } from './Composer.js'
 import type { SizeChoice } from './Composer.js'
 const RECENT_CANVASES = 8
 
@@ -52,7 +52,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
   const [open, setOpen] = useState<string | undefined>(), [settings, setSettings] = useState(false)
   const [library, setLibrary] = useState(false)
   const [launch, setLaunch] = useState<{ tool: ResearchToolId; style?: GenerationStyle }>()
-  const [prompt, setPrompt] = useState(''), [style, setStyle] = useState<GenerationStyle>('auto'), [genSize, setGenSize] = useState<SizeChoice>('')
+  const [prompt, setPrompt] = useState(''), [style, setStyle] = useState<GenerationStyle>('auto'), [genSize, setGenSize] = useState<SizeChoice>(''), [transparent, setTransparent] = useState(false)
   const [templatePicker, setTemplatePicker] = useState(false), [templateComposition, setTemplateComposition] = useState<string>()
   const [stylePicker, setStylePicker] = useState(false), [starting, setStarting] = useState(false)
   const homeInput = useRef<HTMLDivElement>(null), submitting = useRef(false)
@@ -85,7 +85,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
       setTemplateComposition(undefined); setLaunch(undefined); setOpen(id)
       // Dispatch only from this explicit submit, never from a mount effect.
       // Keep the home draft if the request fails so it can be recovered on return.
-      void model.generate({ prompt: text, style, ...(genSize ? { size: genSize } : {}) }).then(ok => { if (ok) setPrompt(value => value === submitted ? '' : value) })
+      void model.generate({ prompt: text, style, ...(genSize ? { size: genSize } : {}), ...(transparent ? { transparent } : {}) }).then(ok => { if (ok) setPrompt(value => value === submitted ? '' : value) })
     } finally { submitting.current = false; setStarting(false) }
   }
   const openCanvas = (id: string) => {
@@ -131,6 +131,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
               <ResearchStyleButton value={style} busy={starting} open={stylePicker} onClick={() => setStylePicker(true)}/>
               <TemplateButton open={templatePicker} disabled={starting || !c} onClick={() => setTemplatePicker(true)}/>
               <SizePicker value={genSize} onChange={setGenSize} fallback={c?.defaultSize}/>
+              <TransparentToggle value={transparent} onChange={setTransparent}/>
             </Composer>
           </div>
           <nav className="sd-home-shortcuts" aria-label="常用工具"><ResearchTools compact disabled={starting} onSelect={tool => { if (tool === 'generate') homeInput.current?.querySelector('textarea')?.focus(); else start(tool) }}/></nav>

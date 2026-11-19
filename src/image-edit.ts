@@ -6,6 +6,7 @@ import type { ArkImage, ArkRequest } from './ark.js'
 import { arkEditDimensions, editDimensions, enhanceDimensions } from './shared/image-edit.js'
 import type { ImageEditInput } from './shared/image-edit.js'
 import { expansionContext, expansionRequest, finishExpansionContext } from './outpaint.js'
+import { bboxTag } from './shared/regions.js'
 import type { ExpansionContext } from './outpaint.js'
 
 const dataUrl = (image: Pixels) => `data:image/png;base64,${Buffer.from(encodePixels(image)).toString('base64')}`
@@ -75,10 +76,10 @@ export function eraseMask(input: ImageEditInput, source: Pixels): Uint8Array {
     if (mask.width !== source.width || mask.height !== source.height) throw new Error('消除蒙版尺寸必须与原图一致。')
     for (let p = 0; p < data.length; p++) data[p] = Math.round((mask.data[p * 4]! + mask.data[p * 4 + 1]! + mask.data[p * 4 + 2]!) / 3 * mask.data[p * 4 + 3]! / 255)
   } else for (const r of input.regions ?? []) {
-    if (r.x + r.width > source.width || r.y + r.height > source.height) throw new Error('消除选区不能超出原图。')
+    if (r.x + r.width > source.width || r.y + r.height > source.height) throw new Error('选区不能超出原图。')
     for (let y = r.y; y < r.y + r.height; y++) data.fill(255, y * source.width + r.x, y * source.width + r.x + r.width)
   }
-  if (!data.some(v => v > 0)) throw new Error('请先涂抹或框选要消除的区域。')
+  if (!data.some(v => v > 0)) throw new Error(input.operation === 'inpaint' ? '请框选要重绘的区域。' : '请先涂抹或框选要消除的区域。')
   return data
 }
 /** Feather inward only: no unselected pixel may be changed, including holes and canvas edges. */
@@ -140,7 +141,12 @@ export function prepareImageEdit(input: ImageEditInput, bytes: Uint8Array): Prep
   const reference = resizePixels(source, originalWork.width, originalWork.height), images = [dataUrl(reference)]
   let prompt: string, mask: Uint8Array | undefined
   if (input.operation === 'remove-background') prompt = '精确抠出参考图中的主要实体主体，去除背景。默认移除主体之外独立的标题、说明文字、引线、图表、装饰面板和地面投影；用户指定保留的对象优先。保留主体本身的原始位置、比例、颜色、印刷文字和完整边缘，包括毛发、细小结构及半透明部分。输出与参考图相同构图的真正透明背景 RGBA PNG。前景轮廓之间的空隙也须透明，去净白边、底色残留和游离杂点；不要画棋盘格，不要增加背景、阴影或新物体。' + notes
-  else if (input.operation === 'erase') {
+  else if (input.operation === 'inpaint') {
+    mask = eraseMask(input, source)
+    const tags = input.regions!.map(r => bboxTag(r, source.width, source.height)).join('、')
+    // Ark interactive editing: <bbox> tags in the prompt; pixels outside are restored locally.
+    prompt = `仅在以下区域内重绘：${tags}（坐标为归一化 0–1000，左上角为原点）。在这些区域内：${input.prompt}\n区域外的所有内容、文字、构图、颜色与尺寸比例保持原图不变；新内容的透视、光照和风格与周围一致，边缘自然衔接。`
+  } else if (input.operation === 'erase') {
     mask = eraseMask(input, source)
     const marked = { ...source, data: new Uint8Array(source.data) }
     for (let p = 0; p < mask.length; p++) { const a = mask[p]! / 255 * 0.65, i = p * 4; marked.data[i] = Math.round(source.data[i]! * (1 - a) + 255 * a); marked.data[i + 1] = Math.round(source.data[i + 1]! * (1 - a)); marked.data[i + 2] = Math.round(source.data[i + 2]! * (1 - a)); marked.data[i + 3] = Math.max(source.data[i + 3]!, Math.round(255 * a)) }
@@ -178,7 +184,7 @@ export function finishImageEdit(prepared: PreparedEdit, result: ArkImage): { ima
   const { source, input, width, height } = prepared, generated = resizePixels(decodePixels(result.bytes), width, height)
   if (input.operation === 'enhance') return finishEnhance(source, generated)
   const data = new Uint8Array(input.operation === 'remove-background' ? refineCutoutEdges(generated).data : generated.data), warnings: string[] = []
-  if (input.operation === 'erase') {
+  if (input.operation === 'erase' || input.operation === 'inpaint') {
     const mask = featherEraseMask(prepared.mask!, width, height, input.feather ?? Math.min(24, Math.round(Math.min(width, height) * 0.008)))
     for (let p = 0; p < mask.length; p++) {
       const a = mask[p]! / 255, i = p * 4

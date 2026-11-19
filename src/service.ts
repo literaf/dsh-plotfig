@@ -11,9 +11,14 @@ import type { DecomposeInput } from './shared/layers.js'
 import { editDimensions, EXPAND_SIDES, expansionSteps, IMAGE_EDIT_LABELS } from './shared/image-edit.js'
 import type { ExpandMargins, ImageEditInput } from './shared/image-edit.js'
 import type { ArkImage } from './ark.js'
-import { finishImageEdit, prepareImageEdit } from './image-edit.js'
+import { decodePixels, finishImageEdit, prepareImageEdit } from './image-edit.js'
 const LOCAL_TYPES: Record<string, string> = { '.png': 'png', '.jpg': 'jpeg', '.jpeg': 'jpeg', '.webp': 'webp', '.bmp': 'bmp', '.gif': 'gif', '.tif': 'tiff', '.tiff': 'tiff', '.heic': 'heic', '.heif': 'heif' }
 const DATA_URL = /^data:image\/(png|jpeg|webp|bmp|tiff|gif|heic|heif);base64,[A-Za-z0-9+/=]+$/
+/** True when the PNG carries at least one non-opaque pixel; JPEG never does. */
+function hasTransparency(image: ArkImage): boolean {
+  if (image.mime !== 'image/png') return false
+  try { return decodePixels(image.bytes).data.some((v, i) => i % 4 === 3 && v < 250) } catch { return false }
+}
 export interface GenerateResult { canvas: Canvas; items: CanvasItem[] }
 export interface ImageEditResult extends GenerateResult { warnings: string[] }
 export class Seedream {
@@ -64,10 +69,12 @@ export class Seedream {
     const entry: PendingGeneration = { key: randomUUID(), prompt: input.prompt, size: input.size, startedAt: new Date().toISOString(), ...(refs.items[0] ? { parentId: refs.items[0] } : {}) }
     this.inflight.set(sessionId, [...this.pending(sessionId), entry])
     try {
-      const result = await this.ark.generate({ prompt, images: refs.images, size: input.size, watermark: input.watermark }, signal)
+      const result = await this.ark.generate({ prompt: input.transparent ? `${prompt}\n\n输出透明背景：只保留主体，主体之外完全透明，不画背景、地面、阴影或边框。` : prompt, images: refs.images, size: input.size, watermark: input.watermark, ...(input.transparent ? { background: 'transparent' as const } : {}) }, signal)
+      const warnings = input.transparent && result.images.some(i => !hasTransparency(i)) ? ['模型未返回透明区域，已保存结果；请检查背景或改用“移除背景”。'] : []
       // Billed output is saved even if the caller stopped waiting meanwhile.
       return await this.store.add(sessionId, result.images, {
         title: input.title ?? titleFrom(input.prompt), prompt, refs: refs.items, externalRefs: refs.external, size: input.size, ...(style === 'auto' ? {} : { generationStyle: style }),
+        ...(input.transparent ? { transparent: true } : {}), ...(warnings.length ? { warnings } : {}),
       }, refs.items[0])
     } finally {
       const rest = this.pending(sessionId).filter(p => p.key !== entry.key)

@@ -27,6 +27,8 @@ export interface GenerateInput {
   title?: string
   /** Omitted inherits the canvas choice; auto leaves the prompt unchanged. */
   style?: GenerationStyle
+  /** Native RGBA PNG output with a transparent background (Seedream 5.5). */
+  transparent?: boolean
 }
 export interface CanvasItem {
   id: string
@@ -48,6 +50,8 @@ export interface CanvasItem {
   edit?: ImageEditReceipt
   warnings?: string[]
   generationStyle?: GenerationStyle
+  /** Generated with a requested transparent background. */
+  transparent?: boolean
   imported?: boolean
 }
 export interface LayerMetadata {
@@ -215,6 +219,7 @@ export function parseGenerate(raw: unknown, defaults: { size: string; watermark:
   if (!Array.isArray(images) || images.some(x => typeof x !== 'string' || !x.trim())) throw new Error('images 必须是字符串数组。')
   if (images.length > MAX_REFS) throw new Error(`参考图最多 ${MAX_REFS} 张。`)
   if (raw.watermark !== undefined && typeof raw.watermark !== 'boolean') throw new Error('watermark 必须是布尔值。')
+  if (raw.transparent !== undefined && typeof raw.transparent !== 'boolean') throw new Error('transparent 必须是布尔值。')
   const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim().slice(0, 80) : undefined
-  return { prompt, images: (images as string[]).map(x => x.trim()), size: parseSize(raw.size, defaults.size), watermark: raw.watermark ?? defaults.watermark, ...(title ? { title } : {}), ...(raw.style === undefined ? {} : { style: parseGenerationStyle(raw.style) }) }
+  return { prompt, images: (images as string[]).map(x => x.trim()), size: parseSize(raw.size, defaults.size), watermark: raw.watermark ?? defaults.watermark, ...(title ? { title } : {}), ...(raw.transparent ? { transparent: true } : {}), ...(raw.style === undefined ? {} : { style: parseGenerationStyle(raw.style) }) }
 }

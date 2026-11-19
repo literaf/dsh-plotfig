@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a 透明背景 composer toggle and `transparent` tool option for native RGBA generation, with a warning when no transparency returns.
+- Add 局部重绘 (inpaint): boxed regions sent as Ark `<bbox>` tags with a required description; pixels outside are restored from the source.
+- Let 拆分图层 box regions to separate, appended to the prompt as normalized `<bbox>` tags.
+- Map all 228 Ark OCR fonts, including Chinese names, to category-aware CSS stacks and PSD PostScript names.
 - Flag expansion passes in which the model draws a straight line parallel to the seam, such as a panel edge, found in a real test that passed every other check.
 - Run multi-sided expansion as chained single-sided passes, one billed image per side, saving completed passes when a later one fails. Original pixels stay byte-identical; real three-side test passed.
 - Add 变清晰 (enhance): upscale to the ~4.62 MP model limit, keep source transparency, refill areas the model changed (such as rewritten words) from the upscaled source, and always hold results for review.

@@ -61,7 +61,7 @@ it('offers enhance with the target size, one billed image and no mask or margins
     expect(node.textContent).toContain('1755 × 2634')
     expect(node.textContent).toContain('需核对')
     expect(node.textContent).toContain('生成 1 张图片')
-    expect([...node.querySelectorAll('[role=tab]')].map(t => t.textContent)).toEqual(['去背景', '消除', '扩图', '变清晰'])
+    expect([...node.querySelectorAll('[role=tab]')].map(t => t.textContent)).toEqual(['去背景', '消除', '局部重绘', '扩图', '变清晰'])
   } finally { await act(async () => root.unmount()); controller.dispose() }
   expect(edit).not.toHaveBeenCalled()
 })

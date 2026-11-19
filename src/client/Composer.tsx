@@ -43,6 +43,12 @@ export function SizePicker({ value, onChange, fallback }: { value: SizeChoice; o
     </div> : null}
   </div>
 }
+/** Transparent-background output, a toggle beside the size picker. */
+export function TransparentToggle({ value, onChange }: { value: boolean; onChange(v: boolean): void }) {
+  return <button type="button" className="sd-chip sd-transparent-chip" aria-pressed={value} onClick={() => onChange(!value)} title="生成透明背景的 PNG，只保留主体，适合图标、器件和组图素材">
+    <span className="sd-checker" aria-hidden="true"/>透明背景
+  </button>
+}
 /**
  * The prompt box: grows with its text, submits on Enter (Shift+Enter for a new
  * line, IME composition respected), and turns its send button into a stop
