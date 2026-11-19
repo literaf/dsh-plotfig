@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Standardize six base appearance presets with explicit visual rules; add naturalistic illustration and keep the former journal preset as a backwards-compatible saved value, without silently remapping existing canvases. Keep subject, figure type, viewpoint, layout, palette and effects independent.
+- Use cross-disciplinary representative references in the style picker and keep six saved microscope outputs as a separate controlled visual audit. Record provenance and limitations: views and proportions drift, naturalistic and 3D are still close, and cross-subject stability is unverified. The picker update makes no model calls; the audit retains its six real paid outputs with no automatic retries.
+
 - Add eight original, local diagram templates in four categories with three palettes, available through a compact composer button. Keep browsing separate from explicit creation, and allow templates without Ark credentials.
 - Support rounded nodes, diamond decisions, editable node labels and attached arrows. Recompute endpoints after edits; preserve connection-aware copy, detach, autosave and undo/redo. Include source-free artboards in recent/all-canvas lists and allow conflict recovery as a separate copy.
 - Export vector/text artboards as SVG using canvas text wrapping; retain editable node labels in PSD groups. Existing raster/OCR artboards keep their export paths. New diagram primitives require this build or later.

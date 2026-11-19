@@ -1,0 +1,180 @@
+{
+  "date": "2026-11-19",
+  "picker_previews": {
+    "purpose": "Picker thumbnails use cross-disciplinary representative references; the controlled six-way microscope comparison remains the visual audit in the offline library.",
+    "model_calls": 0,
+    "transforms": "proportional contain on a 3:2 white canvas, WebP encoding",
+    "previews": [
+      {
+        "style": "flat",
+        "asset_id": "bioicons-04",
+        "title": "涡旋混合器",
+        "source": "Bioicons",
+        "source_path": "originals/bioicons/bioicons-04-vortex_mixer.svg",
+        "source_preview": "previews/assets/bioicons-04.webp",
+        "source_sha256": "21d5bbaba6fd0fb6d8f3bbe54d721182ea8f84fa40db2bb9d27fd31e902dd56c",
+        "role": "open CC0 laboratory component / flat outline",
+        "domain_ids": [
+          "general"
+        ],
+        "figure_types": [
+          "component"
+        ],
+        "license": "CC0",
+        "attribution": "涡旋混合器 — KeHan, via Bioicons; CC0."
+      },
+      {
+        "style": "2.5d",
+        "asset_id": "isometric-device-water-sensor",
+        "title": "便携水质检测盒概念",
+        "source": "Seedream 5.5",
+        "source_path": "generated/isometric-device-water-sensor/result-1.png",
+        "source_preview": "previews/assets/isometric-device-water-sensor.webp",
+        "source_sha256": "a23fabc6844c6f927161612b3acb5e80a0e3e650529c4bd5bcbe79fa9f20b810",
+        "role": "engineering device / structure",
+        "domain_ids": [
+          "eng"
+        ],
+        "figure_types": [
+          "structure"
+        ],
+        "license": "AI 生成样稿；未设置开放许可",
+        "attribution": null
+      },
+      {
+        "style": "line-art",
+        "asset_id": "bioicons-02",
+        "title": "圆底烧瓶轮廓",
+        "source": "Bioicons",
+        "source_path": "originals/bioicons/bioicons-02-round-bottomed-flask-cartoon.svg",
+        "source_preview": "previews/assets/bioicons-02.webp",
+        "source_sha256": "ddbfbeefd06a79e1447329efea8839e1701a181a7afebb056d4c3fe69d620f7e",
+        "role": "open CC0 laboratory component / clear line art",
+        "domain_ids": [
+          "general"
+        ],
+        "figure_types": [
+          "component"
+        ],
+        "license": "CC0",
+        "attribution": "圆底烧瓶轮廓 — Derek-Croote, via Bioicons; CC0."
+      },
+      {
+        "style": "naturalistic",
+        "asset_id": "ecology-textbook-mangrove",
+        "title": "红树林潮间带剖面",
+        "source": "Seedream 5.5",
+        "source_path": "generated/ecology-textbook-mangrove/result-1.png",
+        "source_preview": "previews/assets/ecology-textbook-mangrove.webp",
+        "source_sha256": "966c1835cb137a1434c1f6fa0206d0ff3e7da2876eb59766e4afb5fbdbbedeb8",
+        "role": "ecology scene / natural form",
+        "domain_ids": [
+          "eco"
+        ],
+        "figure_types": [
+          "scene"
+        ],
+        "license": "AI 生成样稿；未设置开放许可",
+        "attribution": null
+      },
+      {
+        "style": "3d",
+        "asset_id": "translucent-material-porous-sponge",
+        "title": "多孔纤维素海绵概念",
+        "source": "Seedream 5.5",
+        "source_path": "generated/translucent-material-porous-sponge/result-1.png",
+        "source_preview": "previews/assets/translucent-material-porous-sponge.webp",
+        "source_sha256": "ee84c8d45c1216757888f9ade0466b93f1dc5cd2d1358e654b53f5ec154f2994",
+        "role": "materials structure / rendered volume",
+        "domain_ids": [
+          "chem"
+        ],
+        "figure_types": [
+          "structure"
+        ],
+        "license": "AI 生成样稿；未设置开放许可",
+        "attribution": null
+      },
+      {
+        "style": "hand-drawn",
+        "asset_id": "editorial-ink-solar-greenhouse",
+        "title": "太阳能温室科普插图",
+        "source": "Seedream 5.5",
+        "source_path": "generated/editorial-ink-solar-greenhouse/result-1.png",
+        "source_preview": "previews/assets/editorial-ink-solar-greenhouse.webp",
+        "source_sha256": "2c0b8d1c16b20753855c588edde8717b7883575259390ad82b169739b971389b",
+        "role": "engineering + ecology explainer",
+        "domain_ids": [
+          "eco",
+          "eng"
+        ],
+        "figure_types": [
+          "structure"
+        ],
+        "license": "AI 生成样稿；未设置开放许可",
+        "attribution": null
+      }
+    ]
+  },
+  "controlled_comparison": {
+    "geometry_reference": {
+      "title": "microscope-cartoon",
+      "author": "Derek Croote",
+      "source": "Bioicons",
+      "license": "CC0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source_url": "https://raw.githubusercontent.com/duerrsimon/bioicons/d29e766ea7580b8063c4f47b29e872db40a4d979/static/icons/cc-0/Lab_apparatus/Derek-Croote/microscope-cartoon.svg"
+    },
+    "limitations": "One subject only; geometry varies. Naturalistic and 3D remain visually close. No expert scientific validation.",
+    "previews": [
+      {
+        "style": "flat",
+        "model": "doubao-seedream-5-5-261028",
+        "source_sha256": "c97b39a7500f3f97322de727996ce894acbc9cb80c51a3fdfde764d8417a0cd6",
+        "preview_sha256": "b0237bd3db386c67146b5a679ce488082b19c05fdb3362b83e5699b9c0a0ed5e",
+        "transforms": "white-margin crop, proportional resize, WebP encoding",
+        "observation": "以纯色块和轮廓为主，接近目标。底座与镜臂仍有少量明暗分区；严格平涂需要继续收紧。"
+      },
+      {
+        "style": "2.5d",
+        "model": "doubao-seedream-5-5-261028",
+        "source_sha256": "347cdd9e069f810fe09552803c8e5b735abd0773bf089f4220113d5c6a44b0bc",
+        "preview_sha256": "8a1b212320a24ebe965aaf8b42048b65bc391753838d6f2ae3be01486d3f03c6",
+        "transforms": "white-margin crop, proportional resize, WebP encoding",
+        "observation": "柔和渐变、细轮廓和图解体积清楚。载物台与底座转成更明显的斜视，结构未与参考完全锁定。"
+      },
+      {
+        "style": "line-art",
+        "model": "doubao-seedream-5-5-261028",
+        "source_sha256": "a050839d2380be2e01b0b168c26200b1c11e8eaad70922532ebb920bed1ac46b",
+        "preview_sha256": "b16e241632a1902ff4e8d2d3b9d6a021520559900853b88fa727a5ceb07c0b23",
+        "transforms": "white-margin crop, proportional resize, WebP encoding",
+        "observation": "白底黑色轮廓为主，线稿特征明确。视角较参考更倾斜，局部新增了结构细节。"
+      },
+      {
+        "style": "naturalistic",
+        "model": "doubao-seedream-5-5-261028",
+        "source_sha256": "93afa024e4b4ccf42bd8284cf2a9b8c874ef66dbf12528d72f44e10ae5b9dd5d",
+        "preview_sha256": "7a3e4b295439a50ee64abd2ff0383bccf48a39ea1c059f773a7a90146402628b",
+        "transforms": "white-margin crop, proportional resize, WebP encoding",
+        "observation": "明暗与比例自然，但金属高光偏强，和三维渲染样图区分不足。保留为边界案例，不作为已经验证稳定的自然插画范例。"
+      },
+      {
+        "style": "3d",
+        "model": "doubao-seedream-5-5-261028",
+        "source_sha256": "2de7ec8fdaa0fe0e9280e2695380bc31194d3ec15dc4a768db325c6169a6147c",
+        "preview_sha256": "d0afda71aef43a6e6f23520bb1fc5d7c7047a0e09bd23a42cf937b61b88ae251",
+        "transforms": "white-margin crop, proportional resize, WebP encoding",
+        "observation": "曲面、高光和接触阴影带来明确渲染观感。镜筒和底座比例仍有变化。"
+      },
+      {
+        "style": "hand-drawn",
+        "model": "doubao-seedream-5-5-261028",
+        "source_sha256": "f35d9743e7c13326ccd18e89a3f31c2d2fc67bfb450c5f68db7ea1b7489bb0e3",
+        "preview_sha256": "c16699b089e9305837f8683cada49549ac09f29319ddd55c4978a5cbab53e91a",
+        "transforms": "white-margin crop, proportional resize, WebP encoding",
+        "observation": "自然墨线、淡彩和纸感明显。保留了主要轮廓，但局部排线与参考结构有所不同。"
+      }
+    ]
+  }
+}

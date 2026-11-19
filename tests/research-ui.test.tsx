@@ -41,11 +41,11 @@ describe('scientific workflow entry points', () => {
       await act(async () => { await h.model.refresh(); h.root.render(<CanvasView model={h.model} conversation={h.actions}/>) })
       await act(async () => h.button('选择生图风格').click())
       expect(h.node.querySelectorAll('.sd-style-card')).toHaveLength(6)
-      const card = Array.from(h.node.querySelectorAll<HTMLButtonElement>('.sd-style-card')).find(e => e.textContent?.includes('黑白线稿'))!
+      const card = Array.from(h.node.querySelectorAll<HTMLButtonElement>('.sd-style-card')).find(e => e.textContent?.includes('清晰线稿'))!
       await act(async () => card.click())
       expect(h.node.querySelector('[role=dialog]')).toBeNull()
       expect(h.model.getSnapshot().canvas?.generationStyle).toBe('line-art')
-      expect(h.button('选择生图风格').textContent).toContain('黑白线稿')
+      expect(h.button('选择生图风格').textContent).toContain('清晰线稿')
       expect(h.node.querySelectorAll('.sd-composer textarea')).toHaveLength(sessionId.startsWith('session-') ? 0 : 1)
       expect(h.billable()).toHaveLength(0); expect(h.actions.prompt).not.toHaveBeenCalled()
     } finally { await h.cleanup() }

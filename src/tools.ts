@@ -92,7 +92,7 @@ export function applyTools(ctx: Context, service: Seedream, defaults: Defaults):
       images: { type: 'array', items: { type: 'string' }, description: 'Up to 10 reference images: item:<id> from this canvas, https URLs, or absolute local file paths. Omit for text-to-image.' },
       size: { type: 'string', description: '1K, 1.5K, 2K (default from settings), or WxH with 921600–4624220 total pixels, e.g. 2560x1440.' },
       title: { type: 'string', description: 'Short Chinese label shown on the canvas, e.g. 雨林垂直分层剖面图.' },
-      style: { type: 'string', enum: STYLE_IDS, description: 'Optional scientific illustration appearance. Omit to inherit the style selected on this Session canvas. auto uses only the supplied prompt; flat, 2.5d, 3d, line-art, hand-drawn, journal apply a visual preset. This is not a scientific accuracy or journal-compliance guarantee.' },
+      style: { type: 'string', enum: STYLE_IDS, description: 'Optional scientific illustration appearance. Omit to inherit the style selected on this Session canvas. auto uses only the supplied prompt; flat, 2.5d, line-art, naturalistic, 3d, hand-drawn apply an appearance preset; journal is accepted only for legacy compatibility. Subject, figure type, viewpoint and palette are independent. This is not a scientific accuracy or journal-compliance guarantee.' },
     },
     output: { schema: OUTPUT, render: (_a, v) => render(v, true) }, timeoutMs: 240_000, isConcurrencySafe: () => false,
     presentCall: a => ({ card: 'generic', title: `Seedream · ${a.title ?? String(a.prompt).slice(0, 30)}`, kind: 'other' }),

@@ -64,7 +64,7 @@ describe('home generation entry', () => {
     const type = async (text: string) => act(async () => { const input = node.querySelector('textarea')!; Simulate.change(input, { target: { value: text } } as never) })
     const pick = async () => {
       await act(async () => node.querySelector<HTMLButtonElement>('[aria-label="选择生图风格"]')!.click())
-      const card = Array.from(node.querySelectorAll<HTMLButtonElement>('.sd-style-card')).find(e => e.textContent?.includes('黑白线稿'))!
+      const card = Array.from(node.querySelectorAll<HTMLButtonElement>('.sd-style-card')).find(e => e.textContent?.includes('清晰线稿'))!
       await act(async () => card.click())
     }
     const cleanup = async () => { await act(async () => root.unmount()); controller.dispose(); node.remove() }

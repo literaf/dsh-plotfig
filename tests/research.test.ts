@@ -11,7 +11,7 @@ import { Preferences } from '../src/preferences.js'
 import { createHandlers } from '../src/routes.js'
 import { applyTools } from '../src/tools.js'
 import { parseGenerate } from '../src/shared/types.js'
-import { RESEARCH_STYLES } from '../src/shared/research.js'
+import { RESEARCH_STYLES, parseGenerationStyle, styledPrompt, styleName } from '../src/shared/research.js'
 import { decodePixels } from '../src/pixels.js'
 import { png } from './fixtures.js'
 
@@ -49,7 +49,7 @@ describe('canvas style across UI routes and conversation tools', () => {
     const tool = registered.get('seedream_generate')!
     await tool.execute({ prompt: '保留 A→B 的顺序，绘制细胞信号示意图' }, { agent: { id: 'first' }, signal: new AbortController().signal })
     expect(bodies).toHaveLength(1)
-    expect(bodies[0]!.prompt).toContain('黑白科研线稿')
+    expect(bodies[0]!.prompt).toContain('清晰线稿风格')
     expect(bodies[0]!.prompt).toContain('保留 A→B 的顺序')
     const saved = await store.get('first')
     expect(saved.items[0]).toMatchObject({ generationStyle: 'line-art', prompt: bodies[0]!.prompt })
@@ -65,6 +65,19 @@ describe('canvas style across UI routes and conversation tools', () => {
     expect(bodies).toHaveLength(1)
     expect(bodies[0]!.prompt).toContain(style.prompt)
     expect(bodies[0]!.prompt).toContain('Signal → Cell → Response')
+  })
+  it('preserves the old journal appearance for persisted canvases while offering six current styles', async () => {
+    const { store, h, bodies } = setup()
+    await store.setGenerationStyle('first', 'journal')
+    expect((await new CanvasStore(store.root).get('first')).generationStyle).toBe('journal')
+    expect((await h.generate(request({ prompt: '保留原内容' }))).status).toBe(200)
+    expect(bodies[0]!.prompt).toContain('简洁的期刊插图视觉语言')
+    expect(bodies[0]!.prompt).not.toContain('自然写实')
+    expect(styleName('journal')).toContain('旧预设')
+    expect(RESEARCH_STYLES.map(s => s.id)).not.toContain('journal')
+    expect(parseGenerationStyle('naturalistic')).toBe('naturalistic')
+    expect(styledPrompt('保留红色边框和已有箭头', 'naturalistic')).toContain('保留红色边框和已有箭头')
+    expect(styledPrompt('unchanged', 'auto')).toBe('unchanged')
   })
   it('rejects unknown styles and an overlong combined prompt before making any billable call', async () => {
     const { h, fetch, service } = setup()
