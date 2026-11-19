@@ -149,16 +149,23 @@ export class Seedream {
           warnings.push(`扩图第 ${index + 1}/${steps.length} 步失败：${error instanceof Error ? error.message : '生成失败'}。已保存前 ${index} 步的结果，未自动重试。`); break
         }
         warnings.push(...result.warnings ?? [])
-        images = result.images.map(image => {
-          try { const processed = finishImageEdit(prepared, image); warnings.push(...processed.warnings.map(w => steps.length > 1 ? `第 ${index + 1} 步：${w}` : w)); return processed.image }
+        let failed = false
+        const processed = result.images.map(image => {
+          try { const out = finishImageEdit(prepared, image); warnings.push(...out.warnings.map(w => steps.length > 1 ? `第 ${index + 1} 步：${w}` : w)); return out.image }
           catch (error) {
-            applied = false
-            warnings.push(`本地合成失败，已保留模型原始结果，可能包含选区外的改动：${error instanceof Error ? error.message : '图片处理失败'}`)
+            failed = true
+            warnings.push(`${steps.length > 1 ? `第 ${index + 1} 步` : ''}本地合成失败，已保留模型原始结果，可能包含选区外的改动：${error instanceof Error ? error.message : '图片处理失败'}`)
             return image
           }
         })
+        if (failed && index) {
+          // Keep the completed passes as the result and the billed raw output beside it.
+          warnings.push(`已保存前 ${index} 步的结果；第 ${index + 1} 步的模型原始结果另存为第二张。`)
+          images = [...images, ...processed]; break
+        }
+        images = processed
+        if (failed) { applied = false; break }
         if (step.expand) for (const side of EXPAND_SIDES) done[side] += step.expand[side]
-        if (!applied) break
       }
       const partial = steps.length > 1 && Object.values(done).reduce((a, b) => a + b, 0) < Object.values(input.expand!).reduce((a, b) => a + b, 0)
       const saved = await this.store.add(sessionId, images, {

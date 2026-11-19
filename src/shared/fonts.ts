@@ -167,7 +167,7 @@ export function ocrFont(name: string): { name: string; category: FontCategory; p
 const cjkName = /[\p{Script=Han}]/u
 /** A CSS font-family list: the named font, its known aliases, then the closest category fallbacks. */
 export function fontStack(name: string): string {
-  const hit = ocrFont(name), category = hit?.category ?? (cjkName.test(name) ? 'sans' : 'sans'), fallback = FALLBACK[category]
+  const hit = ocrFont(name), fallback = FALLBACK[hit?.category ?? 'sans']
   const own = hit?.families ?? [name.trim() || 'Arial']
   const chain = [...new Set([...own, ...fallback.latin, ...fallback.cjk])]
   return [...chain.map(f => `"${f.replace(/["\\]/g, '')}"`), fallback.generic].join(', ')

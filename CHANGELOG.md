@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.0-beta.1 (2026-11-19)
+
+First public prerelease. Everything below was developed locally before this release.
+
 - Let the canvas composer hold up to 10 references (加入参考), numbered 图1… with the main image first; repeated edits request opaque output for consistency.
 - Flag inpaint results whose drawing crossed a box edge and was cut off on restore; ask the model to keep objects and shadows inside the boxes.
 - Add a 透明背景 composer toggle and `transparent` tool option for native RGBA generation, with a warning when no transparency returns.
@@ -18,7 +22,6 @@
 - Add eight original, local diagram templates in four categories with three palettes, available through a compact composer button. Keep browsing separate from explicit creation, and allow templates without Ark credentials.
 - Support rounded nodes, diamond decisions, editable node labels and attached arrows. Recompute endpoints after edits; preserve connection-aware copy, detach, autosave and undo/redo. Include source-free artboards in recent/all-canvas lists and allow conflict recovery as a separate copy.
 - Export vector/text artboards as SVG using canvas text wrapping; retain editable node labels in PSD groups. Existing raster/OCR artboards keep their export paths. New diagram primitives require this build or later.
-
 
 - Limit the home gallery to eight recent canvases and add an All canvases entry with the total count. Open the complete gallery in its own view, preserve the home draft and return destination when browsing, and remove the catalog’s 200-item truncation.
 

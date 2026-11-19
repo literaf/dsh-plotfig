@@ -68,6 +68,25 @@ describe('chained multi-sided expansion', () => {
     expect(saved.edit).toMatchObject({ applied: false, needsReview: true, expand: { left: 30, right: 0, top: 0, bottom: 0 } })
     expect(result.warnings.join()).toContain('第 2/2 步失败')
   })
+  it('keeps completed passes and the raw output when a later pass cannot be composited', async () => {
+    const { store, item, ark, service, requests } = await setup()
+    let calls = 0
+    vi.mocked(ark.generate).mockImplementation(async request => {
+      requests.push(request); calls++
+      const [w, h] = request.size.split('x').map(Number) as [number, number]
+      // The second pass returns bytes that cannot be decoded locally.
+      return { images: [calls === 2 ? { bytes: new Uint8Array([1, 2, 3]), width: w, height: h, mime: 'image/png' as const } : image(scene(w, h))] }
+    })
+    const input = parseImageEdit({ operation: 'expand', image: `item:${item.id}`, requestId: 'multi-side-04', expand: { left: 30, right: 0, top: 24, bottom: 0 } }, false)
+    const result = await service.editImage('s', input, new AbortController().signal)
+    expect(requests).toHaveLength(2)
+    expect(result.items).toHaveLength(2)
+    const first = decodePixels(await store.readImage('s', result.items[0]!.id))
+    expect([first.width, first.height]).toEqual([190, 200])
+    expect(result.items[0]!.edit).toMatchObject({ applied: false, needsReview: true, expand: { left: 30, right: 0, top: 0, bottom: 0 } })
+    expect(result.warnings.join()).toContain('第 2 步本地合成失败')
+    expect(result.warnings.join()).toContain('已保存前 1 步的结果')
+  })
   it('rejects an oversized combined target before billing', async () => {
     const { item, service, requests } = await setup()
     const input = parseImageEdit({ operation: 'expand', image: `item:${item.id}`, requestId: 'multi-side-03', expand: { left: 16000, right: 10, top: 0, bottom: 0 } }, false)

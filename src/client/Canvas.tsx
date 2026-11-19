@@ -140,6 +140,8 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const panning = hand || space
   const [editSource, setEditSource] = useState<CanvasItem>()
   const [splitPrompt, setSplitPrompt] = useState('将主要元素、说明文字与背景拆成独立图层，保持原有位置、颜色和细节。'), [splitRegions, setSplitRegions] = useState<PixelBox[]>([])
+  // Regions are in the opened image's pixels; never carry them to another image.
+  useEffect(() => setSplitRegions([]), [splitSource?.id])
   const [maxImages, setMaxImages] = useState(30), [operationBusy, setOperationBusy] = useState(false), [operationError, setOperationError] = useState('')
   const operation = useRef(false)
   const [history, setHistory] = useState<{ done: CanvasChange[]; undone: CanvasChange[] }>({ done: [], undone: [] })
@@ -194,7 +196,8 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   useEffect(() => { if (pendingKeys) fitAll(placeholders) }, [pendingKeys]) // eslint-disable-line react-hooks/exhaustive-deps
   const item = items.find(i => i.id === selected)
   const mainRef = referenceSource ? referenceSource.item : editing && item ? item : undefined
-  const composerRefs = composerReferences(mainRef, extraRefs)
+  // A reference deleted from the canvas drops out of the composer instead of failing the request.
+  const composerRefs = composerReferences(mainRef, extraRefs.filter(r => items.some(i => i.id === r.id)))
   const savedComposition = compositions.find(c => c.id === selected), opened = compositions.find(c => c.id === editorId)
   const layerEditor = savedComposition ? model.editor(savedComposition) : undefined
   const layerState = useSyncExternalStore(layerEditor?.subscribe ?? noSubscribe, layerEditor?.getSnapshot ?? noSnapshot)

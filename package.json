@@ -1,6 +1,6 @@
 {
   "name": "dsh-seedream",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.1",
   "description": "Scientific illustration with Seedream 5.5 for DeepSeek Harness: visual presets, image generation, layer editing and per-conversation canvases.",
   "type": "module",
   "license": "MIT",

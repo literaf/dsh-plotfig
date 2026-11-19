@@ -45,8 +45,9 @@ export function ImageEditDialog({ model, source, initialOperation, onClose, onCo
   const steps = operation === 'expand' ? Math.max(1, expansionSteps(margins).length) : 1, marking = operation === 'erase' || operation === 'inpaint'
   // Inpainting sends rectangles as <bbox> tags; they must stay inside the image in whole pixels.
   const regions = marks.filter(m => m.kind === 'rect' && m.points.length >= 4).map(m => {
-    const x = Math.floor(Math.min(m.points[0]!, m.points[2]!)), y = Math.floor(Math.min(m.points[1]!, m.points[3]!))
-    return { x, y, width: Math.max(1, Math.min(source.width, Math.ceil(Math.max(m.points[0]!, m.points[2]!))) - x), height: Math.max(1, Math.min(source.height, Math.ceil(Math.max(m.points[1]!, m.points[3]!))) - y) }
+    const x = Math.min(source.width - 1, Math.floor(Math.min(m.points[0]!, m.points[2]!))), y = Math.min(source.height - 1, Math.floor(Math.min(m.points[1]!, m.points[3]!)))
+    const right = Math.min(source.width, Math.ceil(Math.max(m.points[0]!, m.points[2]!))), bottom = Math.min(source.height, Math.ceil(Math.max(m.points[1]!, m.points[3]!)))
+    return { x, y, width: Math.max(1, right - x), height: Math.max(1, bottom - y) }
   })
   const left = operation === 'expand' ? margins.left : 0, top = operation === 'expand' ? margins.top : 0
   const scale = Math.max(0.001, Math.min((size.width - 40) / previewWidth, (size.height - 40) / previewHeight, 1)), originX = (size.width - previewWidth * scale) / 2, originY = (size.height - previewHeight * scale) / 2
