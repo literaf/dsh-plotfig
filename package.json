@@ -26,8 +26,7 @@
     "LICENSE",
     "CHANGELOG.md",
     "README_CN.md",
-    "RELEASING.md",
-    "ROADMAP.md"
+    "RELEASING.md"
   ],
   "sideEffects": false,
   "keywords": [
