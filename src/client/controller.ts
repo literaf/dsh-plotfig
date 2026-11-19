@@ -115,7 +115,7 @@ export class CanvasModel extends Emitter<CanvasState> {
     } catch (error) { if (!control.signal.aborted) this.set({ loading: false, error: errorText(error, '读取画布失败。') }) }
     finally { if (this.reading === control) this.reading = undefined; if (this.state.loading) this.set({ loading: false }) }
   }
-  async generate(input: { prompt: string; images?: string[]; size?: string; title?: string; style?: GenerationStyle; transparent?: boolean }, parentId?: string): Promise<boolean> {
+  async generate(input: { prompt: string; images?: string[]; size?: string; title?: string; style?: GenerationStyle; transparent?: boolean; opaque?: boolean }, parentId?: string): Promise<boolean> {
     const prompt = input.prompt.trim()
     if (!prompt) return false
     const key = `local-${++this.serial}`, control = new AbortController()

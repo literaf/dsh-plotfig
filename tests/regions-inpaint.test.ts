@@ -54,6 +54,19 @@ describe('inpaint', () => {
   })
 })
 
+describe('inpaint clipping', () => {
+  it('warns when the model drew past a box edge, and not when it stayed inside', () => {
+    const input = parseImageEdit({ operation: 'inpaint', image: 'item:aaaaaaaaaaaa', requestId: 'inpaint-002', prompt: '画一个量筒', regions: [{ x: 10, y: 10, width: 20, height: 20 }], feather: 0 }, false)
+    const source = solid(64, 48, [240, 240, 240, 255]), prepared = prepareImageEdit(input, encodePixels(source))
+    const inside = { ...source, data: new Uint8Array(source.data) }
+    for (let y = 12; y < 28; y++) for (let x = 12; x < 28; x++) inside.data.set([30, 30, 30], (y * 64 + x) * 4)
+    expect(finishImageEdit(prepared, image(inside)).warnings).toEqual([])
+    const shadow = { ...inside, data: new Uint8Array(inside.data) }
+    for (let y = 26; y < 40; y++) for (let x = 6; x < 40; x++) if (!(x >= 10 && x < 30 && y >= 10 && y < 30)) shadow.data.set([120, 120, 120], (y * 64 + x) * 4)
+    expect(finishImageEdit(prepared, image(shadow)).warnings.join()).toContain('框外也画了内容')
+  })
+})
+
 describe('transparent text-to-image', () => {
   async function setup(result: Pixels) {
     const store = new CanvasStore(root), ark = new ArkClient({ apiKey: async () => 'k', userAgent: 't', timeoutMs: 1000, fetch: vi.fn() }), requests: ArkRequest[] = []
@@ -77,4 +90,11 @@ describe('transparent text-to-image', () => {
     const result = await service.generate('s', parseGenerate({ prompt: '烧杯', transparent: true }, { size: '2K', watermark: false }), new AbortController().signal)
     expect(result.items[0]!.warnings?.join()).toContain('未返回透明')
   })
+  it('passes opaque for consistent repeated edits and rejects it with transparent', async () => {
+    const { service, requests } = await setup(solid(32, 32, [10, 20, 30, 255]))
+    await service.generate('s', parseGenerate({ prompt: '把烧杯换成蓝色', opaque: true }, { size: '2K', watermark: false }), new AbortController().signal)
+    expect(requests[0]!.background).toBe('opaque')
+    expect(() => parseGenerate({ prompt: 'x', opaque: true, transparent: true }, { size: '2K', watermark: false })).toThrow('不能同时')
+  })
 })
+

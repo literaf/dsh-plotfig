@@ -28,6 +28,7 @@ import { ResearchDialog } from './ResearchDialog.js'
 import { referenceText } from './handoff.js'
 import { DiagramTemplates, TemplateButton } from './DiagramTemplates.js'
 import { RegionPicker } from './RegionPicker.js'
+import { composerReferences, MAX_COMPOSER_REFS } from './references.js'
 import { decomposePrompt } from '../shared/regions.js'
 import type { PixelBox } from '../shared/regions.js'
 import { readOCR } from '../shared/ocr.js'
@@ -129,6 +130,8 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const [stylePicker, setStylePicker] = useState(false), [toolMenu, setToolMenu] = useState(false)
   const [sourceTool, setSourceTool] = useState<Exclude<ResearchToolId, 'generate'> | 'import' | undefined>(initialTool && initialTool !== 'generate' ? initialTool : undefined)
   const [referenceSource, setReferenceSource] = useState<{ item: CanvasItem; kind: 'reference' | 'sketch' }>()
+  // Further canvas images sent alongside the reference or the edited image, up to the model's 10.
+  const [extraRefs, setExtraRefs] = useState<CanvasItem[]>([])
   const [splitForText, setSplitForText] = useState(false), [editorFocus, setEditorFocus] = useState<string>()
   const [editorId, setEditorId] = useState<string | undefined>(initialCompositionId), [splitSource, setSplitSource] = useState<CanvasItem>()
   const [selectedLayers, setSelectedLayers] = useState<string[]>([]), [layerPanel, setLayerPanel] = useState(false)
@@ -190,6 +193,8 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const pendingKeys = state.pending.map(p => p.key).join(',')
   useEffect(() => { if (pendingKeys) fitAll(placeholders) }, [pendingKeys]) // eslint-disable-line react-hooks/exhaustive-deps
   const item = items.find(i => i.id === selected)
+  const mainRef = referenceSource ? referenceSource.item : editing && item ? item : undefined
+  const composerRefs = composerReferences(mainRef, extraRefs)
   const savedComposition = compositions.find(c => c.id === selected), opened = compositions.find(c => c.id === editorId)
   const layerEditor = savedComposition ? model.editor(savedComposition) : undefined
   const layerState = useSyncExternalStore(layerEditor?.subscribe ?? noSubscribe, layerEditor?.getSnapshot ?? noSnapshot)
@@ -255,10 +260,13 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
     const text = prompt.trim()
     if (!text || inConversation || state.styleBusy) return
     const options = { ...(genSize ? { size: genSize } : {}), ...(transparent ? { transparent } : {}) }
-    if (referenceSource) void model.generate({ prompt: text, images: [`item:${referenceSource.item.id}`], ...options }, referenceSource.item.id)
-    else if (editing && item) void model.generate({ prompt: text, images: [`item:${item.id}`], title: `${labelOf(item)} · 编辑`, style: 'auto', ...options }, item.id)
+    const extra = composerRefs.filter(r => r.id !== mainRef?.id).map(r => `item:${r.id}`)
+    if (referenceSource) void model.generate({ prompt: text, images: [`item:${referenceSource.item.id}`, ...extra], ...options }, referenceSource.item.id)
+    // Opaque output keeps repeated edits of one image consistent, unless transparency was asked for.
+    else if (editing && item) void model.generate({ prompt: text, images: [`item:${item.id}`, ...extra], title: `${labelOf(item)} · 编辑`, style: 'auto', ...(transparent ? {} : { opaque: true }), ...options }, item.id)
+    else if (extra.length) void model.generate({ prompt: text, images: extra, ...options }, composerRefs[0]!.id)
     else void model.generate({ prompt: text, ...options })
-    setPrompt(''); setEditing(false); setReferenceSource(undefined)
+    setPrompt(''); setEditing(false); setReferenceSource(undefined); setExtraRefs([])
   }
   const openTextEditor = (c: Composition) => {
     const assets = model.getSnapshot().canvas?.items ?? []
@@ -451,7 +459,8 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
           <button disabled={operationBusy || state.pending.some(p => p.parentId === item.id)} onClick={() => { setSplitForText(false); setSplitSource(item); setOperationError('') }}><LayersIcon/>分图层</button>
           <button disabled={operationBusy || state.pending.some(p => p.parentId === item.id)} onClick={() => setEditSource(item)} title="去背景、涂抹消除、扩图、变清晰">AI 处理</button>
           <button disabled={operationBusy} onClick={() => { void createBoard() }} title="创建可添加文字与图形的画板，不调用模型">加文字 / 图形</button>
-          {inConversation ? <button onClick={() => { void handoff(conversation && (() => conversation.reference(item)), '已引用到对话输入框') }} title="引用到对话输入框"><QuoteIcon/>引用</button> : null}
+          {inConversation ? <button onClick={() => { void handoff(conversation && (() => conversation.reference(item)), '已引用到对话输入框') }} title="引用到对话输入框"><QuoteIcon/>引用</button>
+            : <button disabled={composerRefs.some(r => r.id === item.id) || composerRefs.length >= MAX_COMPOSER_REFS} onClick={() => setExtraRefs(v => [...v, item])} title="加入输入框作为参考图，最多 10 张，提示词中可称为图1、图2…"><PlusIcon/>加入参考</button>}
           <span className="sd-float-sep"/>
           <a href={imageUrl(model.sessionId, item.id, true)} download={`${labelOf(item)}.png`} title="下载原图" aria-label="下载"><DownloadIcon/></a>
           <button onClick={() => setConfirming(true)} title="删除" aria-label="删除"><TrashIcon/></button>
@@ -498,8 +507,8 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
       {reviewWarning ? <div className="sd-review-warning" role="status">{reviewWarning}</div> : null}
       {inConversation ? <><TemplateButton open={templatePicker} disabled={operationBusy} onClick={() => setTemplatePicker(true)}/><button className="sd-conversation-link" onClick={() => { void handoff(conversation?.focus, '请在对话输入框继续描述') }}><QuoteIcon size={14}/>回到对话继续描述</button></> : <Composer value={prompt} onChange={setPrompt} onSubmit={submit} onStop={() => model.cancel()} waiting={waiting} autoFocus={empty && active}
         placeholder={editing ? '描述要修改的地方，以及需要保持不变的部分…' : '描述你想生成的画面…'}
-        context={referenceSource ? <span className="sd-context-chip"><img src={imageUrl(model.sessionId, referenceSource.item.id)} alt=""/>{referenceSource.kind === 'sketch' ? '草图' : '参考'} · {labelOf(referenceSource.item)}</span> : editing && item ? <span className="sd-context-chip"><img src={imageUrl(model.sessionId, item.id)} alt=""/>编辑 · {labelOf(item)}</span> : undefined}
-        onClearContext={() => { setEditing(false); if (referenceSource && prompt === referencePrompt(referenceSource.kind)) setPrompt(''); setReferenceSource(undefined) }}
+        context={composerRefs.length ? <span className="sd-context-refs">{composerRefs.map((r, i) => <span key={r.id} className="sd-context-chip"><img src={imageUrl(model.sessionId, r.id)} alt=""/>{composerRefs.length > 1 ? `图${i + 1} · ` : ''}{i === 0 && referenceSource ? (referenceSource.kind === 'sketch' ? '草图' : '参考') : i === 0 && editing ? '编辑' : '参考'} · {labelOf(r)}{r.id !== mainRef?.id ? <button type="button" className="sd-icon-button sd-icon-small" aria-label={`移除参考图 ${labelOf(r)}`} onClick={() => setExtraRefs(v => v.filter(x => x.id !== r.id))}><CloseIcon size={10}/></button> : null}</span>)}</span> : undefined}
+        onClearContext={() => { setEditing(false); if (referenceSource && prompt === referencePrompt(referenceSource.kind)) setPrompt(''); setReferenceSource(undefined); setExtraRefs([]) }}
         disabled={state.styleBusy}
         hint={state.styleBusy ? '正在保存风格…' : waiting ? '生成中…' : '每次生成都会计费'}>
         <ResearchStyleButton value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.styleBusy} open={stylePicker} onClick={() => setStylePicker(true)}/>

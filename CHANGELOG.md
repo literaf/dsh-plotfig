@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Let the canvas composer hold up to 10 references (加入参考), numbered 图1… with the main image first; repeated edits request opaque output for consistency.
+- Flag inpaint results whose drawing crossed a box edge and was cut off on restore; ask the model to keep objects and shadows inside the boxes.
+- Add ROADMAP.md listing unreleased capabilities, known limitations and release steps.
 - Add a 透明背景 composer toggle and `transparent` tool option for native RGBA generation, with a warning when no transparency returns.
 - Add 局部重绘 (inpaint): boxed regions sent as Ark `<bbox>` tags with a required description; pixels outside are restored from the source.
 - Let 拆分图层 box regions to separate, appended to the prompt as normalized `<bbox>` tags.

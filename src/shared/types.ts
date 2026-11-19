@@ -29,6 +29,8 @@ export interface GenerateInput {
   style?: GenerationStyle
   /** Native RGBA PNG output with a transparent background (Seedream 5.5). */
   transparent?: boolean
+  /** RGB output; Ark recommends it for consistency across repeated edits of one image. */
+  opaque?: boolean
 }
 export interface CanvasItem {
   id: string
@@ -220,6 +222,8 @@ export function parseGenerate(raw: unknown, defaults: { size: string; watermark:
   if (images.length > MAX_REFS) throw new Error(`参考图最多 ${MAX_REFS} 张。`)
   if (raw.watermark !== undefined && typeof raw.watermark !== 'boolean') throw new Error('watermark 必须是布尔值。')
   if (raw.transparent !== undefined && typeof raw.transparent !== 'boolean') throw new Error('transparent 必须是布尔值。')
+  if (raw.opaque !== undefined && typeof raw.opaque !== 'boolean') throw new Error('opaque 必须是布尔值。')
+  if (raw.transparent && raw.opaque) throw new Error('transparent 与 opaque 不能同时开启。')
   const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim().slice(0, 80) : undefined
-  return { prompt, images: (images as string[]).map(x => x.trim()), size: parseSize(raw.size, defaults.size), watermark: raw.watermark ?? defaults.watermark, ...(title ? { title } : {}), ...(raw.transparent ? { transparent: true } : {}), ...(raw.style === undefined ? {} : { style: parseGenerationStyle(raw.style) }) }
+  return { prompt, images: (images as string[]).map(x => x.trim()), size: parseSize(raw.size, defaults.size), watermark: raw.watermark ?? defaults.watermark, ...(title ? { title } : {}), ...(raw.transparent ? { transparent: true } : {}), ...(raw.opaque ? { opaque: true } : {}), ...(raw.style === undefined ? {} : { style: parseGenerationStyle(raw.style) }) }
 }

@@ -92,6 +92,7 @@ export function applyTools(ctx: Context, service: Seedream, defaults: Defaults):
       images: { type: 'array', items: { type: 'string' }, description: 'Up to 10 reference images: item:<id> from this canvas, https URLs, or absolute local file paths. Omit for text-to-image.' },
       size: { type: 'string', description: '1K, 1.5K, 2K (default from settings), or WxH with 921600–4624220 total pixels, e.g. 2560x1440.' },
       title: { type: 'string', description: 'Short Chinese label shown on the canvas, e.g. 雨林垂直分层剖面图.' },
+      opaque: { type: 'boolean', description: 'Force an opaque RGB result. Recommended when editing a canvas image again and again (pass the previous result in images), for consistency across rounds. Do not combine with transparent.' },
       transparent: { type: 'boolean', description: 'Output a PNG with a transparent background: only the subject, nothing behind it. Suits icons, devices and parts to place in figures. Works with or without reference images.' },
       style: { type: 'string', enum: STYLE_IDS, description: 'Optional scientific illustration appearance. Omit to inherit the style selected on this Session canvas. auto uses only the supplied prompt; flat, 2.5d, line-art, naturalistic, 3d, hand-drawn apply an appearance preset; journal is accepted only for legacy compatibility. Subject, figure type, viewpoint and palette are independent. This is not a scientific accuracy or journal-compliance guarantee.' },
     },

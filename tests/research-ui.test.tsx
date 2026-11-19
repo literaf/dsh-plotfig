@@ -8,6 +8,7 @@ import type { Fetcher } from '../src/client/controller.js'
 import type { Canvas, CanvasItem, Composition } from '../src/shared/types.js'
 import { readImportFile } from '../src/client/ResearchTools.js'
 import { LayerEditor } from '../src/client/LayerEditor.js'
+import { composerReferences } from '../src/client/references.js'
 
 vi.mock('react-konva', () => ({ Stage: () => null, Layer: () => null, Group: () => null, Image: () => null, Rect: () => null, Transformer: () => null }))
 beforeEach(() => {
@@ -91,6 +92,29 @@ describe('scientific workflow entry points', () => {
       expect(h.actions.prompt.mock.calls[0]![0]).toContain(`item:${source.id}`)
       expect(h.actions.prompt.mock.calls[0]![0]).toContain('保留草图中明确的对象关系')
       expect(h.node.querySelector('.sd-composer')).toBeNull(); expect(h.billable()).toHaveLength(0)
+    } finally { await h.cleanup() }
+  })
+  it('orders composer references with the main image first, once each, at most ten', () => {
+    const at = (n: number): CanvasItem => ({ ...source, id: `ref${String(n).padStart(9, '0')}`, title: `图片 ${n}` })
+    expect(composerReferences(at(1), [at(2), at(1), at(3)]).map(r => r.title)).toEqual(['图片 1', '图片 2', '图片 3'])
+    expect(composerReferences(undefined, [at(2)]).map(r => r.title)).toEqual(['图片 2'])
+    expect(composerReferences(at(0), Array.from({ length: 12 }, (_, i) => at(i + 1)))).toHaveLength(10)
+  })
+  it('adds a selected canvas image as a reference and sends it with the prompt', async () => {
+    const second: CanvasItem = { ...source, id: 'bbbbbbbbbbbb', title: '第二张', x: 1200 }
+    const h = harness('board-ui', [source, second])
+    try {
+      await act(async () => { await h.model.refresh(); h.root.render(<CanvasView model={h.model} initialCompositionId={second.id}/>) })
+      await act(async () => h.button('加入参考').click())
+      expect(h.node.querySelector('.sd-context-refs')?.textContent).toContain('参考 · 第二张')
+      expect(h.button('加入参考').disabled).toBe(true)
+      expect(h.node.querySelector('[aria-label="移除参考图 第二张"]')).toBeTruthy()
+      expect(h.billable()).toHaveLength(0)
+      const area = h.node.querySelector<HTMLTextAreaElement>('.sd-composer textarea')!
+      await act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area, '参考这张图画一台新器件'); area.dispatchEvent(new Event('input', { bubbles: true })) })
+      await act(async () => h.node.querySelector<HTMLFormElement>('.sd-composer')!.requestSubmit())
+      const calls = h.billable(); expect(calls).toHaveLength(1)
+      expect((calls[0]![2] as { images: string[] }).images).toEqual([`item:${second.id}`])
     } finally { await h.cleanup() }
   })
   it('imports a local file before opening an operation, without a generation request', async () => {

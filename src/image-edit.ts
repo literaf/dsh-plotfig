@@ -4,7 +4,7 @@ export { decodePixels, encodePixels, resizePixels } from './pixels.js'
 export type { Pixels } from './pixels.js'
 import type { ArkImage, ArkRequest } from './ark.js'
 import { arkEditDimensions, editDimensions, enhanceDimensions } from './shared/image-edit.js'
-import type { ImageEditInput } from './shared/image-edit.js'
+import type { EditRegion, ImageEditInput } from './shared/image-edit.js'
 import { expansionContext, expansionRequest, finishExpansionContext } from './outpaint.js'
 import { bboxTag } from './shared/regions.js'
 import type { ExpansionContext } from './outpaint.js'
@@ -124,6 +124,25 @@ export function refineCutoutEdges(image: Pixels): Pixels {
   }
   return { width, height, data: cleaned }
 }
+/**
+ * Share of positions along the region edges where the model changed pixels just outside a box.
+ * Those changes are discarded on restore, so a high share means a shadow or object is cut off.
+ */
+export function clippedEdges(source: Pixels, generated: Pixels, regions: EditRegion[]): number {
+  const lum = (img: Pixels, x: number, y: number) => { const i = (y * img.width + x) * 4; return 0.299 * img.data[i]! + 0.587 * img.data[i + 1]! + 0.114 * img.data[i + 2]! }
+  const inside = (x: number, y: number) => regions.some(r => x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height)
+  let hit = 0, total = 0
+  for (const r of regions) {
+    const probe = (x: number, y: number) => {
+      if (x < 0 || y < 0 || x >= source.width || y >= source.height || inside(x, y)) return
+      total++
+      if (Math.abs(lum(source, x, y) - lum(generated, x, y)) > 18) hit++
+    }
+    for (let x = r.x; x < r.x + r.width; x += 2) { probe(x, r.y - 4); probe(x, r.y + r.height + 3) }
+    for (let y = r.y; y < r.y + r.height; y += 2) { probe(r.x - 4, y); probe(r.x + r.width + 3, y) }
+  }
+  return total ? hit / total : 0
+}
 export interface PreparedEdit { source: Pixels; input: ImageEditInput; request: ArkRequest; width: number; height: number; mask?: Uint8Array; expansion?: ExpansionContext }
 export function prepareImageEdit(input: ImageEditInput, bytes: Uint8Array): PreparedEdit {
   const source = decodePixels(bytes), notes = input.prompt ? `\n用户补充要求：${input.prompt}` : ''
@@ -145,7 +164,7 @@ export function prepareImageEdit(input: ImageEditInput, bytes: Uint8Array): Prep
     mask = eraseMask(input, source)
     const tags = input.regions!.map(r => bboxTag(r, source.width, source.height)).join('、')
     // Ark interactive editing: <bbox> tags in the prompt; pixels outside are restored locally.
-    prompt = `仅在以下区域内重绘：${tags}（坐标为归一化 0–1000，左上角为原点）。在这些区域内：${input.prompt}\n区域外的所有内容、文字、构图、颜色与尺寸比例保持原图不变；新内容的透视、光照和风格与周围一致，边缘自然衔接。`
+    prompt = `仅在以下区域内重绘：${tags}（坐标为归一化 0–1000，左上角为原点）。在这些区域内：${input.prompt}\n新画的物体连同它的阴影、倒影和光晕都必须完整位于框内，不要越出框线。区域外的所有内容、文字、构图、颜色与尺寸比例保持原图不变；新内容的透视、光照和风格与周围一致，边缘自然衔接。`
   } else if (input.operation === 'erase') {
     mask = eraseMask(input, source)
     const marked = { ...source, data: new Uint8Array(source.data) }
@@ -184,6 +203,7 @@ export function finishImageEdit(prepared: PreparedEdit, result: ArkImage): { ima
   const { source, input, width, height } = prepared, generated = resizePixels(decodePixels(result.bytes), width, height)
   if (input.operation === 'enhance') return finishEnhance(source, generated)
   const data = new Uint8Array(input.operation === 'remove-background' ? refineCutoutEdges(generated).data : generated.data), warnings: string[] = []
+  if (input.operation === 'inpaint' && clippedEdges(source, generated, input.regions!) > 0.08) warnings.push('局部重绘需检查：模型在框外也画了内容（常见于阴影），这些部分已按原图还原，框边缘可能出现截断。可以把框画大一些再试。结果另存，不自动替换图层。')
   if (input.operation === 'erase' || input.operation === 'inpaint') {
     const mask = featherEraseMask(prepared.mask!, width, height, input.feather ?? Math.min(24, Math.round(Math.min(width, height) * 0.008)))
     for (let p = 0; p < mask.length; p++) {

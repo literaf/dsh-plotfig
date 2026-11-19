@@ -69,7 +69,7 @@ export class Seedream {
     const entry: PendingGeneration = { key: randomUUID(), prompt: input.prompt, size: input.size, startedAt: new Date().toISOString(), ...(refs.items[0] ? { parentId: refs.items[0] } : {}) }
     this.inflight.set(sessionId, [...this.pending(sessionId), entry])
     try {
-      const result = await this.ark.generate({ prompt: input.transparent ? `${prompt}\n\n输出透明背景：只保留主体，主体之外完全透明，不画背景、地面、阴影或边框。` : prompt, images: refs.images, size: input.size, watermark: input.watermark, ...(input.transparent ? { background: 'transparent' as const } : {}) }, signal)
+      const result = await this.ark.generate({ prompt: input.transparent ? `${prompt}\n\n输出透明背景：只保留主体，主体之外完全透明，不画背景、地面、阴影或边框。` : prompt, images: refs.images, size: input.size, watermark: input.watermark, ...(input.transparent ? { background: 'transparent' as const } : input.opaque ? { background: 'opaque' as const } : {}) }, signal)
       const warnings = input.transparent && result.images.some(i => !hasTransparency(i)) ? ['模型未返回透明区域，已保存结果；请检查背景或改用“移除背景”。'] : []
       // Billed output is saved even if the caller stopped waiting meanwhile.
       return await this.store.add(sessionId, result.images, {
