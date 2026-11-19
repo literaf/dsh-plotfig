@@ -140,6 +140,28 @@ function joinEdge(context: ExpansionContext, generated: Pixels): Pixels {
   return { ...generated, data }
 }
 
+/**
+ * The model sometimes paints a frame: a straight edge parallel to the seam, a few pixels into the
+ * new area, while reproducing the overlap faithfully. Return the largest share of positions
+ * along the seam that step in the same direction at one depth; scenery rarely does this.
+ */
+export function frameLine(context: ExpansionContext, image: Pixels): number {
+  const { source, side, amount } = context, h = horizontal(side), cross = h ? source.height : source.width
+  const lum = (x: number, y: number) => { const i = (y * image.width + x) * 4; return 0.299 * image.data[i]! + 0.587 * image.data[i + 1]! + 0.114 * image.data[i + 2]! }
+  const at = (p: number, d: number): [number, number] => h ? [side === 'left' ? amount - d : source.width - 1 + d, p] : [p, side === 'top' ? amount - d : source.height - 1 + d]
+  let worst = 0
+  for (let d = 1; d + 2 <= Math.min(amount, 64); d++) {
+    let up = 0, down = 0, total = 0
+    for (let p = 0; p < cross; p += 2) {
+      const diff = lum(...at(p, d + 2)) - lum(...at(p, d))
+      if (diff > 8) up++; else if (diff < -8) down++
+      total++
+    }
+    worst = Math.max(worst, Math.max(up, down) / total)
+  }
+  return worst
+}
+
 export function finishExpansionContext(context: ExpansionContext, raw: Pixels): { image: Pixels; warnings: string[]; edgeError: number; aligned: boolean } {
   const { source, side, amount } = context, h = horizontal(side), width = source.width + (h ? amount : 0), height = source.height + (h ? 0 : amount)
   const generated = resizePixels(raw, width, height), before = edgeError(context, generated)
@@ -148,6 +170,7 @@ export function finishExpansionContext(context: ExpansionContext, raw: Pixels): 
   const warnings: string[] = []
   if (mismatch > 20) warnings.push('扩图需检查：新增区域与原图边缘仍有结构偏差。原图像素已完整保留，结果另存，不自动替换图层。')
   if (Math.abs(Math.log((raw.width / raw.height) / (width / height))) > 0.03) warnings.push('扩图需检查：模型返回的宽高比偏离请求，新增区域可能变形。')
+  if (frameLine(context, chosen) > 0.6) warnings.push('扩图需检查：新增区域靠近原图边缘处有一条与边缘平行的直线，可能是模型画出的边框或色块分界。原图像素已完整保留，结果另存，不自动替换图层。')
   let transparent = 0
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const added = side === 'left' ? x < amount : side === 'right' ? x >= source.width : side === 'top' ? y < amount : y >= source.height

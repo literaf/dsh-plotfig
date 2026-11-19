@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Flag expansion passes in which the model draws a straight line parallel to the seam, such as a panel edge, found in a real test that passed every other check.
 - Run multi-sided expansion as chained single-sided passes, one billed image per side, saving completed passes when a later one fails. Original pixels stay byte-identical; real three-side test passed.
 - Add 变清晰 (enhance): upscale to the ~4.62 MP model limit, keep source transparency, refill areas the model changed (such as rewritten words) from the upscaled source, and always hold results for review.
 - Add single-page lossless PDF export from the editor menu and the artboard toolbar, with no new dependencies.

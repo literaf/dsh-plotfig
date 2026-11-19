@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alignExpansion, expansionContext, expansionRequest, finishExpansionContext } from '../src/outpaint.js'
+import { alignExpansion, expansionContext, expansionRequest, finishExpansionContext, frameLine } from '../src/outpaint.js'
 import type { ExpansionSide } from '../src/outpaint.js'
 import { decodePixels, encodePixels, finishImageEdit, prepareImageEdit } from '../src/image-edit.js'
 import type { Pixels } from '../src/pixels.js'
@@ -97,5 +97,16 @@ describe('single-sided contextual expansion', () => {
     generated.data[3] = 0
     expect(finishExpansionContext({ source, side: 'left', amount: 32 }, generated).warnings.join()).toContain('透明像素')
     expect(finishExpansionContext({ source, side: 'left', amount: 32 }, scene(200, 192)).warnings.join()).toContain('宽高比')
+  })
+
+  it('flags a straight frame drawn parallel to the seam, but not continuous scenery', () => {
+    const source = scene(128, 192, 64), generated = scene(192, 192)
+    expect(frameLine({ source, side: 'left', amount: 64 }, generated)).toBeLessThan(0.6)
+    expect(finishExpansionContext({ source, side: 'left', amount: 64 }, generated).warnings).toEqual([])
+    // A light panel starting 6 px outside the original, as in a real failed pass.
+    const framed = { ...generated, data: new Uint8Array(generated.data) }
+    for (let y = 0; y < 192; y++) for (let x = 0; x < 58; x++) framed.data.set([60, 60, 60], (y * 192 + x) * 4)
+    expect(frameLine({ source, side: 'left', amount: 64 }, framed)).toBeGreaterThan(0.9)
+    expect(finishExpansionContext({ source, side: 'left', amount: 64 }, framed).warnings.join()).toContain('平行的直线')
   })
 })
