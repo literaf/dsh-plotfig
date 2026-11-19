@@ -44,16 +44,16 @@ function render(value: Value, generated: boolean) {
 export function applyTools(ctx: Context, service: Seedream, defaults: Defaults): void {
   ctx.tools.register(defineTool({
     name: 'seedream_edit',
-    description: 'Remove an image background, erase selected regions, or extend the canvas with Seedream 5.5. Billed for one generated image. Use only when requested; never retry automatically. The original stays intact and results are saved to this Session. Erase protects pixels outside the supplied rectangles; expansion preserves all pixels of the original rectangle. Inspect dimensions with seedream_canvas first. UI users can paint masks in AI 处理 instead.',
+    description: 'Remove an image background, erase selected regions, extend the canvas, or enhance (upscale and sharpen) an image with Seedream 5.5. Billed per generated image: one, except multi-sided expansion which bills one per side. Use only when requested; never retry automatically. The original stays intact and results are saved to this Session. Erase protects pixels outside the supplied rectangles; expansion preserves all pixels of the original rectangle. Enhance outputs up to ~4.62 MP and flags results that drift from the source. Inspect dimensions with seedream_canvas first. UI users can paint masks in AI 处理 instead.',
     parameters: {
-      operation: { type: 'string', required: true, enum: ['remove-background', 'erase', 'expand'] },
+      operation: { type: 'string', required: true, enum: ['remove-background', 'erase', 'expand', 'enhance'] },
       image: { type: 'string', required: true, description: 'One item:<id> from this Session; local paths and external URLs are not accepted.' },
       prompt: { type: 'string', description: 'Optional description of which foreground to keep, what object to erase, or what scene to extend.' },
       feather: { type: 'number', description: 'Erase only: inward edge transition in pixels, integer 0–64. Default adapts to resolution; 0 keeps a hard edge. Include some background around the object in the selection.' },
       regions: { type: 'array', description: 'Required for erase: 1–64 rectangles in original-image pixel coordinates. Must stay within the source image.', items: { type: 'object', additionalProperties: false, properties: {
         x: { type: 'integer', required: true }, y: { type: 'integer', required: true }, width: { type: 'integer', required: true }, height: { type: 'integer', required: true },
       } } },
-      expand: { type: 'object', description: 'Required for expand: nonnegative added pixels on each side. Prefer exactly one positive side: it uses local edge context and preserves original pixels. Multi-sided requests retain full-image expansion and may need review. One billed image per call; never retry automatically.', additionalProperties: false, properties: {
+      expand: { type: 'object', description: 'Required for expand: nonnegative added pixels on each side. Each positive side is one local-context pass that preserves original pixels; several sides run left, right, top, bottom in sequence, one billed image per side. If a later pass fails, the completed part is saved; never retry automatically.', additionalProperties: false, properties: {
         left: { type: 'integer', required: true }, top: { type: 'integer', required: true }, right: { type: 'integer', required: true }, bottom: { type: 'integer', required: true },
       } },
       request_id: { type: 'string', description: 'Optional stable request identifier, 8–80 ASCII letters/digits/_/-. Reusing the same id and inputs returns the original result instead of charging again.' },

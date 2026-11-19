@@ -3,12 +3,47 @@ import type { Pixels } from './pixels.js'
 export { decodePixels, encodePixels, resizePixels } from './pixels.js'
 export type { Pixels } from './pixels.js'
 import type { ArkImage, ArkRequest } from './ark.js'
-import { arkEditDimensions, editDimensions } from './shared/image-edit.js'
+import { arkEditDimensions, editDimensions, enhanceDimensions } from './shared/image-edit.js'
 import type { ImageEditInput } from './shared/image-edit.js'
 import { expansionContext, expansionRequest, finishExpansionContext } from './outpaint.js'
 import type { ExpansionContext } from './outpaint.js'
 
 const dataUrl = (image: Pixels) => `data:image/png;base64,${Buffer.from(encodePixels(image)).toString('base64')}`
+const hasAlpha = (image: Pixels) => image.data.some((v, i) => i % 4 === 3 && v < 250)
+/**
+ * Compare at the original resolution: an upscale must reduce to the source. Content drift
+ * (redrawn text, moved parts) is flagged, never silently accepted. Transparency follows the source.
+ */
+export function finishEnhance(source: Pixels, generated: Pixels): { image: ArkImage; warnings: string[] } {
+  const reduced = resizePixels(generated, source.width, source.height), warnings: string[] = []
+  let difference = 0, samples = 0, worst = 0
+  // Cells near glyph size: a rewritten word changes a few small cells, which larger cells average away.
+  const cell = Math.max(6, Math.round(Math.min(source.width, source.height) / 80)), cells = new Map<number, number[]>()
+  for (let y = 0; y < source.height; y++) for (let x = 0; x < source.width; x++) {
+    const i = (y * source.width + x) * 4
+    if (source.data[i + 3]! < 240) continue
+    let d = 0
+    for (let c = 0; c < 3; c++) d += Math.abs(source.data[i + c]! - reduced.data[i + c]!)
+    difference += d / 3; samples++
+    const key = Math.floor(y / cell) * 10_000 + Math.floor(x / cell), sum = cells.get(key) ?? [0, 0]
+    sum[0]! += d / 3; sum[1]!++; cells.set(key, sum)
+  }
+  for (const [sum, count] of cells.values()) if (count! >= cell * cell / 2) worst = Math.max(worst, sum! / count!)
+  // Real tests show the model can rewrite small words while the overall difference stays low,
+  // so every result is held for review; strong local drift gets the more specific warning.
+  warnings.push(samples && (difference / samples > 14 || worst > 30)
+    ? '变清晰需检查：结果与原图存在局部差异，可能改写了文字、细节或位置。结果已另存，原图保留，不自动替换图层。'
+    : '变清晰结果需核对：AI 可能改写小字或细节，请对照原图检查后再使用。结果已另存，原图保留，不自动替换图层。')
+  const data = new Uint8Array(generated.data)
+  if (hasAlpha(source)) {
+    // Keep the source silhouette exactly; only sharpen colour inside it.
+    const alpha = resizePixels({ ...source, data: Uint8Array.from(source.data, (v, i) => i % 4 === 3 ? v : 255) }, generated.width, generated.height)
+    for (let i = 3; i < data.length; i += 4) data[i] = alpha.data[i]!
+  } else for (let i = 3; i < data.length; i += 4) data[i] = 255
+  const image = { width: generated.width, height: generated.height, data }, bytes = encodePixels(image)
+  if (bytes.length > 30 * 1024 * 1024) throw new Error('处理后的 PNG 超过 30 MB。')
+  return { image: { bytes, width: image.width, height: image.height, mime: 'image/png' }, warnings }
+}
 export function eraseMask(input: ImageEditInput, source: Pixels): Uint8Array {
   const data = new Uint8Array(source.width * source.height)
   if (input.mask) {
@@ -66,8 +101,13 @@ export function refineCutoutEdges(image: Pixels): Pixels {
 }
 export interface PreparedEdit { source: Pixels; input: ImageEditInput; request: ArkRequest; width: number; height: number; mask?: Uint8Array; expansion?: ExpansionContext }
 export function prepareImageEdit(input: ImageEditInput, bytes: Uint8Array): PreparedEdit {
-  const source = decodePixels(bytes), target = editDimensions(source.width, source.height, input.expand)
-  const notes = input.prompt ? `\n用户补充要求：${input.prompt}` : ''
+  const source = decodePixels(bytes), notes = input.prompt ? `\n用户补充要求：${input.prompt}` : ''
+  if (input.operation === 'enhance') {
+    const target = enhanceDimensions(source.width, source.height)
+    return { source, input, ...target, request: { images: [dataUrl(source)], size: `${target.width}x${target.height}`, watermark: input.watermark, background: hasAlpha(source) ? 'transparent' : 'opaque',
+      prompt: '把这张图片高清化：提高分辨率与清晰度，锐化边缘、线条和文字笔画，去除模糊、噪点和压缩伪影。画面内容必须与原图完全一致：构图、位置、比例、颜色、形状、数量、文字内容与字形都保持不变，不添加、删除或重绘任何元素，不改变画风，不新增背景。' + notes } }
+  }
+  const target = editDimensions(source.width, source.height, input.expand)
   if (input.operation === 'expand') {
     const expansion = expansionContext(source, input.expand!)
     if (expansion) return { source, input, ...target, expansion, request: expansionRequest(expansion, input.watermark, notes) }
@@ -112,6 +152,7 @@ export function finishImageEdit(prepared: PreparedEdit, result: ArkImage): { ima
     return { image: { bytes, width, height, mime: 'image/png' }, warnings: processed.warnings }
   }
   const { source, input, width, height } = prepared, generated = resizePixels(decodePixels(result.bytes), width, height)
+  if (input.operation === 'enhance') return finishEnhance(source, generated)
   const data = new Uint8Array(input.operation === 'remove-background' ? refineCutoutEdges(generated).data : generated.data), warnings: string[] = []
   if (input.operation === 'erase') {
     const mask = featherEraseMask(prepared.mask!, width, height, input.feather ?? Math.min(24, Math.round(Math.min(width, height) * 0.008)))

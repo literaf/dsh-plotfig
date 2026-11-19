@@ -8,8 +8,9 @@ import type { Canvas, CanvasItem, GenerateInput, PendingGeneration } from './sha
 import { ITEM_ID, MAX_PROMPT, titleFrom } from './shared/types.js'
 import { parseGenerationStyle, styledPrompt } from './shared/research.js'
 import type { DecomposeInput } from './shared/layers.js'
-import { IMAGE_EDIT_LABELS } from './shared/image-edit.js'
-import type { ImageEditInput } from './shared/image-edit.js'
+import { editDimensions, EXPAND_SIDES, expansionSteps, IMAGE_EDIT_LABELS } from './shared/image-edit.js'
+import type { ExpandMargins, ImageEditInput } from './shared/image-edit.js'
+import type { ArkImage } from './ark.js'
 import { finishImageEdit, prepareImageEdit } from './image-edit.js'
 const LOCAL_TYPES: Record<string, string> = { '.png': 'png', '.jpg': 'jpeg', '.jpeg': 'jpeg', '.webp': 'webp', '.bmp': 'bmp', '.gif': 'gif', '.tif': 'tiff', '.tiff': 'tiff', '.heic': 'heic', '.heif': 'heif' }
 const DATA_URL = /^data:image\/(png|jpeg|webp|bmp|tiff|gif|heic|heif);base64,[A-Za-z0-9+/=]+$/
@@ -115,27 +116,47 @@ export class Seedream {
     }
     const sourceId = input.image.slice(5), source = canvas.items.find(i => i.id === sourceId)
     if (!source) throw new Error('当前对话的画布中没有这张图片。')
-    const prepared = prepareImageEdit(input, await this.store.readImage(sessionId, sourceId))
+    const bytes = await this.store.readImage(sessionId, sourceId)
+    // Multi-sided expansion chains single-sided passes; each pass extends the previous output.
+    const steps = input.expand ? expansionSteps(input.expand).map(expand => ({ ...input, expand })) : [input]
+    if (steps.length > 1) editDimensions(source.width, source.height, input.expand)
+    const first = prepareImageEdit(steps[0]!, bytes), size = steps.length > 1 ? `${source.width + input.expand!.left + input.expand!.right}x${source.height + input.expand!.top + input.expand!.bottom}` : `${first.width}x${first.height}`
     signal.throwIfAborted()
     const title = `${IMAGE_EDIT_LABELS[input.operation]} · ${source.title}`, entry: PendingGeneration = {
-      key: input.requestId, prompt: title, size: `${prepared.width}x${prepared.height}`, parentId: sourceId, startedAt: new Date().toISOString(),
+      key: input.requestId, prompt: steps.length > 1 ? `${title}（${steps.length} 步）` : title, size, parentId: sourceId, startedAt: new Date().toISOString(),
     }
     this.inflight.set(sessionId, [...this.pending(sessionId), entry])
     try {
-      // After submission, closing a view or cancelling its wait cannot lose a billed output.
-      const result = await this.ark.generate(prepared.request, new AbortController().signal), warnings = [...result.warnings ?? []]
-      let applied = true
-      const images = result.images.map(image => {
-        try { const processed = finishImageEdit(prepared, image); warnings.push(...processed.warnings); return processed.image }
-        catch (error) {
-          applied = false
-          warnings.push(`本地合成失败，已保留模型原始结果，可能包含选区外的改动：${error instanceof Error ? error.message : '图片处理失败'}`)
-          return image
+      const warnings: string[] = [], done: ExpandMargins = { left: 0, top: 0, right: 0, bottom: 0 }
+      let applied = true, prepared = first, images: ArkImage[] = []
+      for (const [index, step] of steps.entries()) {
+        if (index) {
+          try { prepared = prepareImageEdit(step, images[0]!.bytes) }
+          catch (error) { warnings.push(`扩图在第 ${index + 1}/${steps.length} 步前停止：${error instanceof Error ? error.message : '图片处理失败'}。已保存前 ${index} 步的结果。`); break }
         }
-      })
+        let result: Awaited<ReturnType<ArkClient['generate']>>
+        // After submission, closing a view or cancelling its wait cannot lose a billed output.
+        try { result = await this.ark.generate(prepared.request, new AbortController().signal) }
+        catch (error) {
+          if (!index) throw error
+          warnings.push(`扩图第 ${index + 1}/${steps.length} 步失败：${error instanceof Error ? error.message : '生成失败'}。已保存前 ${index} 步的结果，未自动重试。`); break
+        }
+        warnings.push(...result.warnings ?? [])
+        images = result.images.map(image => {
+          try { const processed = finishImageEdit(prepared, image); warnings.push(...processed.warnings.map(w => steps.length > 1 ? `第 ${index + 1} 步：${w}` : w)); return processed.image }
+          catch (error) {
+            applied = false
+            warnings.push(`本地合成失败，已保留模型原始结果，可能包含选区外的改动：${error instanceof Error ? error.message : '图片处理失败'}`)
+            return image
+          }
+        })
+        if (step.expand) for (const side of EXPAND_SIDES) done[side] += step.expand[side]
+        if (!applied) break
+      }
+      const partial = steps.length > 1 && Object.values(done).reduce((a, b) => a + b, 0) < Object.values(input.expand!).reduce((a, b) => a + b, 0)
       const saved = await this.store.add(sessionId, images, {
-        title: applied ? title : `${title} · 原始结果`, prompt: prepared.request.prompt, refs: [sourceId], externalRefs: 0, size: prepared.request.size,
-        edit: { operation: input.operation, sourceId, requestId: input.requestId, fingerprint, applied, ...(warnings.length ? { needsReview: true } : {}), ...(input.expand ? { expand: input.expand } : {}) },
+        title: !applied ? `${title} · 原始结果` : partial ? `${title} · 部分完成` : title, prompt: prepared.request.prompt, refs: [sourceId], externalRefs: 0, size: prepared.request.size,
+        edit: { operation: input.operation, sourceId, requestId: input.requestId, fingerprint, applied: applied && !partial, ...(warnings.length ? { needsReview: true } : {}), ...(input.expand ? { expand: applied ? done : input.expand } : {}) },
         ...(warnings.length ? { warnings } : {}),
       }, sourceId)
       return { ...saved, warnings }

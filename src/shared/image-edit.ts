@@ -1,6 +1,6 @@
 import { isRecord, ITEM_ID, MAX_PROMPT } from './types.js'
 
-export const IMAGE_EDIT_LABELS = { 'remove-background': '去背景', erase: '消除', expand: '扩图' } as const
+export const IMAGE_EDIT_LABELS = { 'remove-background': '去背景', erase: '消除', expand: '扩图', enhance: '变清晰' } as const
 export type ImageEditOperation = keyof typeof IMAGE_EDIT_LABELS
 export interface ExpandMargins { left: number; top: number; right: number; bottom: number }
 export interface EditRegion { x: number; y: number; width: number; height: number }
@@ -32,7 +32,7 @@ export const MAX_MASK_BYTES = 30 * 1024 * 1024
 export const PNG_DATA = /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/
 const integer = (value: unknown, min: number, max: number): value is number => Number.isInteger(value) && Number(value) >= min && Number(value) <= max
 export function parseImageEdit(raw: unknown, watermark: boolean): ImageEditInput {
-  if (!isRecord(raw) || !Object.hasOwn(IMAGE_EDIT_LABELS, String(raw.operation))) throw new Error('请选择去背景、消除或扩图。')
+  if (!isRecord(raw) || !Object.hasOwn(IMAGE_EDIT_LABELS, String(raw.operation))) throw new Error('请选择去背景、消除、扩图或变清晰。')
   const operation = raw.operation as ImageEditOperation
   if (typeof raw.image !== 'string' || !raw.image.startsWith('item:') || !ITEM_ID.test(raw.image.slice(5))) throw new Error('只能编辑当前画布的 item:<id> 图片。')
   if (typeof raw.requestId !== 'string' || !/^[A-Za-z0-9_-]{8,80}$/.test(raw.requestId)) throw new Error('缺少有效的编辑请求标识。')
@@ -70,6 +70,21 @@ export function editDimensions(width: number, height: number, margins?: ExpandMa
   const w = width + (margins?.left ?? 0) + (margins?.right ?? 0), h = height + (margins?.top ?? 0) + (margins?.bottom ?? 0)
   if (!integer(w, 15, 16000) || !integer(h, 15, 16000) || w * h > MAX_EDIT_PIXELS) throw new Error('编辑图片须在 3200 万像素以内，每边不超过 16000 像素。')
   if (w / h < 1 / 16 || w / h > 16) throw new Error('编辑结果宽高比须在 1:16 到 16:1 之间。')
+  return { width: w, height: h }
+}
+export const EXPAND_SIDES = ['left', 'right', 'top', 'bottom'] as const
+/** Multi-sided expansion runs one billed single-side pass per side, horizontal sides first. */
+export function expansionSteps(margins: ExpandMargins): ExpandMargins[] {
+  return EXPAND_SIDES.filter(side => margins[side] > 0).map(side => ({ left: 0, top: 0, right: 0, bottom: 0, [side]: margins[side] }))
+}
+export const MAX_ENHANCE_PIXELS = 4_624_220
+/** Seedream 5.5 outputs at most ~4.62 MP, so enhancement must gain at least 1.25× per side. */
+export function enhanceDimensions(width: number, height: number) {
+  const scale = Math.min(4, Math.sqrt(MAX_ENHANCE_PIXELS / (width * height)))
+  if (scale < 1.25) throw new Error('图片已接近模型最大输出分辨率（约 460 万像素），无法再变清晰。')
+  let w = Math.round(width * scale), h = Math.round(height * scale)
+  while (w * h > MAX_ENHANCE_PIXELS) { if (w / width >= h / height) w--; else h-- }
+  if (w / h < 1 / 16 || w / h > 16) throw new Error('变清晰的图片宽高比须在 1:16 到 16:1 之间。')
   return { width: w, height: h }
 }
 /** Working resolution for the model; original-resolution pixels are restored after editing. */

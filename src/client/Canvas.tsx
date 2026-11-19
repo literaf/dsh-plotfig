@@ -19,6 +19,7 @@ import { mergeSelectedLayers, selectionBounds } from './layer-actions.js'
 import type { EditorModel } from './editor-model.js'
 import { ImageEditDialog } from './ImageEditDialog.js'
 import { exportPsd } from './psd-export.js'
+import { exportPdf } from './pdf-export.js'
 import { referencePrompt } from '../shared/research.js'
 import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
 import { ResearchStyleButton, ResearchStylePicker } from './ResearchStyles.js'
@@ -443,7 +444,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
         </> : <>
           <button onClick={() => editing ? setEditing(false) : startEdit()} aria-pressed={editing}><EditIcon/>编辑<kbd>Tab</kbd></button>
           <button disabled={operationBusy || state.pending.some(p => p.parentId === item.id)} onClick={() => { setSplitForText(false); setSplitSource(item); setOperationError('') }}><LayersIcon/>分图层</button>
-          <button disabled={operationBusy || state.pending.some(p => p.parentId === item.id)} onClick={() => setEditSource(item)} title="去背景、涂抹消除、扩图">AI 处理</button>
+          <button disabled={operationBusy || state.pending.some(p => p.parentId === item.id)} onClick={() => setEditSource(item)} title="去背景、涂抹消除、扩图、变清晰">AI 处理</button>
           <button disabled={operationBusy} onClick={() => { void createBoard() }} title="创建可添加文字与图形的画板，不调用模型">加文字 / 图形</button>
           {inConversation ? <button onClick={() => { void handoff(conversation && (() => conversation.reference(item)), '已引用到对话输入框') }} title="引用到对话输入框"><QuoteIcon/>引用</button> : null}
           <span className="sd-float-sep"/>
@@ -467,7 +468,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
             const layers = chosenLayers.length ? chosenLayers : composition.layers, bounds = chosenLayers.length ? selectionBounds(layers) : { x: 0, y: 0, width: composition.width, height: composition.height }
             const png = await renderLayers(model.sessionId, layers, bounds, chosenLayers.length ? 'transparent' : composition.background); downloadPng(png, chosenLayers.length ? `${composition.title} · 选中图层` : composition.title)
           }) }} title={chosenLayers.length ? '导出选中图层 PNG' : '导出画板 PNG'} aria-label={chosenLayers.length ? '导出选中图层 PNG' : '导出画板 PNG'}><DownloadIcon/></button>
-          {!chosenLayers.length ? <button disabled={operationBusy} onClick={() => { void operate(async () => { const bytes = await exportPsd(model.sessionId, composition); downloadFile(bytes, composition.title, 'psd', 'image/vnd.adobe.photoshop'); flash('分层 PSD 已导出') }) }} title="导出独立图层及可编辑文字">PSD</button> : null}
+          {!chosenLayers.length ? <><button disabled={operationBusy} onClick={() => { void operate(async () => { const bytes = await exportPsd(model.sessionId, composition); downloadFile(bytes, composition.title, 'psd', 'image/vnd.adobe.photoshop'); flash('分层 PSD 已导出') }) }} title="导出独立图层及可编辑文字">PSD</button><button disabled={operationBusy} onClick={() => { void operate(async () => { downloadFile(await exportPdf(model.sessionId, composition), composition.title, 'pdf', 'application/pdf'); flash('PDF 已导出') }) }} title="导出单页 PDF">PDF</button></> : null}
           <button disabled={operationBusy || (chosenLayers.length > 0 && !editableLayers.length)} onClick={() => chosenLayers.length ? removeLayers() : setConfirming(true)} title={chosenLayers.length ? '删除所选图层，可撤销' : '删除画板'} aria-label={chosenLayers.length ? '删除所选图层' : '删除画板'}><TrashIcon/></button>
         </>}
       </div>

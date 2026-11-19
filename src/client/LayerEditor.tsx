@@ -18,6 +18,7 @@ import { ImageEditDialog } from './ImageEditDialog.js'
 import { expandedLayerBox } from '../shared/image-edit.js'
 import type { ImageEditOperation } from '../shared/image-edit.js'
 import { exportPsd } from './psd-export.js'
+import { exportPdf } from './pdf-export.js'
 import { mergeSelectedLayers } from './layer-actions.js'
 import { canExportSvg } from '../shared/diagram-svg.js'
 import { exportSvg } from './diagram-export.js'
@@ -273,6 +274,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation,
             <button role="menuitem" onClick={() => { void exportPng(false) }}>画板 PNG</button>
             {canExportSvg(layers) ? <button role="menuitem" onClick={() => { void task(async () => { downloadFile(await exportSvg(c), c.title, 'svg', 'image/svg+xml'); flash('SVG 已导出') }) }}>矢量 SVG</button> : null}
             <button role="menuitem" disabled={!chosen.length} onClick={() => { void exportPng(true) }}>选中内容 PNG</button>
+            <button role="menuitem" onClick={() => { void task(async () => { downloadFile(await exportPdf(model.sessionId, c), c.title, 'pdf', 'application/pdf'); flash('PDF 已导出') }) }} title="单页 PDF，页面尺寸与画板一致，内容为无损图像">PDF</button>
             <button role="menuitem" onClick={() => { void exportPhotoshop(true) }} title="保留独立图层及可编辑文字；PSD 不嵌入字体，接收方需安装对应字体。需要固定版面可选文字转图片">分层 PSD</button>
             <button role="menuitem" onClick={() => { void exportPhotoshop(false) }} title="所有对象保持独立图片层，适合优先保留显示效果">PSD（文字转图片）</button><hr/>
             <button role="menuitem" onClick={() => { void saveAsImage() }}>保存为画布图片</button>
@@ -296,7 +298,7 @@ export function LayerEditor({ model, initial, onClose, onOpenCopy, conversation,
               <button role="menuitem" onClick={() => { add('arrow'); setPopup(undefined) }}><ShapesIcon/>箭头</button>
             </div> : null}
           </div>
-          <button disabled={busy || !selectedImage || !one || one.locked || one.hidden || model.getSnapshot().pending.some(p => p.parentId === selectedImage?.id)} aria-label="AI 处理" title="AI 处理 · 去背景、消除、扩图" onClick={() => { if (one && selectedImage) setAiEdit({ layerId: one.id, source: selectedImage, operation: 'remove-background' }) }}><SparkIcon/></button><span className="sd-editor-tool-separator"/>
+          <button disabled={busy || !selectedImage || !one || one.locked || one.hidden || model.getSnapshot().pending.some(p => p.parentId === selectedImage?.id)} aria-label="AI 处理" title="AI 处理 · 去背景、消除、扩图、变清晰" onClick={() => { if (one && selectedImage) setAiEdit({ layerId: one.id, source: selectedImage, operation: 'remove-background' }) }}><SparkIcon/></button><span className="sd-editor-tool-separator"/>
           <div className="sd-editor-menu-anchor sd-editor-more-anchor">
             <button onClick={() => togglePopup('more')} disabled={busy} aria-label="更多操作" title="更多操作" aria-expanded={popup === 'more'} aria-haspopup="menu"><MoreIcon/></button>
             {popup === 'more' ? <div className="sd-editor-menu" role="menu" aria-label="更多操作" style={{ maxHeight: Math.max(96, size.height - 76) }}>
