@@ -31,6 +31,8 @@ export interface GenerateInput {
   transparent?: boolean
   /** RGB output; Ark recommends it for consistency across repeated edits of one image. */
   opaque?: boolean
+  /** Regenerate this canvas item: the result takes its place and the old version is kept. */
+  replaces?: string
 }
 export interface CanvasItem {
   id: string
@@ -55,6 +57,11 @@ export interface CanvasItem {
   /** Generated with a requested transparent background. */
   transparent?: boolean
   imported?: boolean
+  /** The user's own prompt, before style and transparency instructions were added. */
+  sourcePrompt?: string
+  /** Regenerated versions share the id of their first version; only one per group is shown. */
+  versionOf?: string
+  superseded?: boolean
 }
 export interface LayerMetadata {
   zIndex: number
@@ -151,7 +158,7 @@ export interface Composition {
   warnings?: string[]
 }
 /** A generation still running on the host, whoever started it (conversation tool or canvas). */
-export interface PendingGeneration { key: string; prompt: string; size: string; parentId?: string; startedAt: string }
+export interface PendingGeneration { key: string; prompt: string; size: string; parentId?: string; startedAt: string; replaces?: string }
 export interface CanvasEntry {
   sessionId: string
   title: string
@@ -174,7 +181,7 @@ export const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typ
 export const labelOf = (item: Pick<CanvasItem, 'title' | 'prompt'>): string =>
   item.title === item.prompt.replace(/\s+/g, ' ').slice(0, 24) ? titleFrom(item.prompt) : item.title
 export const entryOf = (canvas: Canvas): CanvasEntry => {
-  const originals = canvas.items.filter(i => i.role !== 'layer')
+  const originals = canvas.items.filter(i => i.role !== 'layer' && !i.superseded)
   const first = originals[0], last = originals.at(-1), diagram = canvas.compositions?.at(-1)
   const title = first && (canvas.title === undefined || canvas.title === first.title) ? labelOf(first) : canvas.title ?? '未命名画布'
   return { sessionId: canvas.sessionId, title, count: originals.length + (canvas.compositions?.length ?? 0), revision: canvas.revision, updatedAt: canvas.updatedAt, ...(last ? { cover: last.id } : diagram && diagram.layers.every(l => l.kind !== 'image' && !l.ocr) ? { diagramCover: diagram.id } : {}) }
@@ -224,6 +231,7 @@ export function parseGenerate(raw: unknown, defaults: { size: string; watermark:
   if (raw.transparent !== undefined && typeof raw.transparent !== 'boolean') throw new Error('transparent 必须是布尔值。')
   if (raw.opaque !== undefined && typeof raw.opaque !== 'boolean') throw new Error('opaque 必须是布尔值。')
   if (raw.transparent && raw.opaque) throw new Error('transparent 与 opaque 不能同时开启。')
+  if (raw.replaces !== undefined && (typeof raw.replaces !== 'string' || !ITEM_ID.test(raw.replaces))) throw new Error('replaces 必须是当前画布的图片 id。')
   const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim().slice(0, 80) : undefined
-  return { prompt, images: (images as string[]).map(x => x.trim()), size: parseSize(raw.size, defaults.size), watermark: raw.watermark ?? defaults.watermark, ...(title ? { title } : {}), ...(raw.transparent ? { transparent: true } : {}), ...(raw.opaque ? { opaque: true } : {}), ...(raw.style === undefined ? {} : { style: parseGenerationStyle(raw.style) }) }
+  return { prompt, images: (images as string[]).map(x => x.trim()), size: parseSize(raw.size, defaults.size), watermark: raw.watermark ?? defaults.watermark, ...(title ? { title } : {}), ...(raw.transparent ? { transparent: true } : {}), ...(raw.opaque ? { opaque: true } : {}), ...(typeof raw.replaces === 'string' ? { replaces: raw.replaces } : {}), ...(raw.style === undefined ? {} : { style: parseGenerationStyle(raw.style) }) }
 }

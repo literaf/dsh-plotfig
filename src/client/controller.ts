@@ -12,6 +12,7 @@ export interface State {
   loading: boolean
   keyBusy: boolean
   settingsBusy: boolean
+  checkBusy?: boolean
   error?: string | undefined
   message?: string | undefined
 }
@@ -26,7 +27,7 @@ export interface CanvasState {
   created: string[]
   styleBusy?: boolean
 }
-export interface PendingView { key: string; prompt: string; size?: string | undefined; parentId?: string | undefined; startedAt: number }
+export interface PendingView { key: string; prompt: string; size?: string | undefined; parentId?: string | undefined; startedAt: number; replaces?: string | undefined }
 export const MESSAGE_MS = 4000
 export const POLL_MS = 3000
 type Reply<T> = { ok: true; value: T } | { ok: false; error: string }
@@ -94,7 +95,7 @@ export class CanvasModel extends Emitter<CanvasState> {
   private syncPending() {
     // While this view waits on its own request, the host reports the same generation; show it once.
     const mine = this.local.map(p => p.prompt), remote = this.remote.filter(p => { const i = mine.indexOf(p.prompt); if (i < 0) return true; mine.splice(i, 1); return false })
-    this.set({ pending: [...this.local, ...remote.map(p => ({ key: p.key, prompt: p.prompt, size: p.size, parentId: p.parentId, startedAt: Date.parse(p.startedAt) || Date.now() }))] })
+    this.set({ pending: [...this.local, ...remote.map(p => ({ key: p.key, prompt: p.prompt, size: p.size, parentId: p.parentId, replaces: p.replaces, startedAt: Date.parse(p.startedAt) || Date.now() }))] })
   }
   private accept(reply: CanvasReply) {
     const { pending, ...canvas } = reply
@@ -115,12 +116,12 @@ export class CanvasModel extends Emitter<CanvasState> {
     } catch (error) { if (!control.signal.aborted) this.set({ loading: false, error: errorText(error, '读取画布失败。') }) }
     finally { if (this.reading === control) this.reading = undefined; if (this.state.loading) this.set({ loading: false }) }
   }
-  async generate(input: { prompt: string; images?: string[]; size?: string; title?: string; style?: GenerationStyle; transparent?: boolean; opaque?: boolean }, parentId?: string): Promise<boolean> {
+  async generate(input: { prompt: string; images?: string[]; size?: string; title?: string; style?: GenerationStyle; transparent?: boolean; opaque?: boolean; replaces?: string }, parentId?: string): Promise<boolean> {
     const prompt = input.prompt.trim()
     if (!prompt) return false
     const key = `local-${++this.serial}`, control = new AbortController()
     this.generating.set(key, control)
-    this.local = [...this.local, { key, prompt, size: input.size, parentId, startedAt: Date.now() }]
+    this.local = [...this.local, { key, prompt, size: input.size, parentId, startedAt: Date.now(), replaces: input.replaces }]
     this.set({ error: undefined, message: undefined }); this.syncPending()
     try {
       const reply = await this.fetcher<{ canvas: Canvas; created: string[] }>(`${ROUTE}/generate?session=${encodeURIComponent(this.sessionId)}`, control.signal, { ...input, prompt })
@@ -156,6 +157,14 @@ export class CanvasModel extends Emitter<CanvasState> {
       if (this.writes === 1) this.accept(reply.value)
     } catch (error) { this.set({ error: errorText(error, '保存布局失败。') }) }
     finally { this.writes-- }
+  }
+  /** Show another saved version of a regenerated image; no model call. */
+  async showVersion(id: string): Promise<void> {
+    try {
+      const reply = await this.fetcher<Canvas>(this.path, new AbortController().signal, { showVersion: id }, 'PATCH')
+      if (!reply.ok) throw new Error(reply.error)
+      this.accept(reply.value); this.onChange()
+    } catch (error) { this.set({ error: errorText(error, '切换版本失败。') }) }
   }
   async remove(id: string): Promise<boolean> {
     try {
@@ -298,6 +307,17 @@ export class Controller extends Emitter<State> {
       this.set({ catalog: { ...this.state.catalog, ...reply.value }, message: '设置已保存。' })
     } catch (error) { this.set({ error: errorText(error, '保存设置失败。') }) }
     finally { this.set({ settingsBusy: false }) }
+  }
+  /** Lists models with the saved key; never generates or bills. */
+  async checkConnection(): Promise<void> {
+    if (this.state.checkBusy || !this.state.catalog?.configured) return
+    this.set({ checkBusy: true, error: undefined, message: undefined })
+    try {
+      const reply = await this.fetcher<{ ok: boolean; modelAvailable: boolean; message: string }>(ROUTE + '/check', new AbortController().signal, {})
+      if (!reply.ok) throw new Error(reply.error)
+      if (reply.value.ok && reply.value.modelAvailable) this.set({ message: reply.value.message }); else this.set({ error: reply.value.message })
+    } catch (error) { this.set({ error: errorText(error, '连接测试失败。') }) }
+    finally { this.set({ checkBusy: false }) }
   }
   async saveKey(text: string): Promise<boolean> {
     if (!text.trim() || this.state.keyBusy || !this.state.catalog) return false

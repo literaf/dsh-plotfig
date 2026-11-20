@@ -117,6 +117,29 @@ describe('scientific workflow entry points', () => {
       expect((calls[0]![2] as { images: string[] }).images).toEqual([`item:${second.id}`])
     } finally { await h.cleanup() }
   })
+  it('regenerates a generated image in place and switches versions without billing', async () => {
+    const v1: CanvasItem = { ...source, id: 'cccccccccccc', title: '雨林', prompt: '雨林剖面\n\n视觉风格参考：…', sourcePrompt: '雨林剖面', imported: false, superseded: true }
+    const v2: CanvasItem = { ...v1, id: 'dddddddddddd', versionOf: v1.id, superseded: false }
+    const h = harness('board-ui', [v1, v2])
+    try {
+      await act(async () => { await h.model.refresh(); h.root.render(<CanvasView model={h.model} initialCompositionId={v2.id}/>) })
+      expect(h.node.querySelector('.sd-versions')?.textContent).toContain('2 / 2')
+      await act(async () => h.button('上一个版本').click())
+      const patch = vi.mocked(h.fetcher).mock.calls.find(([, , data, method]) => method === 'PATCH' && (data as { showVersion?: string })?.showVersion)
+      expect((patch![2] as { showVersion: string }).showVersion).toBe(v1.id)
+      expect(h.billable()).toHaveLength(0)
+      await act(async () => h.button('重新生成').click())
+      const calls = h.billable(); expect(calls).toHaveLength(1)
+      expect(calls[0]![2]).toMatchObject({ prompt: '雨林剖面', replaces: v2.id, title: '雨林' })
+    } finally { await h.cleanup() }
+  })
+  it('offers no regenerate button for imported images', async () => {
+    const h = harness('board-ui', [source])
+    try {
+      await act(async () => { await h.model.refresh(); h.root.render(<CanvasView model={h.model} initialCompositionId={source.id}/>) })
+      expect(h.button('重新生成')).toBeUndefined()
+    } finally { await h.cleanup() }
+  })
   it('imports a local file before opening an operation, without a generation request', async () => {
     const h = harness('board-ui', [])
     try {

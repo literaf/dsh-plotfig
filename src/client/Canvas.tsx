@@ -117,7 +117,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const inConversation = !isBoard(model.sessionId)
   const bottomControls = useRef<HTMLDivElement>(null), [bottomSpace, setBottomSpace] = useState(0)
   const bottom = Math.max(inConversation ? 72 : BOTTOM, bottomSpace)
-  const items = useMemo(() => state.canvas?.items.filter(i => i.role !== 'layer') ?? [], [state.canvas])
+  const items = useMemo(() => state.canvas?.items.filter(i => i.role !== 'layer' && !i.superseded) ?? [], [state.canvas])
   const compositions = useMemo(() => state.canvas?.compositions ?? [], [state.canvas])
   const allBoxes = useMemo(() => [...items, ...compositions.map(compositionBox)], [items, compositions])
   const host = useRef<HTMLDivElement>(null), stage = useRef<Konva.Stage>(null)
@@ -169,6 +169,9 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const placeholders = useMemo(() => {
     let x = allBoxes.reduce((m, i) => Math.max(m, i.x + i.width + GAP), 0)
     return state.pending.map(p => {
+      // A regeneration covers the image it will replace instead of taking a new slot.
+      const old = p.replaces ? items.find(i => i.id === p.replaces) : undefined
+      if (old) return { ...p, x: old.x, y: old.y, width: old.width, height: old.height }
       const shape = pendingShape(p.size, slot), parent = p.parentId ? items.find(i => i.id === p.parentId) : undefined
       const slotBox = { ...p, ...shape, x, y: parent?.y ?? 0 }
       x += shape.width + GAP
@@ -195,6 +198,20 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const pendingKeys = state.pending.map(p => p.key).join(',')
   useEffect(() => { if (pendingKeys) fitAll(placeholders) }, [pendingKeys]) // eslint-disable-line react-hooks/exhaustive-deps
   const item = items.find(i => i.id === selected)
+  // Saved versions of the selected image, oldest first; switching makes no model call.
+  const versions = useMemo(() => {
+    if (!item) return []
+    const group = item.versionOf ?? item.id
+    return (state.canvas?.items ?? []).filter(i => i.role !== 'layer' && (i.id === group || i.versionOf === group))
+  }, [item, state.canvas])
+  // Only plain generations can be redone: edits, imports and splits have their own dialogs.
+  // Local imports and composites carry fixed placeholder prompts; older generations have no sourcePrompt but a real prompt.
+  const canRegenerate = !!item && !item.imported && !item.edit && item.role !== 'layer' && !['本地导入图片', '本地合成图层'].includes(item.prompt) && !!item.prompt.trim()
+  const regenerate = (target: CanvasItem) => {
+    const refs = target.refs.filter(r => (state.canvas?.items ?? []).some(i => i.id === r)).map(r => `item:${r}`)
+    void model.generate({ prompt: target.sourcePrompt ?? target.prompt, ...(refs.length ? { images: refs } : {}), size: target.size, title: target.title,
+      ...(target.sourcePrompt ? {} : { style: 'auto' as const }), ...(target.transparent ? { transparent: true } : {}), replaces: target.id }, target.refs[0])
+  }
   const mainRef = referenceSource ? referenceSource.item : editing && item ? item : undefined
   // A reference deleted from the canvas drops out of the composer instead of failing the request.
   const composerRefs = composerReferences(mainRef, extraRefs.filter(r => items.some(i => i.id === r.id)))
@@ -459,6 +476,12 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
           <button onClick={() => setConfirming(false)}>取消</button>
         </> : <>
           <button onClick={() => editing ? setEditing(false) : startEdit()} aria-pressed={editing}><EditIcon/>编辑<kbd>Tab</kbd></button>
+          {canRegenerate ? <button disabled={state.pending.some(p => p.replaces === item.id)} onClick={() => regenerate(item)} title="用同样的描述和参数再生成一次，结果放在原位置；旧版本保留，可随时切回。按 1 张图计费"><RedoIcon/>重新生成</button> : null}
+          {versions.length > 1 ? <span className="sd-versions" role="group" aria-label="切换版本">
+            <button disabled={versions[0]!.id === item.id} onClick={() => { const i = versions.findIndex(v => v.id === item.id); void model.showVersion(versions[i - 1]!.id) }} aria-label="上一个版本">‹</button>
+            <span>{versions.findIndex(v => v.id === item.id) + 1} / {versions.length}</span>
+            <button disabled={versions.at(-1)!.id === item.id} onClick={() => { const i = versions.findIndex(v => v.id === item.id); void model.showVersion(versions[i + 1]!.id) }} aria-label="下一个版本">›</button>
+          </span> : null}
           <button disabled={operationBusy || state.pending.some(p => p.parentId === item.id)} onClick={() => { setSplitForText(false); setSplitSource(item); setOperationError('') }}><LayersIcon/>分图层</button>
           <button disabled={operationBusy || state.pending.some(p => p.parentId === item.id)} onClick={() => setEditSource(item)} title="去背景、涂抹消除、扩图、变清晰">AI 处理</button>
           <button disabled={operationBusy} onClick={() => { void createBoard() }} title="创建可添加文字与图形的画板，不调用模型">加文字 / 图形</button>

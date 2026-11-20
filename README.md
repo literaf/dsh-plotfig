@@ -5,19 +5,38 @@ An AI illustration plugin for researchers using DeepSeek Harness. Use Volcengine
 - **Conversation canvas**: one per conversation. Images generated in the conversation land on it, and it opens in the right Sidebar when a generation starts (Harness ≥ 0.2.2).
 - **Standalone canvas**: created from the Seedream panel with "新建画布". It belongs to no conversation.
 
+![Seedream home: prompt box, styles, templates, transparent background and recent canvases](docs/images/home.jpg)
+
+## What it does
+
+| You say or do | The plugin |
+|---|---|
+| "Draw a rainforest layering cross-section, textbook style" | Generates onto this conversation's canvas and opens it on the right |
+| "Make 4 figures for this paper in one flat style: workflow, model, setup, results" | Plans four prompts and generates them one by one; a failed item does not stop the rest |
+| Select an image, click **重新生成** | Generates again with the same settings in the same place; older versions stay switchable |
+| Turn on **透明背景** and describe a device | A transparent PNG of just the subject, ready for figure assembly |
+| **加入参考** on two images, then "put the device from 图2 into 图1" | Sends both images to the model |
+| **AI 处理 → 局部重绘**, box a region, "add a measuring cylinder" | Redraws only inside the box; every outside pixel is kept |
+| **分图层** | Splits into movable transparent layers with editable OCR text |
+| Export | PNG, SVG, PDF and layered PSD with editable text |
+
+![Toolbar for a selected image: edit, regenerate, split layers, AI edits, add as reference](docs/images/canvas-selected.jpg)
+
 ## Install
 
 ```bash
 dsh plugin --profile desktop add dsh-seedream
 ```
 
-Save an Ark API key under Settings → Seedream (credential `ARK_API_KEY`). Use `--profile web` for the web host. Saved canvases remain available for local editing and export without a key; model operations require one.
+Save an Ark API key under Settings → Seedream (credential `ARK_API_KEY`). **测试连接** in settings lists Ark models with the saved key to confirm it works and Seedream 5.5 is enabled; it generates nothing and is not billed. Use `--profile web` for the web host. Saved canvases remain available for local editing and export without a key; model operations require one.
 
 ## Generating
 
 - Use `/seedream <description>`, ask the assistant to draw, or type into a standalone canvas prompt box. The size menu offers seven aspect ratios at 2K, or a 1K/1.5K/2K tier that lets the model choose the shape.
 - Conversation canvases share the native DSH composer: examples, edits and references append to the same Session's draft without submitting it. Opening a conversation canvas from the gallery returns to its conversation with the canvas on the right.
 - The home page starts with a prompt box. A submission opens a new standalone canvas with the selected style and size. Six tool shortcuts and up to eight recent canvases sit below it; **全部画布** opens the full gallery.
+- **重新生成** redoes a generated image with its original prompt, references, size and style, in the same place. Older versions are kept and switchable from the toolbar without a model call.
+- For a set of different images, the assistant uses `seedream_generate_batch` (2–10 items, one billed image each, run in order; failures are reported, not retried).
 - **加入参考** adds the selected canvas image to the prompt, up to 10 references. The main image (the one being edited or used for reference generation) is 图1 and the rest follow in order, so prompts can say "put the device from 图2 into 图1".
 - **透明背景** generates a PNG with a transparent background, for icons, devices and figure parts. A result without transparency is kept with a warning.
 - Repeated edits of one image request opaque output, as the Ark docs recommend for consistency, unless transparency is on.
@@ -59,6 +78,6 @@ Each generation is billed per output image by Ark. Stopping a wait does not canc
 ## Limitations
 
 - 500 objects per artboard, 32 million pixels per PNG export; undo history lasts for the current run.
-- AI results depend on the model. Pixel protection is exact; picture quality is not guaranteed. Expanding blank areas beside diagrams and tables is unreliable, cutouts lose glass-like translucency, combining several references can drop text labels, and naturalistic and 3D presets look similar.
+- AI results depend on the model. Pixel protection is exact; picture quality is not guaranteed. Expanding blank areas beside diagrams and tables is unreliable, cutouts lose glass-like translucency, combining several references can drop text labels, naturalistic and 3D presets look similar, and images in one batch are generated independently, so their look can differ even with the same style.
 - PSD files have been checked in Photopea and Adobe Illustrator 2025, not in Photoshop. Fonts missing on the target machine are substituted.
 - This is a beta release. Each AI operation was tested against the real Ark API, but on a limited set of samples. See [README_CN.md](README_CN.md) for the full Chinese guide and shortcuts.

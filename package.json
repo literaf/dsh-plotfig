@@ -21,6 +21,7 @@
   "files": [
     "lib",
     "assets",
+    "docs/images",
     "cordis.patch.yml",
     "README.md",
     "LICENSE",

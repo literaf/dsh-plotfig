@@ -66,7 +66,7 @@ export class Seedream {
     if (prompt.length > MAX_PROMPT) throw new Error('提示词与风格要求合计超过 4000 个字符，请缩短描述或选择“跟随描述”。')
     const refs = await this.resolve(sessionId, input.images, allowLocal)
     signal.throwIfAborted()
-    const entry: PendingGeneration = { key: randomUUID(), prompt: input.prompt, size: input.size, startedAt: new Date().toISOString(), ...(refs.items[0] ? { parentId: refs.items[0] } : {}) }
+    const entry: PendingGeneration = { key: randomUUID(), prompt: input.prompt, size: input.size, startedAt: new Date().toISOString(), ...(refs.items[0] ? { parentId: refs.items[0] } : {}), ...(input.replaces ? { replaces: input.replaces } : {}) }
     this.inflight.set(sessionId, [...this.pending(sessionId), entry])
     try {
       const result = await this.ark.generate({ prompt: input.transparent ? `${prompt}\n\n输出透明背景：只保留主体，主体之外完全透明，不画背景、地面、阴影或边框。` : prompt, images: refs.images, size: input.size, watermark: input.watermark, ...(input.transparent ? { background: 'transparent' as const } : input.opaque ? { background: 'opaque' as const } : {}) }, signal)
@@ -74,8 +74,8 @@ export class Seedream {
       // Billed output is saved even if the caller stopped waiting meanwhile.
       return await this.store.add(sessionId, result.images, {
         title: input.title ?? titleFrom(input.prompt), prompt, refs: refs.items, externalRefs: refs.external, size: input.size, ...(style === 'auto' ? {} : { generationStyle: style }),
-        ...(input.transparent ? { transparent: true } : {}), ...(warnings.length ? { warnings } : {}),
-      }, refs.items[0])
+        ...(input.transparent ? { transparent: true } : {}), ...(warnings.length ? { warnings } : {}), sourcePrompt: input.prompt,
+      }, refs.items[0], input.replaces)
     } finally {
       const rest = this.pending(sessionId).filter(p => p.key !== entry.key)
       if (rest.length) this.inflight.set(sessionId, rest); else this.inflight.delete(sessionId)

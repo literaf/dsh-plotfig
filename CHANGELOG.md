@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add 重新生成: redo a generated image in place, keep older versions and switch between them without a model call.
+- Add `seedream_generate_batch` for 2–10 planned images in one conversation request, run in order with per-item failure reporting and no retries.
+- Add a free 测试连接 button that lists Ark models with the saved key and checks that Seedream 5.5 is available.
+
 ## 0.1.0-beta.1 (2026-11-19)
 
 First public prerelease. Everything below was developed locally before this release.

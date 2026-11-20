@@ -68,9 +68,21 @@ async function readLimited(response: Response, signal: AbortSignal): Promise<Uin
   for (const c of chunks) { out.set(c, offset); offset += c.byteLength }
   return out
 }
+export interface ArkCheck { ok: boolean; modelAvailable: boolean; message: string }
 export class ArkClient {
   constructor(private readonly options: ArkOptions) {}
   private get fetch(): typeof fetch { return this.options.fetch ?? fetch }
+  /** Lists models with the saved key. This generates nothing and is not billed. */
+  async check(signal: AbortSignal): Promise<ArkCheck> {
+    const endpoint = new URL('models', (this.options.endpoint ?? ENDPOINT).replace(/images\/generations$/, ''))
+    const key = await this.options.apiKey()
+    const response = await this.fetch(endpoint, { signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]), redirect: 'error', headers: { Authorization: `Bearer ${key}`, 'User-Agent': this.options.userAgent } })
+    const json: unknown = await response.json().catch(() => undefined)
+    if (!response.ok) return { ok: false, modelAvailable: false, message: message(json, response.status).message.replace('Seedream 生成失败', '连接失败') }
+    const ids = isRecord(json) && Array.isArray(json.data) ? json.data.map(m => isRecord(m) ? m.id : undefined) : []
+    const available = ids.includes(MODEL)
+    return { ok: true, modelAvailable: available, message: available ? `连接正常，可以使用 ${MODEL}。` : `Key 有效，但账号下的模型列表里没有 ${MODEL}，请在方舟控制台开通该模型。` }
+  }
   async generate(input: ArkRequest, signal: AbortSignal): Promise<ArkResult> {
     if (input.decomposition && input.background) throw new Error('分层请求不能设置 background。')
     const timeout = AbortSignal.timeout(this.options.timeoutMs), combined = AbortSignal.any([signal, timeout])

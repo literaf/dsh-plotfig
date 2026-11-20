@@ -41,7 +41,7 @@ export function Settings({ controller }: { controller: Controller }) {
       <select id={sizeId} disabled={!c || state.settingsBusy} value={c && (SIZE_TIERS as readonly string[]).includes(c.defaultSize) ? c.defaultSize : '2K'} onChange={e => { void controller.saveSettings({ size: e.target.value }) }}>{SIZE_TIERS.map(s => <option key={s} value={s}>{s}</option>)}</select>
     </div>
     <label className="sd-check"><input type="checkbox" disabled={!c || state.settingsBusy} checked={c?.watermark ?? true} onChange={e => { void controller.saveSettings({ watermark: e.target.checked }) }}/>添加「AI 生成」水印（方舟默认开启）</label>
-    <div className="sd-settings-actions"><button className="sd-button" disabled={!c?.configured || state.keyBusy} onClick={() => { void controller.removeKey() }}>移除 Key</button><button className="sd-button" disabled={state.loading} onClick={() => { void controller.attach() }}>刷新状态</button></div>
+    <div className="sd-settings-actions"><button className="sd-button" disabled={!c?.configured || state.checkBusy} onClick={() => { void controller.checkConnection() }} title="用已保存的 Key 读取模型列表，不生成图片、不计费">{state.checkBusy ? '测试中…' : '测试连接'}</button><button className="sd-button" disabled={!c?.configured || state.keyBusy} onClick={() => { void controller.removeKey() }}>移除 Key</button><button className="sd-button" disabled={state.loading} onClick={() => { void controller.attach() }}>刷新状态</button></div>
     <p>每次生成按输出图片张数计费。生成结果会立即下载到本机，按对话分别保存在各自的画布中。</p>
     <p>版本 {c?.version ?? '—'}</p>
   </section>

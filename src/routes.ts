@@ -34,6 +34,7 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
         if (request.method === 'PATCH') {
           const raw = await body(request, 256 * 1024)
           if (isRecord(raw) && raw.generationStyle !== undefined && raw.positions === undefined) return json({ ok: true, value: await service.store.setGenerationStyle(id, raw.generationStyle) })
+          if (isRecord(raw) && typeof raw.showVersion === 'string' && raw.positions === undefined) return json({ ok: true, value: await service.store.showVersion(id, raw.showVersion) })
           if (!isRecord(raw) || !Array.isArray(raw.positions)) throw new Error('无效的布局数据。')
           const positions = raw.positions.filter(isRecord).map(p => ({ id: String(p.id), x: Number(p.x), y: Number(p.y) }))
           return json({ ok: true, value: await service.store.move(id, positions) })
@@ -134,6 +135,10 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
         return json({ ok: true, value: { canvas, entry: entryOf(canvas) } })
       } catch (error) { return fail(error, '删除失败。', 404) }
     },
+    async check(): Promise<Response> {
+      try { return json({ ok: true, value: await service.ark.check(new AbortController().signal) }) }
+      catch (error) { return fail(error, '连接测试失败。') }
+    },
     async settings(request: Request): Promise<Response> {
       try {
         const raw = await body(request, 4096)
@@ -165,5 +170,6 @@ export function applyRoutes(ctx: Context, service: Seedream, prefs: Preferences,
     bridge.register({ path: `${ROUTE}/image`, methods: ['GET'], requestBody: 'buffered', fetch: r => h.image(r) })
     bridge.register({ path: `${ROUTE}/item`, methods: ['DELETE'], requestBody: 'buffered', fetch: r => h.removeItem(r) })
     bridge.register({ path: `${ROUTE}/settings`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.settings(r) })
+    bridge.register({ path: `${ROUTE}/check`, methods: ['POST'], requestBody: 'buffered', fetch: () => h.check() })
   })
 }

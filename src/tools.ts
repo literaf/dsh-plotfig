@@ -32,7 +32,8 @@ function sessionOf(exec: { agent?: { id: unknown } }): string {
 }
 function valueOf(service: Seedream, canvas: Canvas, created: CanvasItem[]): Value {
   const view = (i: CanvasItem) => ({ id: i.id, ref: `item:${i.id}`, title: i.title, path: service.store.imagePath(canvas.sessionId, i.id), width: i.width, height: i.height, prompt: i.prompt, refs: i.refs.map(r => `item:${r}`) })
-  return { session_id: canvas.sessionId, created: created.map(view), items: canvas.items.map(view), generation_style: canvas.generationStyle ?? 'auto' }
+  // Older versions of regenerated images stay saved but are not offered to the agent.
+  return { session_id: canvas.sessionId, created: created.map(view), items: canvas.items.filter(i => !i.superseded).map(view), generation_style: canvas.generationStyle ?? 'auto' }
 }
 function render(value: Value, generated: boolean) {
   const line = (i: Value['items'][number]) => `- ${i.title} · ${i.ref} · ${i.width}×${i.height}\n  [${i.path}](<${i.path}>)${i.refs.length ? `\n  参考：${i.refs.join(', ')}` : ''}`
@@ -103,6 +104,43 @@ export function applyTools(ctx: Context, service: Seedream, defaults: Defaults):
       const input = parseGenerate(args, await defaults())
       const { canvas, items } = await service.generate(sessionId, input, exec.signal, true)
       return valueOf(service, canvas, items)
+    },
+  }))
+  ctx.tools.register(defineTool({
+    name: 'seedream_generate_batch',
+    description: 'Generate a planned set of 2–10 different images in one call, e.g. "four figures for this paper in one consistent style". Write one complete prompt per image; shared size, style and references apply to every item unless an item overrides them. Items run one after another and each is billed once; a failed item is reported and never retried, and the others still complete. Use seedream_generate for a single image.',
+    parameters: {
+      items: { type: 'array', required: true, description: '2–10 images in order. Each needs its own full prompt; repeat the shared visual style in every prompt for consistency.', items: { type: 'object', additionalProperties: false, properties: {
+        prompt: { type: 'string', required: true }, title: { type: 'string' }, size: { type: 'string' },
+        images: { type: 'array', items: { type: 'string' }, description: 'Item-specific references, added after the shared ones.' },
+      } } },
+      images: { type: 'array', items: { type: 'string' }, description: 'Shared references for every item: item:<id>, https URLs or absolute local paths. Up to 10 per item including item-specific ones.' },
+      size: { type: 'string', description: 'Shared size: 1K, 1.5K, 2K or WxH. Defaults to settings.' },
+      style: { type: 'string', enum: STYLE_IDS, description: 'Shared appearance preset; omit to inherit the canvas style.' },
+      transparent: { type: 'boolean', description: 'Transparent-background PNGs for every item.' },
+    },
+    output: { schema: OUTPUT, render: (_a, v) => render(v, true) }, timeoutMs: 1_800_000, isConcurrencySafe: () => false,
+    presentCall: a => ({ card: 'generic', title: `Seedream · 批量 ${Array.isArray(a.items) ? a.items.length : ''} 张`, kind: 'other' }),
+    async execute(args, exec) {
+      const sessionId = sessionOf(exec), base = await defaults()
+      const list = Array.isArray(args.items) ? args.items : []
+      if (list.length < 2 || list.length > 10) throw new Error('批量生成需要 2–10 个条目；单张请用 seedream_generate。')
+      const shared = Array.isArray(args.images) ? args.images : []
+      // Validate everything before the first billed request.
+      const inputs = list.map((item, i) => {
+        try { return parseGenerate({ ...item, images: [...shared, ...(item.images ?? [])], size: item.size ?? args.size, style: args.style, transparent: args.transparent }, base) }
+        catch (error) { throw new Error(`第 ${i + 1} 项参数无效：${error instanceof Error ? error.message : '格式错误'}`) }
+      })
+      const created: CanvasItem[] = [], warnings: string[] = []
+      let canvas: Canvas | undefined
+      for (const [i, input] of inputs.entries()) {
+        if (exec.signal.aborted) { warnings.push(`已停止：第 ${i + 1}–${inputs.length} 项未提交。`); break }
+        try { const result = await service.generate(sessionId, input, exec.signal, true); canvas = result.canvas; created.push(...result.items) }
+        catch (error) { warnings.push(`第 ${i + 1} 项失败，未自动重试：${error instanceof Error ? error.message : '生成失败'}`) }
+      }
+      canvas ??= await service.store.get(sessionId)
+      warnings.unshift(`批量生成：成功 ${created.length} / 共 ${inputs.length}。`)
+      return { ...valueOf(service, canvas, created), warnings }
     },
   }))
   ctx.tools.register(defineTool({

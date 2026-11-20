@@ -16,7 +16,7 @@ async function atomic(path: string, data: string | Uint8Array): Promise<void> {
 export const checkSession = (id: string): string => { if (!SESSION_ID.test(id)) throw new Error('无效的对话 ID。'); return id }
 export const checkItem = (id: string): string => { if (!ITEM_ID.test(id)) throw new Error('无效的图片 ID。'); return id }
 export class EditConflict extends Error { constructor() { super('画板已在其他窗口更新，当前编辑仍保留。可另存副本，避免覆盖另一窗口的内容。') } }
-const rightEdge = (canvas: Canvas) => [...canvas.items.filter(i => i.role !== 'layer'), ...canvas.compositions ?? []].reduce((m, i) => Math.max(m, i.x + i.width + GAP), 0)
+const rightEdge = (canvas: Canvas) => [...canvas.items.filter(i => i.role !== 'layer' && !i.superseded), ...canvas.compositions ?? []].reduce((m, i) => Math.max(m, i.x + i.width + GAP), 0)
 const imageLayer = (asset: CanvasItem, box = { x: 0, y: 0, width: asset.width, height: asset.height }): CanvasLayer => ({
   id: randomUUID(), kind: 'image', name: asset.title, assetId: asset.id, ...box, rotation: 0, opacity: 1, hidden: false, locked: false,
 })
@@ -62,22 +62,37 @@ export class CanvasStore {
     })
   }
   /** Place new images to the right of the parent (or the rightmost item), matching the workspace's left-to-right flow. */
-  async add(sessionId: string, images: Array<{ bytes: Uint8Array; width: number; height: number }>, meta: Omit<CanvasItem, 'id' | 'x' | 'y' | 'width' | 'height' | 'createdAt'>, parentId?: string): Promise<{ canvas: Canvas; items: CanvasItem[] }> {
+  async add(sessionId: string, images: Array<{ bytes: Uint8Array; width: number; height: number }>, meta: Omit<CanvasItem, 'id' | 'x' | 'y' | 'width' | 'height' | 'createdAt'>, parentId?: string, replaces?: string): Promise<{ canvas: Canvas; items: CanvasItem[] }> {
     return this.serial(sessionId, async () => {
       const canvas = await this.get(sessionId)
       await mkdir(join(this.directory(sessionId), 'images'), { recursive: true, mode: 0o700 })
       const parent = parentId ? canvas.items.find(i => i.id === parentId) : undefined
-      let x = rightEdge(canvas)
-      const y = parent?.y ?? 0
+      // A regenerated result takes the old version's place; a deleted or already hidden target falls back to normal placement.
+      const old = replaces ? canvas.items.find(i => i.id === replaces && i.role !== 'layer' && !i.superseded) : undefined
+      let x = old?.x ?? rightEdge(canvas)
+      const y = old?.y ?? parent?.y ?? 0
       const items: CanvasItem[] = []
       for (const [index, image] of images.entries()) {
         const id = randomBytes(6).toString('hex')
         await atomic(this.imagePath(sessionId, id), image.bytes)
-        const item: CanvasItem = { ...meta, title: images.length > 1 ? `${meta.title}_${index + 1}` : meta.title, id, x, y, width: image.width, height: image.height, createdAt: new Date().toISOString() }
+        const item: CanvasItem = { ...meta, title: images.length > 1 ? `${meta.title}_${index + 1}` : meta.title, id, x, y, width: image.width, height: image.height, createdAt: new Date().toISOString(), ...(old && index === 0 ? { versionOf: old.versionOf ?? old.id } : {}) }
         items.push(item); canvas.items.push(item); x += image.width + GAP
       }
+      if (old && items.length) old.superseded = true
       if (!canvas.title) canvas.title = meta.title
       return { canvas: await this.commit(canvas), items }
+    })
+  }
+  /** Show another version of a regenerated image in the place of the one currently shown. */
+  async showVersion(sessionId: string, itemId: string): Promise<Canvas> {
+    return this.serial(sessionId, async () => {
+      const canvas = await this.get(sessionId), target = canvas.items.find(i => i.id === checkItem(itemId) && i.role !== 'layer')
+      if (!target) throw new Error('图片不存在。')
+      const group = target.versionOf ?? target.id, members = canvas.items.filter(i => i.role !== 'layer' && (i.id === group || i.versionOf === group))
+      const shown = members.find(i => !i.superseded)
+      if (shown && shown !== target) { target.x = shown.x; target.y = shown.y }
+      for (const m of members) m.superseded = m !== target
+      return this.commit(canvas)
     })
   }
   /** Layout-only update; ignores unknown ids and never changes image metadata. */
@@ -96,7 +111,13 @@ export class CanvasStore {
       const canvas = await this.get(sessionId)
       if (!canvas.items.some(i => i.id === checkItem(itemId))) throw new Error('图片不存在。')
       if (canvas.compositions?.some(c => c.sourceId === itemId || c.layers.some(l => l.assetId === itemId || l.ocr?.sourceAssetId === itemId))) throw new Error('这张图仍被图层画板使用，请先删除相关画板。')
+      // Deleting the shown version reveals the newest remaining one in the same place.
+      const removed = canvas.items.find(i => i.id === itemId)!, group = removed.versionOf ?? removed.id
       canvas.items = canvas.items.filter(i => i.id !== itemId)
+      if (!removed.superseded) {
+        const next = canvas.items.filter(i => i.role !== 'layer' && (i.id === group || i.versionOf === group)).at(-1)
+        if (next) { next.superseded = false; next.x = removed.x; next.y = removed.y }
+      }
       const next = await this.commit(canvas)
       await rm(this.imagePath(sessionId, itemId), { force: true })
       return next
