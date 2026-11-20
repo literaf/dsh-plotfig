@@ -1,11 +1,11 @@
-# dsh-seedream
+# PlotFig (dsh-plotfig)
 
 An AI illustration plugin for researchers using DeepSeek Harness. Use Volcengine Ark **Seedream 5.5** (`doubao-seedream-5-5-261028`) for mechanism diagrams, method illustrations, graphical abstracts and presentation figures, then continue with layer editing, text changes and export. General image creation remains available. There are two kinds of canvas:
 
 - **Conversation canvas**: one per conversation. Images generated in the conversation land on it, and it opens in the right Sidebar when a generation starts (Harness ≥ 0.2.2).
-- **Standalone canvas**: created from the Seedream panel with "新建画布". It belongs to no conversation.
+- **Standalone canvas**: created from the PlotFig panel with "新建画布". It belongs to no conversation.
 
-![Seedream home: prompt box, styles, templates, transparent background and recent canvases](docs/images/home.jpg)
+![PlotFig home: prompt box, styles, templates, transparent background and recent canvases](docs/images/home.jpg)
 
 ## What it does
 
@@ -25,10 +25,10 @@ An AI illustration plugin for researchers using DeepSeek Harness. Use Volcengine
 ## Install
 
 ```bash
-dsh plugin --profile desktop add dsh-seedream
+dsh plugin --profile desktop add dsh-plotfig
 ```
 
-Save an Ark API key under Settings → Seedream (credential `ARK_API_KEY`). **测试连接** in settings lists Ark models with the saved key to confirm it works and Seedream 5.5 is enabled; it generates nothing and is not billed. Use `--profile web` for the web host. Saved canvases remain available for local editing and export without a key; model operations require one.
+Save an Ark API key under Settings → PlotFig (credential `ARK_API_KEY`). **测试连接** in settings lists Ark models with the saved key to confirm it works and Seedream 5.5 is enabled; it generates nothing and is not billed. Use `--profile web` for the web host. Saved canvases remain available for local editing and export without a key; model operations require one.
 
 ## Generating
 

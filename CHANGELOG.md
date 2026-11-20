@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Rename the package to `dsh-plotfig` and the interface name to PlotFig. Tool names, the `/seedream` command, the data directory `$DSH_HOME/seedream` and saved canvases are unchanged; the old `dsh-seedream` package was never published.
+
 - Add 重新生成: redo a generated image in place, keep older versions and switch between them without a model call.
 - Add `seedream_generate_batch` for 2–10 planned images in one conversation request, run in order with per-item failure reporting and no retries.
 - Add a free 测试连接 button that lists Ark models with the saved key and checks that Seedream 5.5 is available.

@@ -2,7 +2,7 @@ import { researchStyles } from './research-styles.js'
 
 export function installStyles(): () => void {
   const tag = document.createElement('style')
-  tag.dataset.plugin = 'dsh-seedream'
+  tag.dataset.plugin = 'dsh-plotfig'
   tag.textContent = `
 .sd{--sd-text:var(--dsw-alias-label-primary,#1f2024);--sd-muted:var(--dsw-alias-label-secondary,#73757d);--sd-faint:color-mix(in srgb,var(--sd-muted) 70%,transparent);--sd-line:var(--dsw-alias-border-l3,#e4e5e9);--sd-bg:var(--dsw-alias-bg-base,#fff);--sd-fill:color-mix(in srgb,var(--sd-text) 5%,var(--sd-bg));--sd-fill-strong:color-mix(in srgb,var(--sd-text) 9%,var(--sd-bg));--sd-accent:#3b6cf6;--sd-accent-soft:color-mix(in srgb,#3b6cf6 10%,var(--sd-bg));--sd-danger:var(--dsw-alias-state-danger-primary,#d14b5e);--sd-shadow:0 1px 2px #1018280d,0 8px 24px #10182814;--sd-shadow-lg:0 2px 4px #1018280f,0 16px 40px #1018281f;color:var(--sd-text);height:100%;min-height:0;min-width:0;display:flex;flex-direction:column;overflow:hidden;font:13px/1.55 system-ui,-apple-system,"PingFang SC",sans-serif;-webkit-font-smoothing:antialiased}
 .sd *{box-sizing:border-box}.sd button,.sd input,.sd select,.sd textarea{font:inherit;color:inherit}.sd button{cursor:pointer}.sd button:disabled{cursor:default;opacity:.45}.sd :focus-visible{outline:2px solid color-mix(in srgb,var(--sd-accent) 70%,transparent);outline-offset:2px}

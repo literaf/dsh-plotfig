@@ -38,7 +38,7 @@ export const request: Fetcher = async <T>(path: string, signal: AbortSignal, bod
     method: method ?? (body === undefined ? 'GET' : 'POST'), credentials: 'same-origin', cache: 'no-store', signal,
     ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   })
-  if (!response.headers.get('content-type')?.includes('application/json')) throw new Error(`Seedream 暂不可用（HTTP ${response.status}）。`)
+  if (!response.headers.get('content-type')?.includes('application/json')) throw new Error(`PlotFig 暂不可用（HTTP ${response.status}）。`)
   return response.json() as Promise<Reply<T>>
 }
 export const imageUrl = (sessionId: string, id: string, download = false): string => {

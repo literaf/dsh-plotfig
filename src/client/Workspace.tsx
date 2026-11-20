@@ -31,7 +31,7 @@ export function Settings({ controller }: { controller: Controller }) {
   const c = state.catalog
   useEffect(() => { void controller.attach() }, [controller])
   return <section className="sd-settings">
-    <h2>Seedream 设置</h2><p>使用火山方舟的 Seedream 5.5 模型（{c?.model ?? 'doubao-seedream-5-5'}）生成和编辑图片。</p>
+    <h2>PlotFig 设置</h2><p>使用火山方舟的 Seedream 5.5 模型（{c?.model ?? 'doubao-seedream-5-5'}）生成和编辑图片。</p>
     <div className="sd-key-status"><span className="sd-status-dot" data-ready={c?.configured ?? false}/>{keyStatus(state)}</div>
     {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}{state.message ? <div className="sd-alert" role="status">{state.message}</div> : null}
     <label htmlFor={keyId}>方舟 API Key</label><div className="sd-key-row"><input id={keyId} type="password" autoComplete="off" spellCheck={false} placeholder="输入新 Key" value={key} onChange={e => setKey(e.target.value)} /><button className="sd-button sd-button-primary" disabled={!key.trim() || state.keyBusy || !c} onClick={() => { void controller.saveKey(key).then(ok => { if (ok) setKey('') }) }}>{state.keyBusy ? '保存中…' : '保存'}</button></div>
@@ -100,7 +100,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
     if (minutes < 60 * 24) return `${Math.round(minutes / 60)} 小时前`
     return new Date(iso).toLocaleDateString()
   }
-  const heading = settings ? '设置' : open ? current?.title ?? (isBoard(open) ? '新画布' : '画布') : library ? '全部画布' : '科研绘图'
+  const heading = settings ? '设置' : open ? current?.title ?? (isBoard(open) ? '新画布' : '画布') : library ? '全部画布' : 'PlotFig'
   const backLabel = (open || settings) && library ? '返回全部画布' : '返回首页'
   const back = () => {
     if (open || settings) { setOpen(undefined); setSettings(false) } else setLibrary(false)

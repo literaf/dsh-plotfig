@@ -9,7 +9,7 @@
  */
 import { defineConfig } from 'tsdown'
 
-const ID = 'dsh-seedream'
+const ID = 'dsh-plotfig'
 
 /** The web shell's module table: what a plugin bundle may `require` at runtime. */
 const PLATFORM_MODULES = [

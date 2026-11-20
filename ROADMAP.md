@@ -1,4 +1,4 @@
-# dsh-seedream 待办计划
+# PlotFig（dsh-plotfig）待办计划
 
 最后更新：2026-11-19。完成一项就从这里移到 CHANGELOG，并注明提交号。
 

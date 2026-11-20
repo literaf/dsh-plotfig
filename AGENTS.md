@@ -1,6 +1,6 @@
 # Repository instructions
 
-- This repository contains `dsh-seedream`. Do not publish, push or create a remote repository unless the user requests it.
+- This repository contains `dsh-plotfig` (PlotFig), formerly `dsh-seedream`. Internal ids (`seedream` cordis id, tab ids, tool names, `/seedream`, the `$DSH_HOME/seedream` data directory) keep their old names so existing canvases and settings keep working. Do not publish, push or create a remote repository unless the user requests it.
 - Every Seedream generation is billed per output image. Never retry billable requests automatically, and keep a result that arrives after the caller stopped waiting.
 - Result URLs expire after 24 hours: download bytes immediately and serve only local files to the canvas.
 - One canvas per Session. Tools take the Session from `exec.agent.id`; browser routes take it from the query and may reference canvas items and https URLs only, never local paths.

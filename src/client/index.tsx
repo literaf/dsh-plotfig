@@ -27,22 +27,22 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => () => navigation.dispose(), 'seedream: navigation')
   const Root = () => <Workspace controller={controller} openConversation={id => navigation.open(id)} conversation={id => conversationActions(ctx, id)}/>
   slots.inject('main', () => slots.register({ name: 'main', key: PANEL }, Root))
-  slots.inject('sidebar.panellist', () => slots.register({ name: 'sidebar.panellist', id: PANEL, order: 67, label: () => 'Seedream' }, () => <Icon/>))
+  slots.inject('sidebar.panellist', () => slots.register({ name: 'sidebar.panellist', id: PANEL, order: 67, label: () => 'PlotFig' }, () => <Icon/>))
   const Config = ({ view = 'page' }: { view?: 'summary' | 'page' }) => {
     const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
     return <div className="sd" style={{ height: 'auto', overflow: 'visible' }}>{view === 'summary'
       ? <p style={{ margin: 0, color: 'var(--sd-muted)', fontSize: 12 }}>{keyStatus(state)} · 打开详情配置方舟 Key</p>
       : <Settings controller={controller}/>}</div>
   }
-  slots.inject('plugins.bundle.config', () => slots.register({ name: 'plugins.bundle.config', key: 'dsh-seedream' }, Config))
-  slots.inject('plugins.row.config', () => slots.register({ name: 'plugins.row.config', key: 'dsh-seedream#seedream' }, Config))
-  slots.inject('settings.section', () => slots.register({ name: 'settings.section', id: PANEL, order: 192, label: () => 'Seedream' }, Config))
+  slots.inject('plugins.bundle.config', () => slots.register({ name: 'plugins.bundle.config', key: 'dsh-plotfig' }, Config))
+  slots.inject('plugins.row.config', () => slots.register({ name: 'plugins.row.config', key: 'dsh-plotfig#seedream' }, Config))
+  slots.inject('settings.section', () => slots.register({ name: 'settings.section', id: PANEL, order: 192, label: () => 'PlotFig' }, Config))
   // Per-conversation canvas as a right Sidebar tab, where the host provides one (Harness ≥ 0.2.2).
   ctx.inject(['sidebarRightTabs', 'sidebarRight'], child => {
     const tabs = child.get('sidebarRightTabs' as never) as unknown as TabRegistry
     const right = child.get('sidebarRight' as never) as unknown as SidebarRight
-    child.effect(() => tabs.register({ id: TAB_ID, kind: TAB_KIND, keepMounted: true, priority: 'extension', title: () => 'Seedream 画布',
-      guide: [{ id: 'canvas', order: 60, title: () => 'Seedream 画布', description: () => '在这个对话里生成和编辑图片', icon: () => <Icon size={16}/> }] }), 'seedream: tab type')
+    child.effect(() => tabs.register({ id: TAB_ID, kind: TAB_KIND, keepMounted: true, priority: 'extension', title: () => 'PlotFig 画布',
+      guide: [{ id: 'canvas', order: 60, title: () => 'PlotFig 画布', description: () => '在这个对话里生成和编辑图片', icon: () => <Icon size={16}/> }] }), 'seedream: tab type')
     const Body = ({ sessionId, useTabInfo }: TabBodyProps) => {
       const { tab } = useTabInfo()
       const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
@@ -63,7 +63,7 @@ export function apply(ctx: ClientContext): void {
         try { if (show(sessionId)) fresh.forEach(p => controller.announced.add(p.key)) } catch { /* the host may not have adopted this Session yet */ }
         void controller.canvas(sessionId).refresh()
       }, [running, sessionId, mounted])
-      return <button className="sd-header-button" data-running={running.length > 0 || undefined} title={running.length ? 'Seedream 生成中，打开画布' : '打开 Seedream 画布'} aria-label="打开 Seedream 画布"
+      return <button className="sd-header-button" data-running={running.length > 0 || undefined} title={running.length ? 'PlotFig 生成中，打开画布' : '打开 PlotFig 画布'} aria-label="打开 PlotFig 画布"
         onClick={() => { try { show(sessionId) } catch (error) { controller.notify(error instanceof Error ? error.message : '无法打开画布。') } }}><Icon size={16}/></button>
     }
     slots.inject('conversation.session.header.actions', () => slots.register({ name: 'conversation.session.header.actions', id: PANEL, order: 60 }, Open))

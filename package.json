@@ -1,7 +1,7 @@
 {
-  "name": "dsh-seedream",
+  "name": "dsh-plotfig",
   "version": "0.1.0-beta.1",
-  "description": "Scientific illustration with Seedream 5.5 for DeepSeek Harness: visual presets, image generation, layer editing and per-conversation canvases.",
+  "description": "PlotFig for DeepSeek Harness: scientific figures with Seedream 5.5 — illustration styles, image generation and editing, layer splitting, editable OCR text, and PNG/SVG/PDF/PSD export.",
   "type": "module",
   "license": "MIT",
   "author": "ai4scholar",
@@ -37,7 +37,10 @@
     "volcengine",
     "image-generation",
     "canvas",
-    "scientific-illustration"
+    "scientific-illustration",
+    "plotfig",
+    "scientific-figures",
+    "paper-figures"
   ],
   "engines": {
     "node": ">=22.19.0"
@@ -120,5 +123,5 @@
     "vitest": "^4.1.8"
   },
   "icon": "./assets/icon.svg",
-  "homepage": "https://www.npmjs.com/package/dsh-seedream"
+  "homepage": "https://www.npmjs.com/package/dsh-plotfig"
 }

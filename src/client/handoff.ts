@@ -16,7 +16,7 @@ export interface ConversationActions {
   prompt(text: string): Promise<Outcome>
   focus(): Promise<Outcome>
 }
-export const referenceText = (item: ItemReference): string => `[Seedream 图片 item:${item.id} ${item.title}] `
+export const referenceText = (item: ItemReference): string => `[PlotFig 图片 item:${item.id} ${item.title}] `
 
 /** Append through the host's structured editor, preserving references, quotes and attachments. Never submit. */
 async function handoff(ctx: Host, sessionId: string, text: string, duplicate?: string): Promise<Outcome> {
@@ -51,8 +51,8 @@ export function referenceItem(ctx: Host, sessionId: string, item: ItemReference)
 export function conversationActions(ctx: Host, sessionId: string): ConversationActions {
   return {
     reference: item => referenceItem(ctx, sessionId, item),
-    edit: item => handoff(ctx, sessionId, `请使用 Seedream 编辑 ${referenceText(item)}，修改要求：`, `item:${item.id}`),
-    prompt: text => handoff(ctx, sessionId, `请使用 Seedream 生成图片：${text}`, text),
+    edit: item => handoff(ctx, sessionId, `请使用 PlotFig 编辑 ${referenceText(item)}，修改要求：`, `item:${item.id}`),
+    prompt: text => handoff(ctx, sessionId, `请使用 PlotFig 生成图片：${text}`, text),
     focus: () => handoff(ctx, sessionId, ''),
   }
 }

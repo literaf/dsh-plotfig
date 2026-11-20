@@ -3,7 +3,7 @@
  * Ask npmmirror (registry.npmmirror.com, the default registry for most users
  * in China) to sync this package right now, then wait until the version just
  * published is visible there. Runs as `postpublish`, so `dsh plugin add
- * dsh-seedream` works from either registry within a minute of a release.
+ * dsh-plotfig` works from either registry within a minute of a release.
  * Never fails the publish: mirror hiccups only print a note.
  */
 import { readFileSync } from 'node:fs'

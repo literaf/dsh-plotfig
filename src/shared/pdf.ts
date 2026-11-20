@@ -34,7 +34,7 @@ export async function buildPdf(image: PdfImage, title: string, deflate: Deflate,
     [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`],
     [`<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode${mask ? ' /SMask 7 0 R' : ''} /Length ${color.length} >>\nstream\n`, color, '\nendstream'],
     [`<< /Length ${content.length} >>\nstream\n`, content, 'endstream'],
-    [`<< /Title ${pdfString(title)} /Producer (dsh-seedream) /CreationDate (${pdfDate(created)}) >>`],
+    [`<< /Title ${pdfString(title)} /Producer (dsh-plotfig) /CreationDate (${pdfDate(created)}) >>`],
     ...(mask ? [[`<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length ${mask.length} >>\nstream\n`, mask, '\nendstream']] : []),
   ]
   const chunks: Uint8Array[] = [ascii('%PDF-1.7\n%\xE2\xE3\xCF\xD3\n')], offsets: number[] = []

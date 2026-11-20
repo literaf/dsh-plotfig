@@ -35,7 +35,7 @@ export function apply(ctx: Context, config: Config): void {
   }
   const root = config.dataDirectory ? resolve(config.dataDirectory) : join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'seedream')
   const prefs = new Preferences(join(root, 'settings.json'), { size: config.defaultSize ?? '2K', watermark: config.watermark ?? true })
-  const ark = new ArkClient({ timeoutMs: config.requestTimeoutMs ?? 180000, userAgent: `dsh-seedream/${VERSION}`,
+  const ark = new ArkClient({ timeoutMs: config.requestTimeoutMs ?? 180000, userAgent: `dsh-plotfig/${VERSION}`,
     apiKey: async () => { const key = await resolveKey(); if (!key) throw new Error('请先在 Seedream 设置中保存方舟 API Key。'); return key },
   })
   const service = new Seedream(ark, new CanvasStore(join(root, 'canvases')))
@@ -45,13 +45,13 @@ export function apply(ctx: Context, config: Config): void {
     return { version: VERSION, configured: (await resolveKey()) !== undefined, keyRef: ref, model: MODEL, defaultSize: p.size, watermark: p.watermark }
   })
   ctx.systemPrompt.section({ name: 'seedream:workflow', order: 159, text: [
-    'dsh-seedream provides /seedream and a per-conversation Seedream canvas (right sidebar tab "Seedream 画布"). Use seedream_generate to create or edit images and seedream_canvas to list what is already on the canvas.',
+    'dsh-plotfig (PlotFig) provides /seedream and a per-conversation canvas (right sidebar tab "PlotFig 画布"). Use seedream_generate to create or edit images and seedream_canvas to list what is already on the canvas.',
     'Every seedream_generate call is billed per output image. Do not call it again to retry or to produce variants unless the user asks. Read the canvas first instead of regenerating an existing image.',
     'When the user asks for a set of different images (several figures for one paper, a series in one style), use seedream_generate_batch with one complete prompt per image instead of repeated seedream_generate calls. It bills one image per item and reports any failed item without retrying.',
     'Use seedream_decompose only when the user requests splitting an image into layers. It is billed per output image (background included); never retry automatically. Editable artboards preserve the original and support local drag, resize, text, shapes and PNG export without further model calls.',
     'Use seedream_edit only when the user requests background removal, erasing objects, redrawing boxed regions (inpaint), expanding or enhancing an image. Read seedream_canvas first and use its item reference and exact pixel dimensions. Erase requires rectangles; expand requires added pixel margins. Each edit is billed for one image, never retry automatically, and originals are retained. The UI also offers painted masks, editable OCR and local layered PSD export.',
     'Write rich, specific prompts (subject, composition, style, text to render, colors). For edits pass the source as images: ["item:<id>"] and say what to change and what must stay the same.',
-    'A user message may contain [Seedream 图片 item:<id>] references from the canvas; pass those exact references in images.',
+    'A user message may contain [PlotFig 图片 item:<id>] references from the canvas (older conversations show [Seedream 图片 item:<id>]); pass those exact item:<id> references in images.',
     'After generating, describe the result briefly and give the local file path. The image is already on the canvas; the user can open it from the conversation header or the Seedream panel.',
   ].join('\n') })
 }

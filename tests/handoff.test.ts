@@ -52,7 +52,7 @@ describe('native draft handoff', () => {
   it('prepares edits and examples in the same native draft, and focus alone changes nothing', async () => {
     const f = fixture(), actions = conversationActions(f.ctx, 's')
     await actions.edit(item); expect(f.state.draft).toContain(`item:${item.id}`)
-    await actions.prompt('画一只树蛙'); expect(f.state.draft).toContain('请使用 Seedream 生成图片：画一只树蛙')
+    await actions.prompt('画一只树蛙'); expect(f.state.draft).toContain('请使用 PlotFig 生成图片：画一只树蛙')
     const draft = f.state.draft; await actions.focus(); expect(f.state.draft).toBe(draft)
     expect(f.input.submit).not.toHaveBeenCalled(); expect(f.input.setDraft).not.toHaveBeenCalled()
   })

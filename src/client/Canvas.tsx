@@ -459,7 +459,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
     {empty ? <div className="sd-empty">
       <div className="sd-empty-icon"><ImageIcon size={22}/></div>
       <strong>{inConversation ? '这个对话的画布' : '新画布'}</strong>
-      <p>{inConversation ? '在对话中描述画面，Seedream 生成的图片会出现在这里。选中图片后可回到同一个对话继续修改。' : '描述你想要的画面，生成第一张图。这个画布不属于任何对话。'}</p>
+      <p>{inConversation ? '在对话中描述画面，生成的图片会出现在这里。选中图片后可回到同一个对话继续修改。' : '描述你想要的画面，生成第一张图。这个画布不属于任何对话。'}</p>
       <div className="sd-examples">{EXAMPLES.map(x => <button key={x} type="button" onClick={() => {
         if (inConversation) void handoff(conversation && (() => conversation.prompt(x)), '示例已填入对话，可修改后发送')
         else { setPrompt(x); host.current?.querySelector<HTMLTextAreaElement>('.sd-composer textarea')?.focus() }

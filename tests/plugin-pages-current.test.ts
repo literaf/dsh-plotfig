@@ -51,8 +51,8 @@ describe.skipIf(!compatRoot)('native pages in the current published Harness', ()
         expect(found, name).not.toBeNull(); children[name] = new Function(`return (${found![1]})`)() as object
       }
       owner = slots.register({ name: 'root', children }, () => null)
-      expect(slots.entries('plugins.bundle.config')[0]?.options.key).toBe('dsh-seedream')
-      expect(slots.entries('plugins.row.config')[0]?.options.key).toBe('dsh-seedream#seedream')
+      expect(slots.entries('plugins.bundle.config')[0]?.options.key).toBe('dsh-plotfig')
+      expect(slots.entries('plugins.row.config')[0]?.options.key).toBe('dsh-plotfig#seedream')
       expect(slots.entries('settings.section')[0]?.options.id).toBe('seedream')
       expect(slots.entries('main')[0]?.options.key).toBe('seedream')
       const pages = ['plugins.bundle.config', 'plugins.row.config', 'settings.section'].map(name => slots.entries(name)[0]!)
@@ -66,7 +66,7 @@ describe.skipIf(!compatRoot)('native pages in the current published Harness', ()
       expect(container.textContent).toContain('打开详情配置方舟 Key')
       await act(async () => { root.unmount() }); await fiber.dispose()
       for (const name of Object.keys(children)) expect(slots.entries(name)).toHaveLength(0)
-      expect(document.querySelector('style[data-plugin="dsh-seedream"]')).toBeNull()
+      expect(document.querySelector('style[data-plugin="dsh-plotfig"]')).toBeNull()
     } finally {
       await act(async () => { root.unmount() }); await fiber.dispose(); owner?.(); vi.unstubAllGlobals()
     }
