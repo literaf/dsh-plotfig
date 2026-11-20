@@ -15,10 +15,13 @@ const RECENT_CANVASES = 8
 
 export function Icon({ size = 20 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
-    <rect width="100" height="100" rx="22" fill="#0a0a0a"/>
-    <path d="M22 72L42 46L56 62L64 52L80 72Z" fill="#f5f5f5"/>
-    <circle cx="66" cy="32" r="9" fill="#9be22c"/>
-    <path d="M30 26C36 20 44 22 46 28" stroke="#f5f5f5" strokeWidth="5" strokeLinecap="round" fill="none"/>
+    {/* PlotFig mark: a P holding a bar chart, with a leaf as its stem. Same drawing as assets/icon.svg. */}
+    <rect width="100" height="100" rx="22" fill="#161616"/>
+    <path d="M28 22h30a20 20 0 0 1 20 20v4a20 20 0 0 1-20 20H40v12H28z" fill="#f5f5f5"/>
+    <rect x="36" y="44" width="7" height="12" rx="2" fill="#161616"/>
+    <rect x="47" y="38" width="7" height="18" rx="2" fill="#161616"/>
+    <rect x="58" y="31" width="7" height="25" rx="2" fill="#161616"/>
+    <path d="M28 78c2-10 8-14 16-14h-4v14z" fill="#B9623F"/>
   </svg>
 }
 export function keyStatus(state: State): string {

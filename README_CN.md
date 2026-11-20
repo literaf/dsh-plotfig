@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
+    <img src="docs/images/logo-light.svg" alt="PlotFig" width="360">
+  </picture>
+</p>
+
 # PlotFig（dsh-plotfig）
 
 面向科研工作者的 AI 插图创作插件。在 DeepSeek Harness 里使用火山方舟 **Seedream 5.5**（`doubao-seedream-5-5-261028`）生成机制示意图、方法架构图、图形摘要与汇报插图，再通过分层、改字和导出继续修改。也支持其他图片创作。画布有两种：

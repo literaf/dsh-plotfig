@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
+    <img src="docs/images/logo-light.svg" alt="PlotFig" width="360">
+  </picture>
+</p>
+
 # PlotFig (dsh-plotfig)
 
 An AI illustration plugin for researchers using DeepSeek Harness. Use Volcengine Ark **Seedream 5.5** (`doubao-seedream-5-5-261028`) for mechanism diagrams, method illustrations, graphical abstracts and presentation figures, then continue with layer editing, text changes and export. General image creation remains available. There are two kinds of canvas:
