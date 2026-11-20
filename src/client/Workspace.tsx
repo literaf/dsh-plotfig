@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { MARK_BODY, MARK_LEAF, MARK_LEAF_COLOR, MARK_TRANSFORM, MARK_VIEWBOX } from './mark.js'
 import { BOARD_PREFIX, isBoard, SIZE_TIERS } from '../shared/types.js'
 import { BackIcon, ChevronIcon, GearIcon, ImageIcon, NewIcon } from './icons.js'
 import type { Controller, State } from './controller.js'
@@ -14,14 +15,10 @@ import type { SizeChoice } from './Composer.js'
 const RECENT_CANVASES = 8
 
 export function Icon({ size = 20 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
-    {/* PlotFig mark: a P holding a bar chart, with a leaf as its stem. Same drawing as assets/icon.svg. */}
-    <rect width="100" height="100" rx="22" fill="#161616"/>
-    <path d="M28 22h30a20 20 0 0 1 20 20v4a20 20 0 0 1-20 20H40v12H28z" fill="#f5f5f5"/>
-    <rect x="36" y="44" width="7" height="12" rx="2" fill="#161616"/>
-    <rect x="47" y="38" width="7" height="18" rx="2" fill="#161616"/>
-    <rect x="58" y="31" width="7" height="25" rx="2" fill="#161616"/>
-    <path d="M28 78c2-10 8-14 16-14h-4v14z" fill="#B9623F"/>
+  // The P follows the surrounding text color, so it reads on light and dark sidebars; the leaf keeps the brand orange.
+  return <svg width={size} height={size} viewBox={MARK_VIEWBOX} aria-hidden="true">
+    <path d={MARK_BODY} fill="currentColor" transform={MARK_TRANSFORM}/>
+    <path d={MARK_LEAF} fill={MARK_LEAF_COLOR} transform={MARK_TRANSFORM}/>
   </svg>
 }
 export function keyStatus(state: State): string {

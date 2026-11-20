@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Replace the plugin icon with the PlotFig mark (a P holding a bar chart, with a leaf stem) and add the PlotFig logo, in light and dark versions, to the top of both READMEs.
+- Replace the plugin icon with the PlotFig mark cut from the original logo, without a background tile; the P follows the sidebar text color and the leaf stays orange. Add the PlotFig logo, in light and dark versions, to the top of both READMEs.
 
 - Rename the package to `dsh-plotfig` and the interface name to PlotFig. Tool names, the `/seedream` command, the data directory `$DSH_HOME/seedream` and saved canvases are unchanged; the old `dsh-seedream` package was never published.
 
