@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { MARK_BODY, MARK_LEAF, MARK_LEAF_COLOR, MARK_TRANSFORM, MARK_VIEWBOX } from './mark.js'
+import { MARK_BODY, MARK_LEAF, MARK_TRANSFORM, MARK_VIEWBOX } from './mark.js'
 import { BOARD_PREFIX, isBoard, SIZE_TIERS } from '../shared/types.js'
 import { BackIcon, ChevronIcon, GearIcon, ImageIcon, NewIcon } from './icons.js'
 import type { Controller, State } from './controller.js'
@@ -15,10 +15,10 @@ import type { SizeChoice } from './Composer.js'
 const RECENT_CANVASES = 8
 
 export function Icon({ size = 20 }: { size?: number }) {
-  // The P follows the surrounding text color, so it reads on light and dark sidebars; the leaf keeps the brand orange.
+  // The P follows the surrounding text color, so it reads on light and dark sidebars; the leaf is burnt orange on light themes and lime on dark ones.
   return <svg width={size} height={size} viewBox={MARK_VIEWBOX} aria-hidden="true">
     <path d={MARK_BODY} fill="currentColor" transform={MARK_TRANSFORM}/>
-    <path d={MARK_LEAF} fill={MARK_LEAF_COLOR} transform={MARK_TRANSFORM}/>
+    <path className="sd-mark-leaf" d={MARK_LEAF} transform={MARK_TRANSFORM}/>
   </svg>
 }
 export function keyStatus(state: State): string {
