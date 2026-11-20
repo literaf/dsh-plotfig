@@ -19,7 +19,7 @@ const ITEM = { type: 'object', additionalProperties: false, properties: {
 const OUTPUT = { type: 'object', additionalProperties: false, properties: {
   session_id: { type: 'string', required: true }, created: { type: 'array', required: true, items: ITEM },
   items: { type: 'array', required: true, items: ITEM },
-  composition_id: { type: 'string' },
+  composition_id: { type: 'string' }, charged_credits: { type: 'number' }, refunded_credits: { type: 'number' },
   warnings: { type: 'array', items: { type: 'string' } },
   generation_style: { type: 'string' },
 } } as const
@@ -43,6 +43,22 @@ function render(value: Value, generated: boolean) {
   ).concat(value.generation_style && value.generation_style !== 'auto' ? [`当前画布生图风格：${styleName(value.generation_style as Parameters<typeof styleName>[0])}。后续 seedream_generate 默认应用，style: auto 可单次关闭。`] : [], value.warnings ?? []).join('\n') }]
 }
 export function applyTools(ctx: Context, service: Seedream, defaults: Defaults): void {
+  ctx.tools.register(defineTool({
+    name: 'seedream_layer_quote',
+    description: 'Get the current layer split price and supported output cap before submitting a paid task. Free.',
+    parameters: { max_images: { type: 'integer', description: 'Desired maximum including the background, 2–100. Default 30.' } },
+    output: { schema: { type: 'object', additionalProperties: false, properties: {
+      enabled: { type: 'boolean', required: true }, max_images: { type: 'integer', required: true },
+      supported_max_images: { type: 'integer', required: true }, quoted_credits: { type: 'integer' }, metered: { type: 'boolean' },
+    } }, render: (_args, value) => [{ type: 'text' as const, text: value.enabled && value.quoted_credits !== undefined
+      ? `本次最多输出 ${value.max_images} 张，${value.metered ? `最高预留 ${value.quoted_credits} 积分，按实际交付图片结算并退回差额。` : `共 ${value.quoted_credits} 积分。`}`
+      : `所选张数尚未开放，当前支持上限为 ${value.supported_max_images} 张。` }] },
+    isConcurrencySafe: () => true,
+    async execute(args) {
+      const q = await service.layerQuote(args.max_images ?? 30)
+      return { enabled: q.enabled, metered: !!q.pricing, max_images: q.maxImages, supported_max_images: q.supportedMaxImages, ...(q.creditCost == null ? {} : { quoted_credits: q.creditCost }) }
+    },
+  }))
   ctx.tools.register(defineTool({
     name: 'seedream_edit',
     description: 'Remove an image background, erase selected regions, redraw selected regions from a description (inpaint), extend the canvas, or enhance (upscale and sharpen) an image with Seedream 5.5. Billed per generated image: one, except multi-sided expansion which bills one per side. Use only when requested; never retry automatically. The original stays intact and results are saved to this Session. Erase and inpaint protect pixels outside the supplied rectangles; inpaint requires a prompt describing what to draw; expansion preserves all pixels of the original rectangle. Enhance outputs up to ~4.62 MP and flags results that drift from the source. Inspect dimensions with seedream_canvas first. UI users can paint masks in AI 处理 instead.',
@@ -69,25 +85,28 @@ export function applyTools(ctx: Context, service: Seedream, defaults: Defaults):
   }))
   ctx.tools.register(defineTool({
     name: 'seedream_decompose',
-    description: 'Split one existing canvas image into a background and independently editable transparent layers. Creates a separate artboard and preserves the original. Billed per output image; call only when the user requests splitting, never retry automatically. Dragging, text, shapes and exporting the resulting artboard are local and do not call the model.',
+    description: 'Split a canvas image into editable layers. Get the current quote with seedream_layer_quote and pass the confirmed maximum reservation as quoted_credits. Never retry paid submissions automatically.',
     parameters: {
       image: { type: 'string', required: true, description: 'Exactly one image reference from this Session, item:<id>. Use seedream_canvas to find it.' },
       prompt: { type: 'string', description: 'Optional instructions for which objects or text to separate.' },
-      max_images: { type: 'integer', description: 'Maximum billed output images, including the background, from 2 to 100. Defaults to 30.' },
+      max_images: { type: 'integer', description: 'Maximum number of output images in one split, including the background, from 2 to 100. Defaults to 30.' },
       size: { type: 'string', description: 'auto (default), 1K, 1.5K or 2K.' },
+      quoted_credits: { type: 'integer', description: 'Required for a new task. Pass the confirmed ceiling from seedream_layer_quote for this output cap.' },
+      request_id: { type: 'string', description: 'Stable UUID v4 for retrieving the same AI4Scholar split task.' },
     },
-    output: { schema: OUTPUT, render: (_a, v) => [{ type: 'text' as const, text: `已保存 ${v.created.length} 张分层素材，并创建可编辑图层画板。原图仍保留。画板 ID：${v.composition_id}\n在右侧画布打开“编辑图层”，可移动、添加文字图形或导出。\n${v.created.map(i => `${i.title} · ${i.ref} · ${i.path}`).join('\n')}` }] },
+    output: { schema: OUTPUT, render: (_a, v) => [{ type: 'text' as const, text: `已保存 ${v.created.length} 张分层素材，并创建可编辑图层画板。${v.charged_credits == null ? '' : `实收 ${v.charged_credits} 积分，已退回 ${v.refunded_credits} 积分。`}画板 ID：${v.composition_id}\n在右侧画布打开“编辑图层”，可移动、添加文字图形或导出。\n${v.created.map(i => `${i.title} · ${i.ref} · ${i.path}`).join('\n')}` }] },
     timeoutMs: 600_000, isConcurrencySafe: () => false,
     presentCall: () => ({ card: 'generic', title: 'Seedream · 分图层', kind: 'other' }),
     async execute(args, exec) {
       const sessionId = sessionOf(exec), input = parseDecompose(args, (await defaults()).watermark)
       const result = await service.decompose(sessionId, input, exec.signal)
-      return { ...valueOf(service, result.canvas, result.items), composition_id: result.composition.id }
+      return { ...valueOf(service, result.canvas, result.items), composition_id: result.composition.id,
+        ...(result.composition.layerTask?.billing && { charged_credits: result.composition.layerTask.billing.chargedCredits, refunded_credits: result.composition.layerTask.billing.refundedCredits }) }
     },
   }))
   ctx.tools.register(defineTool({
     name: 'seedream_generate',
-    description: 'Generate or edit images with Volcengine Seedream 5.5 and place the results on the current conversation\'s canvas. Each call is billed per output image; never repeat a call to "retry" without the user asking. For edits, pass the source as images: ["item:<id>"] and state both what changes and what must stay unchanged.',
+    description: 'Generate or edit images with Seedream 5.5 through AI4Scholar and place the results on the current conversation\'s canvas. AI4Scholar charges credits per image. Never retry without the user asking. For edits, pass the source as images: ["item:<id>"] and describe the requested changes.',
     parameters: {
       prompt: { type: 'string', required: true, description: 'Full instruction. Chinese or English. For edits describe the change and what to keep.' },
       images: { type: 'array', items: { type: 'string' }, description: 'Up to 10 reference images: item:<id> from this canvas, https URLs, or absolute local file paths. Omit for text-to-image.' },

@@ -5,7 +5,7 @@ import { MAX_REGIONS } from '../shared/regions.js'
 
 /**
  * Drag rectangles on an image preview. Boxes are kept in source pixels; the parent
- * converts them to Ark `<bbox>` tags. Numbered labels let prompts refer to 区域 1, 2…
+ * converts them to normalized `<bbox>` tags. Numbered labels let prompts refer to 区域 1, 2…
  */
 export function RegionPicker({ src, width, height, value, onChange, maxHeight = 320, label = '框选区域' }: {
   src: string; width: number; height: number; value: PixelBox[]; onChange(v: PixelBox[]): void; maxHeight?: number; label?: string

@@ -1,21 +1,22 @@
 import { readFile, stat } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import { extname, isAbsolute } from 'node:path'
-import type { ArkClient } from './ark.js'
-import { MAX_BYTES } from './ark.js'
+import { MAX_BYTES } from './image-data.js'
+import { AI4ScholarError } from './ai4scholar.js'
+import type { AI4ScholarClient, ImageResult } from './ai4scholar.js'
 import type { CanvasStore } from './store.js'
-import type { Canvas, CanvasItem, GenerateInput, PendingGeneration } from './shared/types.js'
+import type { Canvas, CanvasItem, GenerateInput, LayerQuote, PendingGeneration, SavedLayerTask } from './shared/types.js'
 import { ITEM_ID, MAX_PROMPT, titleFrom } from './shared/types.js'
 import { parseGenerationStyle, styledPrompt } from './shared/research.js'
 import type { DecomposeInput } from './shared/layers.js'
 import { editDimensions, EXPAND_SIDES, expansionSteps, IMAGE_EDIT_LABELS } from './shared/image-edit.js'
 import type { ExpandMargins, ImageEditInput } from './shared/image-edit.js'
-import type { ArkImage } from './ark.js'
+import type { GeneratedImage } from './image-data.js'
 import { decodePixels, finishImageEdit, prepareImageEdit } from './image-edit.js'
 const LOCAL_TYPES: Record<string, string> = { '.png': 'png', '.jpg': 'jpeg', '.jpeg': 'jpeg', '.webp': 'webp', '.bmp': 'bmp', '.gif': 'gif', '.tif': 'tiff', '.tiff': 'tiff', '.heic': 'heic', '.heif': 'heif' }
 const DATA_URL = /^data:image\/(png|jpeg|webp|bmp|tiff|gif|heic|heif);base64,[A-Za-z0-9+/=]+$/
 /** True when the PNG carries at least one non-opaque pixel; JPEG never does. */
-function hasTransparency(image: ArkImage): boolean {
+function hasTransparency(image: GeneratedImage): boolean {
   if (image.mime !== 'image/png') return false
   try { return decodePixels(image.bytes).data.some((v, i) => i % 4 === 3 && v < 250) } catch { return false }
 }
@@ -24,12 +25,16 @@ export interface ImageEditResult extends GenerateResult { warnings: string[] }
 export class Seedream {
   private inflight = new Map<string, PendingGeneration[]>()
   private editRequests = new Map<string, { fingerprint: string; promise: Promise<ImageEditResult>; settled: boolean }>()
-  constructor(readonly ark: ArkClient, readonly store: CanvasStore) {}
+  constructor(readonly client: AI4ScholarClient, readonly store: CanvasStore) {}
+  async layerQuote(maxImages: number): Promise<LayerQuote> {
+    if (!Number.isInteger(maxImages) || maxImages < 2 || maxImages > 100) throw new Error('分层张数须为 2–100。')
+    return this.client.quote(maxImages)
+  }
   pending(sessionId: string): PendingGeneration[] { return this.inflight.get(sessionId) ?? [] }
   /** Sessions with a generation running now, for the client to open their canvas. */
   active(): Record<string, PendingGeneration[]> { return Object.fromEntries(this.inflight) }
   /**
-   * Resolve references into what Ark accepts. Canvas items are read from this
+   * Resolve canvas items and references for the AI4Scholar API. Canvas items are read from this
    * Session only; local paths are accepted only for tool calls made by the
    * conversation agent, never for browser requests.
    */
@@ -69,11 +74,12 @@ export class Seedream {
     const entry: PendingGeneration = { key: randomUUID(), prompt: input.prompt, size: input.size, startedAt: new Date().toISOString(), ...(refs.items[0] ? { parentId: refs.items[0] } : {}), ...(input.replaces ? { replaces: input.replaces } : {}) }
     this.inflight.set(sessionId, [...this.pending(sessionId), entry])
     try {
-      const result = await this.ark.generate({ prompt: input.transparent ? `${prompt}\n\n输出透明背景：只保留主体，主体之外完全透明，不画背景、地面、阴影或边框。` : prompt, images: refs.images, size: input.size, watermark: input.watermark, ...(input.transparent ? { background: 'transparent' as const } : input.opaque ? { background: 'opaque' as const } : {}) }, signal)
+      const result = await this.client.generate({ prompt: input.transparent ? `${prompt}\n\n输出透明背景：只保留主体，主体之外完全透明，不画背景、地面、阴影或边框。` : prompt, images: refs.images, size: input.size, watermark: input.watermark, ...(input.transparent ? { background: 'transparent' as const } : input.opaque ? { background: 'opaque' as const } : {}) }, signal)
       const warnings = input.transparent && result.images.some(i => !hasTransparency(i)) ? ['模型未返回透明区域，已保存结果；请检查背景或改用“移除背景”。'] : []
       // Billed output is saved even if the caller stopped waiting meanwhile.
       return await this.store.add(sessionId, result.images, {
         title: input.title ?? titleFrom(input.prompt), prompt, refs: refs.items, externalRefs: refs.external, size: input.size, ...(style === 'auto' ? {} : { generationStyle: style }),
+        ...(result.creditCost === undefined ? {} : { creditCost: result.creditCost }),
         ...(input.transparent ? { transparent: true } : {}), ...(warnings.length ? { warnings } : {}), sourcePrompt: input.prompt,
       }, refs.items[0], input.replaces)
     } finally {
@@ -83,19 +89,64 @@ export class Seedream {
   }
   async decompose(sessionId: string, input: DecomposeInput, signal: AbortSignal) {
     const refs = await this.resolve(sessionId, [input.image], false), sourceId = refs.items[0]!
-    const source = (await this.store.get(sessionId)).items.find(i => i.id === sourceId)!
+    const canvas = await this.store.get(sessionId), source = canvas.items.find(i => i.id === sourceId)!
+    const id = input.requestId ?? randomUUID()
+    const fingerprint = createHash('sha256').update(JSON.stringify([sourceId,input.prompt,input.maxImages,input.size,input.watermark])).digest('hex')
+    const previous = canvas.compositions?.find(c => c.layerTask?.id === id)
+    if (previous) {
+      if (previous.layerTask?.fingerprint !== fingerprint) throw new Error('分层任务编号已用于其他参数。')
+      return { canvas, composition: previous, items: canvas.items.filter(item => item.role === 'layer' && previous.layers.some(layer => layer.assetId === item.id)) }
+    }
+    if (this.pending(sessionId).some(p => p.key === id)) throw new Error('该分层任务正在进行，请在画布查看进度。')
+    const saved = canvas.layerTasks?.find(job => job.id === id)
+    if (saved && saved.fingerprint !== fingerprint) throw new Error('分层任务编号已用于其他参数。')
     if (source.width * source.height < 262144 || source.width * source.height > 36000000) throw new Error('分层输入图片总像素须在 512×512 到 6000×6000 之间。')
     signal.throwIfAborted()
-    const entry: PendingGeneration = { key: randomUUID(), prompt: `分图层 · ${source.title}`, size: `${source.width}x${source.height}`, parentId: sourceId, startedAt: new Date().toISOString() }
+    const entry: PendingGeneration = { key: id, prompt: `分图层 · ${source.title}`, size: `${source.width}x${source.height}`, parentId: sourceId, startedAt: new Date().toISOString() }
     this.inflight.set(sessionId, [...this.pending(sessionId), entry])
     try {
-      // Once submitted, a split can be billed for many files. Closing the view must
-      // not cancel their downloads or discard a result; the next poll retrieves it.
-      const result = await this.ark.generate({ ...input, images: refs.images, decomposition: { maxImages: input.maxImages } }, new AbortController().signal)
-      return await this.store.addDecomposition(sessionId, sourceId, result.images, result.warnings)
+      // A submitted task may already be billed even if its response was lost.
+      if (saved) return await this.importTask(sessionId, saved)
+      const quotedCredits = input.quotedCredits
+      if (!quotedCredits) throw new Error('请先获取并确认本次拆分的积分报价。')
+      const job = { id, sourceId, startedAt: entry.startedAt, fingerprint }
+      await this.store.setLayerTask(sessionId, job)
+      try {
+        await this.client.submitLayers(id, {
+          image: refs.images[0]!, prompt: input.prompt, size: input.size,
+          watermark: input.watermark, maxImages: input.maxImages, quotedCredits,
+        })
+      } catch (error) {
+        const rejected = error instanceof AI4ScholarError && (error.status < 500 || error.code === 'LAYER_PACKAGE_UNAVAILABLE')
+        await this.store.setLayerTask(sessionId, { ...job, error: error instanceof Error ? error.message : '分层提交未确认' }, rejected)
+        throw error
+      }
+      return await this.importTask(sessionId, job)
     } finally {
       const rest = this.pending(sessionId).filter(p => p.key !== entry.key)
       if (rest.length) this.inflight.set(sessionId, rest); else this.inflight.delete(sessionId)
+    }
+  }
+  private async importTask(sessionId: string, job: SavedLayerTask) {
+    try {
+      const result = await this.client.waitForLayers(job.id)
+      return await this.store.addDecomposition(sessionId, job.sourceId, result.images, result.warnings, job.id, result.billing)
+    } catch (error) {
+      const failed = error instanceof AI4ScholarError && error.code === 'LAYER_TASK_FAILED'
+      await this.store.setLayerTask(sessionId, { ...job, error: error instanceof Error ? error.message : '分层结果获取失败' }, failed)
+      throw error
+    }
+  }
+  /** Reopen only polls existing paid jobs, including after a host restart. */
+  resumeLayerTasks(canvas: Canvas, retryId: string | null = null) {
+    const sid = canvas.sessionId
+    for (const job of canvas.layerTasks ?? []) {
+      if ((job.error && job.id !== retryId) || this.pending(sid).some(p => p.key === job.id)) continue
+      this.inflight.set(sid, [...this.pending(sid), { key: job.id, parentId: job.sourceId, prompt: '取回分层结果', size: 'auto', startedAt: job.startedAt }])
+      void this.importTask(sid, job).catch(() => {}).finally(() => {
+        const rest = this.pending(sid).filter(p => p.key !== job.id)
+        if (rest.length) this.inflight.set(sid, rest); else this.inflight.delete(sid)
+      })
     }
   }
   /** A duplicate request id reuses its original result; it never starts another billable call. */
@@ -135,15 +186,15 @@ export class Seedream {
     this.inflight.set(sessionId, [...this.pending(sessionId), entry])
     try {
       const warnings: string[] = [], done: ExpandMargins = { left: 0, top: 0, right: 0, bottom: 0 }
-      let applied = true, prepared = first, images: ArkImage[] = []
+      let applied = true, prepared = first, images: GeneratedImage[] = []
       for (const [index, step] of steps.entries()) {
         if (index) {
           try { prepared = prepareImageEdit(step, images[0]!.bytes) }
           catch (error) { warnings.push(`扩图在第 ${index + 1}/${steps.length} 步前停止：${error instanceof Error ? error.message : '图片处理失败'}。已保存前 ${index} 步的结果。`); break }
         }
-        let result: Awaited<ReturnType<ArkClient['generate']>>
+        let result: ImageResult
         // After submission, closing a view or cancelling its wait cannot lose a billed output.
-        try { result = await this.ark.generate(prepared.request, new AbortController().signal) }
+        try { result = await this.client.generate(prepared.request, new AbortController().signal) }
         catch (error) {
           if (!index) throw error
           warnings.push(`扩图第 ${index + 1}/${steps.length} 步失败：${error instanceof Error ? error.message : '生成失败'}。已保存前 ${index} 步的结果，未自动重试。`); break

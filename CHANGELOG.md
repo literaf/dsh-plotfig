@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.1.0-beta.2 (2026-11-21)
+
+Beta installation package for DeepSeek Harness Desktop. Transparent source images are composited onto white for the AI4Scholar layer request. The canvas keeps the source image and the foreground layers retain their alpha channels.
 
 - Replace the plugin icon with the PlotFig mark cut from the original logo, without a background tile; the P follows the sidebar text color and the leaf is burnt orange on light themes and lime on dark ones. Add the PlotFig logo to the top of both READMEs: burnt orange in light mode, lime in dark mode.
 
@@ -8,18 +10,19 @@
 
 - Add 重新生成: redo a generated image in place, keep older versions and switch between them without a model call.
 - Add `seedream_generate_batch` for 2–10 planned images in one conversation request, run in order with per-item failure reporting and no retries.
-- Add a free 测试连接 button that lists Ark models with the saved key and checks that Seedream 5.5 is available.
+- Show the maximum reservation before a split, then keep the final charge and returned credits with the editable board.
+- Route generation, edits and quoted layer tasks through AI4Scholar using the shared `AI4SCHOLAR_API_KEY`. The free 测试连接 button checks the balance and Seedream availability.
 
 ## 0.1.0-beta.1 (2026-11-19)
 
-First public prerelease. Everything below was developed locally before this release.
+Local prerelease build for installation testing.
 
 - Let the canvas composer hold up to 10 references (加入参考), numbered 图1… with the main image first; repeated edits request opaque output for consistency.
 - Flag inpaint results whose drawing crossed a box edge and was cut off on restore; ask the model to keep objects and shadows inside the boxes.
 - Add a 透明背景 composer toggle and `transparent` tool option for native RGBA generation, with a warning when no transparency returns.
-- Add 局部重绘 (inpaint): boxed regions sent as Ark `<bbox>` tags with a required description; pixels outside are restored from the source.
+- Add 局部重绘 (inpaint): boxed regions sent as `<bbox>` tags with a required description; pixels outside are restored from the source.
 - Let 拆分图层 box regions to separate, appended to the prompt as normalized `<bbox>` tags.
-- Map all 228 Ark OCR fonts, including Chinese names, to category-aware CSS stacks and PSD PostScript names.
+- Map all 228 supported OCR fonts, including Chinese names, to category-aware CSS stacks and PSD PostScript names.
 - Flag expansion passes in which the model draws a straight line parallel to the seam, such as a panel edge, found in a real test that passed every other check.
 - Run multi-sided expansion as chained single-sided passes, one billed image per side, saving completed passes when a later one fails. Original pixels stay byte-identical; real three-side test passed.
 - Add 变清晰 (enhance): upscale to the ~4.62 MP model limit, keep source transparency, refill areas the model changed (such as rewritten words) from the upscaled source, and always hold results for review.
@@ -27,7 +30,7 @@ First public prerelease. Everything below was developed locally before this rele
 - Standardize six base appearance presets with explicit visual rules; add naturalistic illustration and keep the former journal preset as a backwards-compatible saved value, without silently remapping existing canvases. Keep subject, figure type, viewpoint, layout, palette and effects independent.
 - Use cross-disciplinary representative references in the style picker and keep six saved microscope outputs as a separate controlled visual audit. Record provenance and limitations: views and proportions drift, naturalistic and 3D are still close, and cross-subject stability is unverified. The picker update makes no model calls; the audit retains its six real paid outputs with no automatic retries.
 
-- Add eight original, local diagram templates in four categories with three palettes, available through a compact composer button. Keep browsing separate from explicit creation, and allow templates without Ark credentials.
+- Add eight original, local diagram templates in four categories with three palettes, available through a compact composer button. Keep browsing separate from explicit creation, and allow templates without a drawing API key.
 - Support rounded nodes, diamond decisions, editable node labels and attached arrows. Recompute endpoints after edits; preserve connection-aware copy, detach, autosave and undo/redo. Include source-free artboards in recent/all-canvas lists and allow conflict recovery as a separate copy.
 - Export vector/text artboards as SVG using canvas text wrapping; retain editable node labels in PSD groups. Existing raster/OCR artboards keep their export paths. New diagram primitives require this build or later.
 
@@ -41,7 +44,7 @@ First public prerelease. Everything below was developed locally before this rele
 - Import PNG/JPEG locally without a model call, preserving PNG bytes and alpha. Route tools to split/cutout confirmation, existing OCR text properties, or a reference/sketch draft. Keep native conversation drafts intact and avoid automatic submission on tool or style selection.
 - Validate request forwarding, per-canvas isolation, file validation, persistence, confirmations, native drafts and narrow layouts with automated, mocked-request and isolated-host checks. No new paid outputs were used for this iteration; style and sketch output quality remain unvalidated.
 
-- Keep saved canvases accessible for local layer editing and export without an Ark key. Show setup initially only when there are no saved canvases; model calls still require credentials. Add regression coverage and support the current host's minified slot declarations in native-page checks.
+- Keep saved canvases accessible for local layer editing and export without an API key. Show setup initially only when there are no saved canvases; model calls still require credentials. Add regression coverage and support the current host's minified slot declarations in native-page checks.
 - Complete one live OCR decomposition acceptance on 2026-11-18: 13 paid outputs, seven usable OCR layers, no automatic retries. Validate conversion, mixed Chinese/English edits, restore/undo, movement/order, reload and PNG/PSD exports; independent PSD parsing retains 13 top-level objects and 13 text records. Decorative titles can remain raster-only and model stacking can need manual adjustment. Fresh external-editor validation remains unavailable; outpainting is deferred from the initial-release acceptance scope.
 
 - Place detailed-editor tools in a slim vertical dock on the left, with menus opening to the right. Group undo/redo with bottom zoom controls and fit the artboard within the remaining space; keep narrow property panels clear of both control groups.
@@ -81,7 +84,7 @@ First public prerelease. Everything below was developed locally before this rele
 
 ## 0.1.0
 
-First version. Not published yet; tested locally against real Ark requests and the Harness 0.2.2-rc web and desktop hosts.
+The first local build was tested with live Seedream requests and the Harness 0.2.2-rc web and desktop hosts.
 
 - Tools `seedream_generate` (text-to-image and editing with up to 10 references: canvas items, https URLs, local paths) and `seedream_canvas` (list, no charge), plus the `/seedream` command.
 - Conversation canvases: one per conversation, opened in the right Sidebar from the conversation header (Harness ≥ 0.2.2). The canvas opens on its own when the conversation starts a generation, and shows a timed placeholder until the image arrives.
@@ -91,5 +94,5 @@ First version. Not published yet; tested locally against real Ark requests and t
 - Image actions: edit in place with the source image shown as context, reference into the conversation draft, download, delete with inline confirmation.
 - Seedream panel lists every canvas, with type, image count, recency and a running badge.
 - Readable image titles from the first clause of the prompt.
-- Settings: Ark key, default size, watermark (on by default, as in Ark).
+- Added settings for the drawing API key, default image size, and watermark. The watermark defaults to on.
 - Not included yet: layer decomposition, text and shape overlays, background removal, erase, outpainting, upscaling.

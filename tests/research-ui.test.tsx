@@ -22,6 +22,7 @@ function harness(sessionId = 'board-ui', items: CanvasItem[] = [source]) {
   let canvas: Canvas = { sessionId, revision: 0, createdAt: 'now', updatedAt: 'now', items }
   const fetcher = vi.fn(async (path: string, _signal: AbortSignal, data?: unknown) => {
     const body = data as { generationStyle?: Canvas['generationStyle'] } | undefined
+    if (path.includes('/layer-quote?')) return { ok: true, value: { enabled: true, maxImages: 30, supportedMaxImages: 100, creditCost: 182, pricing: { mode: 'per_output_v1', inputCredits: 2, standardCredits: 3, largeCredits: 6, standardMaxPixels: 2610000 } } }
     if (body?.generationStyle) canvas = { ...canvas, revision: canvas.revision + 1, generationStyle: body.generationStyle }
     if (path.includes('/import-image')) { canvas = { ...canvas, revision: canvas.revision + 1, items: [source] }; return { ok: true, value: { canvas, item: source } } }
     return { ok: true, value: canvas }
@@ -58,8 +59,8 @@ describe('scientific workflow entry points', () => {
       expect(h.node.textContent).toContain('选择当前画布的图片')
       await act(async () => h.node.querySelector<HTMLButtonElement>('.sd-source-list button')!.click())
       expect(h.node.querySelector('[aria-label="拆分图层"]')).not.toBeNull()
-      expect(h.node.textContent).toContain('按实际返回图片数计费')
-      expect(h.button('开始分层')).toBeTruthy()
+      expect(h.node.textContent).toContain('最高预留 182 积分，最多输出 30 张')
+      expect(h.button('开始分层').disabled).toBe(false)
       expect(h.billable()).toHaveLength(0)
     } finally { await h.cleanup() }
   })
@@ -68,6 +69,7 @@ describe('scientific workflow entry points', () => {
     try {
       await act(async () => { await h.model.refresh(); h.root.render(<CanvasView model={h.model} initialTool="text"/>) })
       expect(h.node.textContent).toContain('普通图片需要先分层识别')
+      expect(h.node.textContent).toContain('确认本次分层所需的 AI4Scholar 积分')
       await act(async () => h.node.querySelector<HTMLButtonElement>('.sd-source-list button')!.click())
       expect(h.node.textContent).toContain('先拆分并识别图中文字')
       expect(h.billable()).toHaveLength(0)

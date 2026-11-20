@@ -12,7 +12,7 @@ beforeEach(() => vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true))
 afterEach(() => vi.unstubAllGlobals())
 describe('saved canvas access without model credentials', () => {
   it('keeps saved canvases accessible after removing the key, including settings roundtrips', async () => {
-    const catalog = { version: '0.1.0', configured: false, keyRef: 'ARK_API_KEY', model: 'seedream', defaultSize: '2K', watermark: false, canvases: [{ sessionId: 'board-local', title: '已有分层画布', count: 2, updatedAt: new Date().toISOString() }] }
+    const catalog = { version: '0.1.0', configured: false, keyRef: 'AI4SCHOLAR_API_KEY', model: 'seedream', defaultSize: '2K', watermark: false, canvases: [{ sessionId: 'board-local', title: '已有分层画布', count: 2, updatedAt: new Date().toISOString() }] }
     const fetcher = vi.fn(async () => ({ ok: true, value: catalog })) as unknown as Fetcher
     const controller = new Controller(() => { throw new Error('Local editing must not request credentials') }, fetcher)
     const node = document.createElement('div'), root = createRoot(node)
@@ -48,7 +48,7 @@ describe('saved canvas access without model credentials', () => {
 
 describe('home generation entry', () => {
   function setup(failStyle = false) {
-    const catalog = { version: '0.1.0', configured: true, keyRef: 'ARK_API_KEY', model: 'seedream', defaultSize: '2K', watermark: false, canvases: [] }
+    const catalog = { version: '0.1.0', configured: true, keyRef: 'AI4SCHOLAR_API_KEY', model: 'seedream', defaultSize: '2K', watermark: false, canvases: [] }
     const fetcher = vi.fn(async (path: string, _signal: AbortSignal, data?: unknown, method?: string) => {
       if (path === '/api/seedream') return { ok: true, value: catalog }
       const sessionId = new URL(path, 'http://local').searchParams.get('session')!

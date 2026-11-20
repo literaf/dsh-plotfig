@@ -2,8 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ArkClient } from '../src/ark.js'
-import type { ArkImage, ArkRequest } from '../src/ark.js'
+import { AI4ScholarClient } from '../src/ai4scholar.js'
+import type { GeneratedImage } from '../src/image-data.js'
+import type { ImageRequest } from '../src/ai4scholar.js'
 import { decodePixels, encodePixels, finishImageEdit, prepareImageEdit } from '../src/image-edit.js'
 import type { Pixels } from '../src/pixels.js'
 import { parseImageEdit } from '../src/shared/image-edit.js'
@@ -13,12 +14,12 @@ import { CanvasStore } from '../src/store.js'
 import { Seedream } from '../src/service.js'
 
 const solid = (width: number, height: number, rgba: number[]): Pixels => ({ width, height, data: Uint8Array.from({ length: width * height * 4 }, (_, i) => rgba[i % 4]!) })
-const image = (p: Pixels): ArkImage => ({ bytes: encodePixels(p), width: p.width, height: p.height, mime: 'image/png' })
+const image = (p: Pixels): GeneratedImage => ({ bytes: encodePixels(p), width: p.width, height: p.height, mime: 'image/png' })
 let root: string
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'seedream-regions-')) })
 afterEach(async () => { vi.restoreAllMocks(); await rm(root, { recursive: true, force: true }) })
 
-describe('Ark <bbox> coordinates', () => {
+describe('Normalized <bbox> coordinates', () => {
   it('normalizes pixel boxes to 0–1000, left top right bottom, clamped and non-empty', () => {
     expect(bboxTag({ x: 180, y: 64, width: 632, height: 134 }, 1000, 1000)).toBe('<bbox>180 64 812 198</bbox>')
     expect(bboxTag({ x: 0, y: 0, width: 2496, height: 1664 }, 2496, 1664)).toBe('<bbox>0 0 1000 1000</bbox>')
@@ -69,9 +70,9 @@ describe('inpaint clipping', () => {
 
 describe('transparent text-to-image', () => {
   async function setup(result: Pixels) {
-    const store = new CanvasStore(root), ark = new ArkClient({ apiKey: async () => 'k', userAgent: 't', timeoutMs: 1000, fetch: vi.fn() }), requests: ArkRequest[] = []
-    vi.spyOn(ark, 'generate').mockImplementation(async r => { requests.push(r); return { images: [image(result)] } })
-    return { store, requests, service: new Seedream(ark, store) }
+    const store = new CanvasStore(root), api = new AI4ScholarClient({ apiKey: async () => 'sk-user-fixture', userAgent: 't', timeoutMs: 1000, fetch: vi.fn() }), requests: ImageRequest[] = []
+    vi.spyOn(api, 'generate').mockImplementation(async r => { requests.push(r); return { images: [image(result)] } })
+    return { store, requests, service: new Seedream(api, store) }
   }
   it('requests a transparent PNG, records it, and only then', async () => {
     const cut = solid(32, 32, [10, 20, 30, 255]); cut.data[3] = 0

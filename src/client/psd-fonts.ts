@@ -18,7 +18,7 @@ const cjkFont = /PingFang|Songti|YaHei|SimSun|SimHei|Noto.*(?:SC|TC|CJK|JP|KR)|S
 export function psdFontName(family: string, text = ''): string {
   const families = family.split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
   let chosen = families[0] || 'Arial'
-  // A stack that names its own CJK fallback keeps it; otherwise Ark OCR names, including
+  // A stack that names its own CJK fallback keeps it; otherwise recognized font names, including
   // Chinese names such as 苹方 or 思源黑体, map through the font list.
   const ownFallback = cjk.test(text) && !cjkFont.test(chosen) && families.slice(1).some(f => cjkFont.test(f))
   const listed = ownFallback || aliases[chosen] ? undefined : fontPostScript(chosen, cjk.test(text))

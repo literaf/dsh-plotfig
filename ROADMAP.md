@@ -1,15 +1,13 @@
 # PlotFig（dsh-plotfig）待办计划
 
-最后更新：2026-11-19。完成一项就从这里移到 CHANGELOG，并注明提交号。
+最后更新：2026-11-21。完成一项就从这里移到 CHANGELOG，并注明提交号。
 
 ## 发布
 
-- [ ] 发布 `0.1.0-beta.1` 到 npm（`--tag beta`）。需要你明确要求后才执行；按 RELEASING.md 在发布提交上重跑 Node 22/24 与原生页面检查，发布后核对 registry 和 npmmirror。
+- [ ] 发布 `0.1.0-beta.2` 到 npm（`--tag beta`）。需要你明确要求后才执行；按 RELEASING.md 在发布提交上重跑 Node 22/24 与原生页面检查，发布后核对 registry 和 npmmirror。
 - [ ] beta 试用后发布正式版 `0.1.0`。
 
-## 方舟文档中尚未用上的能力
-
-来源：[Seedream 5.5](https://docs.volcengine.com/docs/zh/ark/seedream-5-5.md)、[图片生成教程](https://docs.volcengine.com/docs/zh/ark/image-generation-tutorial.md)、[Seedream 5.0 pro](https://docs.volcengine.com/docs/zh/ark/seedream-5-0-pro.md)。
+## 待集成的模型能力
 
 - [ ] **跨图摆放**：在两张图上各框一个区域，提示词写成“将图1<bbox>…</bbox>的主体放到图2<bbox>…</bbox>位置”。适合把器件放进场景图。可复用分图层的框选组件和多参考图输入。
 - [ ] **点位与箭头定位**：交互编辑除了框选，还支持 `<point>` 坐标和在图上画箭头标记。目前只做了框选，框选已能覆盖大多数用法，优先级低。
@@ -31,7 +29,7 @@
 
 ## 发布后再考虑的新功能
 
-- [ ] 从图反推提示词：上传一张参考插图，把风格、配色、线条写成提示词，再用来画新内容。需要接入能看图的模型（如豆包视觉模型）。参考 dsh-imagegen 的“提示词反推”。
+- [ ] 从图反推提示词：上传一张参考插图，把风格、配色、线条写成提示词，再用来画新内容。需要接入能分析参考图的视觉模型。参考 dsh-imagegen 的“提示词反推”。
 - [ ] 科研提示词灵感库：把 ai4scholar 的 100 条提示词和风格库素材做成可按学科、图型筛选的库，Agent 也能检索。参考 dsh-image-gen、dsh-imagegen 的灵感库。
 - [ ] 导入 CSV / Excel 画数据图（折线、散点、柱状、箱线等统计图），和示意图放在同一画布里编辑、组图和导出。
 - [ ] 多面板科研组图（自动排版、编号、对齐）。

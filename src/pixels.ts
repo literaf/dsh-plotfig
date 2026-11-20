@@ -1,6 +1,6 @@
 import { PNG } from 'pngjs'
 import jpeg from 'jpeg-js'
-import { imageInfo } from './ark.js'
+import { imageInfo } from './image-data.js'
 import { MAX_EDIT_PIXELS } from './shared/image-edit.js'
 
 export interface Pixels { width: number; height: number; data: Uint8Array }

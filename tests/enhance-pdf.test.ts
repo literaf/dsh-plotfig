@@ -3,8 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { deflateSync, inflateSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ArkClient } from '../src/ark.js'
-import type { ArkImage, ArkRequest } from '../src/ark.js'
+import { AI4ScholarClient } from '../src/ai4scholar.js'
+import type { GeneratedImage } from '../src/image-data.js'
+import type { ImageRequest } from '../src/ai4scholar.js'
 import { decodePixels, encodePixels, finishEnhance, prepareImageEdit, resizePixels, restoreDrift } from '../src/image-edit.js'
 import type { Pixels } from '../src/pixels.js'
 import { enhanceDimensions, expansionSteps, parseImageEdit } from '../src/shared/image-edit.js'
@@ -21,7 +22,7 @@ function scene(width: number, height: number, dx = 0, dy = 0): Pixels {
   }
   return { width, height, data }
 }
-const image = (p: Pixels): ArkImage => ({ bytes: encodePixels(p), width: p.width, height: p.height, mime: 'image/png' })
+const image = (p: Pixels): GeneratedImage => ({ bytes: encodePixels(p), width: p.width, height: p.height, mime: 'image/png' })
 let root: string
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'seedream-enhance-')) })
 afterEach(async () => { vi.restoreAllMocks(); await rm(root, { recursive: true, force: true }) })
@@ -34,15 +35,15 @@ describe('chained multi-sided expansion', () => {
   async function setup(fail?: number) {
     const store = new CanvasStore(root), source = scene(160, 200, 40, 30)
     const { items: [item] } = await store.add('s', [image(source)], { title: '原图', prompt: 'x', refs: [], externalRefs: 0, size: '160x200' })
-    const ark = new ArkClient({ apiKey: async () => 'k', userAgent: 't', timeoutMs: 1000, fetch: vi.fn() }), requests: ArkRequest[] = []
+    const api = new AI4ScholarClient({ apiKey: async () => 'sk-user-fixture', userAgent: 't', timeoutMs: 1000, fetch: vi.fn() }), requests: ImageRequest[] = []
     // A faithful model: return the continuous scene the context came from, at the requested size.
-    vi.spyOn(ark, 'generate').mockImplementation(async request => {
+    vi.spyOn(api, 'generate').mockImplementation(async request => {
       requests.push(request)
       if (requests.length === fail) throw new Error('upstream failed')
       const [w, h] = request.size.split('x').map(Number) as [number, number]
       return { images: [image(scene(w, h))] }
     })
-    return { store, source, item: item!, ark, requests, service: new Seedream(ark, store) }
+    return { store, source, item: item!, api, requests, service: new Seedream(api, store) }
   }
   it('bills one pass per side, preserves every original byte and records the full expansion', async () => {
     const { store, source, item, service, requests } = await setup()
@@ -69,9 +70,9 @@ describe('chained multi-sided expansion', () => {
     expect(result.warnings.join()).toContain('第 2/2 步失败')
   })
   it('keeps completed passes and the raw output when a later pass cannot be composited', async () => {
-    const { store, item, ark, service, requests } = await setup()
+    const { store, item, api, service, requests } = await setup()
     let calls = 0
-    vi.mocked(ark.generate).mockImplementation(async request => {
+    vi.mocked(api.generate).mockImplementation(async request => {
       requests.push(request); calls++
       const [w, h] = request.size.split('x').map(Number) as [number, number]
       // The second pass returns bytes that cannot be decoded locally.

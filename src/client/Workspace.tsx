@@ -24,25 +24,25 @@ export function Icon({ size = 20 }: { size?: number }) {
 export function keyStatus(state: State): string {
   const c = state.catalog
   if (!c) return state.loading ? '正在读取配置…' : '配置暂不可用'
-  return c.configured ? '已配置方舟 API Key' : '尚未配置方舟 API Key'
+  return `${c.configured ? '已配置' : '尚未配置'} AI4Scholar API Key`
 }
 export function Settings({ controller }: { controller: Controller }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot), [key, setKey] = useState(''), keyId = useId(), sizeId = useId()
   const c = state.catalog
   useEffect(() => { void controller.attach() }, [controller])
   return <section className="sd-settings">
-    <h2>PlotFig 设置</h2><p>使用火山方舟的 Seedream 5.5 模型（{c?.model ?? 'doubao-seedream-5-5'}）生成和编辑图片。</p>
+    <h2>PlotFig 设置</h2><p>通过 AI4Scholar 使用 Seedream 5.5 生成和编辑图片。</p>
     <div className="sd-key-status"><span className="sd-status-dot" data-ready={c?.configured ?? false}/>{keyStatus(state)}</div>
     {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}{state.message ? <div className="sd-alert" role="status">{state.message}</div> : null}
-    <label htmlFor={keyId}>方舟 API Key</label><div className="sd-key-row"><input id={keyId} type="password" autoComplete="off" spellCheck={false} placeholder="输入新 Key" value={key} onChange={e => setKey(e.target.value)} /><button className="sd-button sd-button-primary" disabled={!key.trim() || state.keyBusy || !c} onClick={() => { void controller.saveKey(key).then(ok => { if (ok) setKey('') }) }}>{state.keyBusy ? '保存中…' : '保存'}</button></div>
-    <p>Key 保存在本机的凭据服务中。<a href="https://console.volcengine.com/ark/region:cn-beijing/apiKey" target="_blank" rel="noopener noreferrer">获取 API Key ↗</a></p>
+    <label htmlFor={keyId}>AI4Scholar API Key</label><div className="sd-key-row"><input id={keyId} type="password" autoComplete="off" spellCheck={false} placeholder="sk-user-…" value={key} onChange={e => setKey(e.target.value)} /><button className="sd-button sd-button-primary" disabled={!key.trim() || state.keyBusy || !c} onClick={() => { void controller.saveKey(key).then(ok => { if (ok) setKey('') }) }}>{state.keyBusy ? '保存中…' : '保存'}</button></div>
+    <p>Key 保存在本机凭据服务中。PlotFig 与 dsh-ai4scholar 共用此凭据，保存或移除会同步影响两个插件。<a href="https://ai4scholar.net/resources/contact?tab=api-keys" target="_blank" rel="noopener noreferrer">获取 API Key ↗</a></p>
     <div className="sd-settings-row">
       <label htmlFor={sizeId}>默认尺寸</label>
       <select id={sizeId} disabled={!c || state.settingsBusy} value={c && (SIZE_TIERS as readonly string[]).includes(c.defaultSize) ? c.defaultSize : '2K'} onChange={e => { void controller.saveSettings({ size: e.target.value }) }}>{SIZE_TIERS.map(s => <option key={s} value={s}>{s}</option>)}</select>
     </div>
-    <label className="sd-check"><input type="checkbox" disabled={!c || state.settingsBusy} checked={c?.watermark ?? true} onChange={e => { void controller.saveSettings({ watermark: e.target.checked }) }}/>添加「AI 生成」水印（方舟默认开启）</label>
-    <div className="sd-settings-actions"><button className="sd-button" disabled={!c?.configured || state.checkBusy} onClick={() => { void controller.checkConnection() }} title="用已保存的 Key 读取模型列表，不生成图片、不计费">{state.checkBusy ? '测试中…' : '测试连接'}</button><button className="sd-button" disabled={!c?.configured || state.keyBusy} onClick={() => { void controller.removeKey() }}>移除 Key</button><button className="sd-button" disabled={state.loading} onClick={() => { void controller.attach() }}>刷新状态</button></div>
-    <p>每次生成按输出图片张数计费。生成结果会立即下载到本机，按对话分别保存在各自的画布中。</p>
+    <label className="sd-check"><input type="checkbox" disabled={!c || state.settingsBusy} checked={c?.watermark ?? true} onChange={e => { void controller.saveSettings({ watermark: e.target.checked }) }}/>添加「AI 生成」水印</label>
+    <div className="sd-settings-actions"><button className="sd-button" disabled={!c?.configured || state.checkBusy} onClick={() => { void controller.checkConnection() }} title="免费检查 AI4Scholar 密钥、余额和绘图接口">{state.checkBusy ? '测试中…' : '测试连接'}</button><button className="sd-button" disabled={!c?.configured || state.keyBusy} onClick={() => { void controller.removeKey() }}>移除 Key</button><button className="sd-button" disabled={state.loading} onClick={() => { void controller.attach() }}>刷新状态</button></div>
+    <p>生图和编辑使用 AI4Scholar 积分，分层先预留最高积分，再按实际交付的图片结算。生成结果会立即下载到本机，按对话分别保存在各自的画布中。</p>
     <p>版本 {c?.version ?? '—'}</p>
   </section>
 }
@@ -121,7 +121,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
     {settings ? <div className="sd-scroll"><Settings controller={controller}/></div>
       : open ? <CanvasView key={open} model={controller.canvas(open)} defaultSize={c?.defaultSize} conversation={isBoard(open) ? undefined : conversation(open)} initialTool={launch?.tool} initialStyle={launch?.style} initialCompositionId={templateComposition}/>
       : <div className="sd-scroll" key={library ? 'all' : 'home'} ref={galleryScroll} onScroll={e => { scrollPositions.current[library ? 'all' : 'recent'] = e.currentTarget.scrollTop }}>
-        {c && !c.configured ? <div className="sd-alert" role="status">已保存的画布可继续编辑和导出。生成或分图层前，请在设置中配置方舟 API Key。</div> : null}
+        {c && !c.configured ? <div className="sd-alert" role="status">已保存的画布可继续编辑和导出。生成或分图层前，请在设置中配置 AI4Scholar API Key。</div> : null}
         {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}
         {state.message ? <div className="sd-alert" role="status">{state.message}</div> : null}
         {!library ? <section className="sd-research-home">

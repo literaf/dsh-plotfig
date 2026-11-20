@@ -6,7 +6,7 @@
 
 ## 中文记录
 
-图层编辑使用已缓存的真实分层素材验证；文字和 PSD 使用火山官方公开 OCR 示例验证。自动测试和界面流程使用模拟返回值。2026-11-14 另完成首轮 3 张、修正候选 4 张真实付费图片测试，无自动重试：风机去背景效果改善；消除过渡复用已付费结果在本地检查；复杂雨林说明图的扩图效果仍未通过。PSD 已在 Photopea 验证改字、保存和重开；本机没有 Photoshop，另用 Adobe Illustrator 2025 导入验证（见下方 2026-11-19 记录），尚未在 Photoshop 中验收。
+图层编辑使用已缓存的真实分层素材验证；文字和 PSD 使用 Seedream 5.5 的公开 OCR 示例验证。自动测试和界面流程使用模拟返回值。2026-11-14 另完成首轮 3 张、修正候选 4 张真实付费图片测试，无自动重试：风机去背景效果改善；消除过渡复用已付费结果在本地检查；复杂雨林说明图的扩图效果仍未通过。PSD 已在 Photopea 验证改字、保存和重开；本机没有 Photoshop，另用 Adobe Illustrator 2025 导入验证（见下方 2026-11-19 记录），尚未在 Photoshop 中验收。
 
 最新扩图验证（2026-11-14/15）：新增 3 张真实付费候选，无自动重试。两种整图方案未通过；雨林向左 256 像素的局部参考方案通过整体及三处边缘放大检查，原图 1664×2496 区域改变像素为 0。此前桌面消除复测另用 1 张真实图片，成功保存中英文标题、PNG 和可编辑 PSD。
 
@@ -14,7 +14,7 @@
 
 科研工具与风格入口验证（2026-11-18）：通过自动测试、模拟生图请求和隔离的真实宿主界面检查了风格持久化、参数传递、PNG/JPEG 导入、操作确认、原生草稿追加和窄窗口布局。这轮新增界面没有产生付费生图；不能据此视为六种风格或草图生成效果的实测。
 
-本地图形模板验收（2026-11-18）：在无方舟 Key 的隔离宿主中创建并导出全部 8 个模板，检查中英文改字、拖动后连线更新、撤销重做、自动保存与刷新重开，付费接口调用为 0。138 项测试通过，明暗主题及 320／420／768 像素窗口通过界面检查。SVG 按浏览器重渲染对照 PNG；两份 PSD 通过独立解析和图层重合成验证，分别保留 9 和 7 条可编辑文字记录。尚未在 Photoshop 中验收这批模板。
+本地图形模板验收（2026-11-18）：在未配置绘图 Key 的隔离宿主中创建并导出全部 8 个模板，检查中英文改字、拖动后连线更新、撤销重做、自动保存与刷新重开，付费接口调用为 0。138 项测试通过，明暗主题及 320／420／768 像素窗口通过界面检查。SVG 按浏览器重渲染对照 PNG；两份 PSD 通过独立解析和图层重合成验证，分别保留 9 和 7 条可编辑文字记录。尚未在 Photoshop 中验收这批模板。
 
 收尾验收（2026-11-19）：共 4 张真实付费图片，无自动重试。雨林图同时向右、上、下各扩 256 像素，链式 3 步生成 1920×3008，原图 1664×2496 区域改变像素为 0，未触发需检查提示；整体与五处接缝放大检查未见矩形接缝，新增区域延续了树冠、天空和蕨类。雨林图缩小到 640×960 后变清晰得到 1755×2634：树叶、枝干和大标题明显比双三次放大清楚，但小字有改写（canopy→canegy、exposed→expased、eagles→cagles、wide-ranging→with-ranging），因此加入了改动还原：同一张结果经本地处理后约 13% 的区域用原图放大还原，上述四个词全部恢复正确，代价是这些区域比其他区域略模糊。PDF 用 poppler（pdfinfo、pdfimages）和 macOS Quartz 打开，页面 1664×2496 pt，内嵌图像与原图逐像素一致，透明蒙版生效。Photoshop 兼容性：本机未安装 Photoshop；已有两份导出 PSD 用 Adobe Illustrator 2025 导入，13 和 9 条文字均识别为可编辑文字对象，字体名正确；psd-tools 1.27 独立重合成与内嵌预览平均差 0.02。PSD 未嵌入字体，Barlow、Cal Sans 等本机未装的字体在 Photoshop 中会被替换。
 
@@ -28,7 +28,7 @@
 
 ## English records
 
-Validation includes synthetic pixel tests, mocked UI requests, cached decomposition assets and the public [Volcengine OCR sample](https://docs.volcengine.com/docs/ark/seedream-5-5?lang=zh). Real API checks on 2026-11-14 used three initial images and four further candidate images, without automatic retries: the turbine cutout improved; the erase transition was checked by locally recomposing the cached result; the complex rainforest infographic still did not pass visual outpainting review. PSD text editing, saving and reopening were checked in Photopea; Photoshop itself has not been tested. See [README_CN.md](README_CN.md) for the full guide and shortcuts.
+Validation includes synthetic pixel tests, mocked UI requests, cached decomposition assets and the public Seedream 5.5 OCR sample. Real API checks on 2026-11-14 used three initial images and four further candidate images, without automatic retries: the turbine cutout improved; the erase transition was checked by locally recomposing the cached result; the complex rainforest infographic still did not pass visual outpainting review. PSD text editing, saving and reopening were checked in Photopea; Photoshop itself has not been tested. See [README_CN.md](README_CN.md) for the full guide and shortcuts.
 
 The 2026-11-14/15 outpainting follow-up used three additional real outputs with no automatic retries: both full-image variants failed visual review; the single-sided rainforest left expansion passed whole-image and three magnified boundary inspections, with zero changed original pixels. Other sides have synthetic pixel and simulated interaction checks only. A preceding desktop erase check used one further real output and saved a mixed Chinese/English title, PNG and editable PSD.
 
@@ -36,7 +36,7 @@ On 2026-11-18, one real decomposition request with OCR enabled and a 16-image li
 
 The scientific toolbox/style iteration on 2026-11-18 was checked with automated tests, mocked generation requests and an isolated real-host browser: style persistence and request forwarding, local import, confirmation steps, native draft appending and narrow layouts. It added no billed model calls; generation quality for the six styles and sketch entry point has not yet been individually validated.
 
-Local diagram validation (2026-11-18): eight templates created and exported in an isolated native host without an Ark key, with no paid calls. Checked mixed-language node edits, dragging and connection updates, undo/redo, persistence and reload, light/dark themes, and 320/420/768 px widths. All 138 tests passed. Browser-rerendered SVGs were compared with PNGs; two PSDs passed independent parsing and layer recomposition with 9 and 7 editable text records. These templates have not been tested in Photoshop.
+Local diagram validation (2026-11-18): eight templates created and exported in an isolated native host without a drawing API key, with no paid calls. Checked mixed-language node edits, dragging and connection updates, undo/redo, persistence and reload, light/dark themes, and 320/420/768 px widths. All 138 tests passed. Browser-rerendered SVGs were compared with PNGs; two PSDs passed independent parsing and layer recomposition with 9 and 7 editable text records. These templates have not been tested in Photoshop.
 
 Finishing acceptance (2026-11-19): four real paid images, no automatic retries. A chained right/top/bottom expansion of the rainforest image (256 px each, three passes) produced 1920×3008 with zero changed pixels in the original area and no visible rectangular seams in five magnified checks. Enhancing a 640×960 copy produced 1755×2634; foliage and headings were sharper than bicubic, but four small words were rewritten; drift restoration refilled about 13% of the image from the source, which corrected all four at the cost of local softness. PDFs open in poppler and macOS Quartz with the embedded image pixel-identical to the source. Photoshop is not installed on the test machine; two exported PSDs imported into Adobe Illustrator 2025 with all 13 and 9 text records as editable text, and psd-tools re-compositing matched the embedded preview. Fonts are not embedded.
 
@@ -44,7 +44,7 @@ Release checks (2026-11-19, clean clone of `2278669`): typecheck, build and 162 
 
 Expansion and cutout batch (2026-11-19): 15 real paid images across six figure types, no automatic retries. Six expansions (ten passes) kept zero changed original pixels. Turbine top, blood-brain-barrier bottom, fluorescent cell left and line-icon pipette left/right joined cleanly; the optical bench passed on three of four sides, but its left pass drew a panel edge about 6 px outside the original that went undetected, so a parallel-line check was added; replayed over all 14 saved real passes, it flags only that pass. Extending the YOLO diagram to the right produced an unrelated harbour photo, which was correctly flagged for review: blank areas beside diagrams and tables remain unreliable. Five cutouts kept complete subjects with clean backgrounds, but glass and translucent shells came back nearly opaque.
 
-New capabilities (2026-11-19): the composer has a **透明背景** toggle for native transparent PNG generation; 拆分图层 lets you box regions, sent as normalized `<bbox>` tags; OCR fonts follow the full 228-font Ark list with category fallbacks for display and PostScript names for PSD. Real tests used 8 paid images, no automatic retries: two transparent generations were 70% and 90% fully transparent with clean edges; two inpaints drew the requested object with zero pixels changed outside the boxes (the whole box is redrawn, so boxes should avoid content to keep); one boxed decomposition returned three layers, all within or touching the box, with no unboxed control run.
+New capabilities (2026-11-19): the composer has a **透明背景** toggle for native transparent PNG generation; 拆分图层 lets you box regions, sent as normalized `<bbox>` tags; All 228 supported OCR fonts have category fallbacks for display and PostScript names for PSD export. Real tests used 8 paid images, no automatic retries: two transparent generations were 70% and 90% fully transparent with clean edges; two inpaints drew the requested object with zero pixels changed outside the boxes (the whole box is redrawn, so boxes should avoid content to keep); one boxed decomposition returned three layers, all within or touching the box, with no unboxed control run.
 
 Multi-reference and repeated-edit checks (2026-11-19): two real paid images, no automatic retries. Combining two references placed the stirrer beside the cylinder as asked and kept the bench intact, but dropped the "Lens" label, so check text after combining. An opaque repeat edit recoloured the cylinder liquid and left the rest unchanged. Reviewing the earlier inpaint, the cylinder shadow crossed the box and was cut off on restore without a warning; an outside-change check now flags it, and replaying both saved inpaints flags only that one.
 
@@ -61,3 +61,9 @@ Multi-reference and repeated-edit checks (2026-11-19): two real paid images, no 
 图标改为原 logo 的 P（无背景方块）后的发布前检查（2026-11-20，提交 `77ac7b7` 的干净克隆）：Node 22 与 24 下 `prepublishOnly`（171 项测试）通过；原生页面兼容测试 2 项通过。发布包 2.2M、102 个文件，未发现本机路径或凭据。隔离宿主侧边栏浅色、深色主题下图标都清楚。尚未发布到 npm。
 
 深色主题改用青柠色后的发布前检查（2026-11-20，提交 `2c2766c` 的干净克隆）：Node 22 与 24 下 `prepublishOnly`（171 项测试）通过；原生页面兼容测试 2 项通过。发布包 2.2M、102 个文件，未发现本机路径或凭据。隔离宿主侧边栏叶子颜色实测：浅色 rgb(185,98,63)，深色 rgb(167,231,70)。README logo 和插件列表图标在浏览器浅色、深色模式下分别显示焦橙版、青柠版。尚未发布到 npm。
+
+2026-11-21 首次安装实测。将本地 `dsh-plotfig@0.1.0-beta.1` 装入全新配置的 DSH Desktop `0.2.2-rc.5`，核对安装包内全部 104 个文件。通过原生插件管理页启用后，侧栏可打开 PlotFig。只设置其他服务的模拟凭据时，绘图请求提示配置 AI4Scholar Key。设置页拒绝格式不符的输入，可保存和移除测试 Key。使用随机生成的测试 Key 点击「测试连接」，AI4Scholar 的免费余额接口返回密钥无效。无 Key 时可创建「实验流程」模板，保存 12 个图层并读取 SVG 预览。完全退出并重启 DSH 后，从图库重新打开了同一画板。本轮付费请求为 0，实际模型出图与付费分层仍待联调。
+
+2026-11-21 生产联调。AI4Scholar Web 提交 `76e13fa0` 上线后，在已经运行的 DSH Desktop `0.2.2-rc.5` 中，通过插件管理器载入 `dsh-plotfig@0.1.0-beta.1` 本地包，设置页成功复用共享凭据。用 Seedream 5.5 生成钴蓝色显微镜 PNG，实际尺寸为 2304 × 1728，完全透明像素占 79.2%。在同一画布引用原图，将底座和旋钮改为橙色，选择 1.5K 后得到 1792 × 1344 PNG，完全透明像素占 79.2%。两张图片各扣 6 积分，账户余额减少 12 积分。重开画布后两张图片均可见。线上分层报价返回套餐未开放，桌面提交按钮禁用，本轮分层调用为 0。
+
+2026-11-21 分层按量计费上线验收。生产 Web 提交 `87bec385` 与本机 DSH 安装包 `7aa7af7` 配合使用。默认 30 张报价最高预留 182 积分。实际仅提交一单，将同一张透明显微镜原图的上限设为 4 张，预留 26 积分。画板保存了底图（2304 × 1728）及底座（1411 × 775）、载物台（1311 × 800）、镜筒（1268 × 1359）三个独立部件。按 PNG 像素复算为输入 2 + 底图 6 + 三个部件 9，共 17 积分。生产收据退回 9 积分，调用日志记录实收 17 积分，桌面版余额净减少 17 积分。重开画布后图层和账单均可见。这张样图的底图空白区域呈黑色，未达到测试提示中的白底要求。

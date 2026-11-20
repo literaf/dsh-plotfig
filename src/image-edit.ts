@@ -2,8 +2,9 @@ import { decodePixels, encodePixels, resizePixels } from './pixels.js'
 import type { Pixels } from './pixels.js'
 export { decodePixels, encodePixels, resizePixels } from './pixels.js'
 export type { Pixels } from './pixels.js'
-import type { ArkImage, ArkRequest } from './ark.js'
-import { arkEditDimensions, editDimensions, enhanceDimensions } from './shared/image-edit.js'
+import type { GeneratedImage } from './image-data.js'
+import type { ImageRequest } from './ai4scholar.js'
+import { modelEditDimensions, editDimensions, enhanceDimensions } from './shared/image-edit.js'
 import type { EditRegion, ImageEditInput } from './shared/image-edit.js'
 import { expansionContext, expansionRequest, finishExpansionContext } from './outpaint.js'
 import { bboxTag } from './shared/regions.js'
@@ -53,7 +54,7 @@ export function restoreDrift(source: Pixels, generated: Pixels): { image: Pixels
   return { image: { ...generated, data }, restored: restored / (width * height) }
 }
 /** Restore drifted regions from the source, keep the source silhouette, and always hold for review. */
-export function finishEnhance(source: Pixels, raw: Pixels): { image: ArkImage; warnings: string[] } {
+export function finishEnhance(source: Pixels, raw: Pixels): { image: GeneratedImage; warnings: string[] } {
   const { image: generated, restored } = restoreDrift(source, raw), warnings: string[] = []
   const percent = restored * 100
   warnings.push(restored
@@ -143,7 +144,7 @@ export function clippedEdges(source: Pixels, generated: Pixels, regions: EditReg
   }
   return total ? hit / total : 0
 }
-export interface PreparedEdit { source: Pixels; input: ImageEditInput; request: ArkRequest; width: number; height: number; mask?: Uint8Array; expansion?: ExpansionContext }
+export interface PreparedEdit { source: Pixels; input: ImageEditInput; request: ImageRequest; width: number; height: number; mask?: Uint8Array; expansion?: ExpansionContext }
 export function prepareImageEdit(input: ImageEditInput, bytes: Uint8Array): PreparedEdit {
   const source = decodePixels(bytes), notes = input.prompt ? `\n用户补充要求：${input.prompt}` : ''
   if (input.operation === 'enhance') {
@@ -156,14 +157,14 @@ export function prepareImageEdit(input: ImageEditInput, bytes: Uint8Array): Prep
     const expansion = expansionContext(source, input.expand!)
     if (expansion) return { source, input, ...target, expansion, request: expansionRequest(expansion, input.watermark, notes) }
   }
-  const work = arkEditDimensions(target.width, target.height), originalWork = arkEditDimensions(source.width, source.height)
+  const work = modelEditDimensions(target.width, target.height), originalWork = modelEditDimensions(source.width, source.height)
   const reference = resizePixels(source, originalWork.width, originalWork.height), images = [dataUrl(reference)]
   let prompt: string, mask: Uint8Array | undefined
   if (input.operation === 'remove-background') prompt = '精确抠出参考图中的主要实体主体，去除背景。默认移除主体之外独立的标题、说明文字、引线、图表、装饰面板和地面投影；用户指定保留的对象优先。保留主体本身的原始位置、比例、颜色、印刷文字和完整边缘，包括毛发、细小结构及半透明部分。输出与参考图相同构图的真正透明背景 RGBA PNG。前景轮廓之间的空隙也须透明，去净白边、底色残留和游离杂点；不要画棋盘格，不要增加背景、阴影或新物体。' + notes
   else if (input.operation === 'inpaint') {
     mask = eraseMask(input, source)
     const tags = input.regions!.map(r => bboxTag(r, source.width, source.height)).join('、')
-    // Ark interactive editing: <bbox> tags in the prompt; pixels outside are restored locally.
+    // Send <bbox> tags in the prompt and restore pixels outside each box locally.
     prompt = `仅在以下区域内重绘：${tags}（坐标为归一化 0–1000，左上角为原点）。在这些区域内：${input.prompt}\n新画的物体连同它的阴影、倒影和光晕都必须完整位于框内，不要越出框线。区域外的所有内容、文字、构图、颜色与尺寸比例保持原图不变；新内容的透视、光照和风格与周围一致，边缘自然衔接。`
   } else if (input.operation === 'erase') {
     mask = eraseMask(input, source)
@@ -183,7 +184,7 @@ export function prepareImageEdit(input: ImageEditInput, bytes: Uint8Array): Prep
   }
   return { source, input, ...target, ...(mask ? { mask } : {}), request: { prompt, images, size: `${work.width}x${work.height}`, watermark: input.watermark, ...(input.operation === 'remove-background' ? { background: 'transparent' as const } : input.operation === 'expand' ? { background: 'opaque' as const } : {}) } }
 }
-export function finishImageEdit(prepared: PreparedEdit, result: ArkImage): { image: ArkImage; warnings: string[] } {
+export function finishImageEdit(prepared: PreparedEdit, result: GeneratedImage): { image: GeneratedImage; warnings: string[] } {
   if (prepared.expansion) {
     const { source, input, width, height, expansion } = prepared, margins = input.expand!
     const processed = finishExpansionContext(expansion, decodePixels(result.bytes)), tile = processed.image

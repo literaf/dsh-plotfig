@@ -1,5 +1,5 @@
-import { ROUTE } from '../shared/types.js'
-import type { Canvas, CanvasEntry, CanvasItem, Composition, PendingGeneration, Status } from '../shared/types.js'
+import { isAI4ScholarKey, KEY_REF, ROUTE } from '../shared/types.js'
+import type { Canvas, CanvasEntry, CanvasItem, Composition, LayerQuote, PendingGeneration, Status } from '../shared/types.js'
 import type { CredentialsPort } from './credentials-port.js'
 import { EditorModel } from './editor-model.js'
 import { IMAGE_EDIT_LABELS } from '../shared/image-edit.js'
@@ -104,11 +104,11 @@ export class CanvasModel extends Emitter<CanvasState> {
     if (current && canvas.revision <= current.revision) return
     this.set({ canvas, loading: false, error: undefined })
   }
-  async refresh(): Promise<void> {
+  async refresh(resumeLayer?: string): Promise<void> {
     if (this.reading || this.disposed) return
     const control = new AbortController(); this.reading = control
     try {
-      const reply = await this.fetcher<CanvasReply>(this.path, control.signal)
+      const reply = await this.fetcher<CanvasReply>(resumeLayer ? this.path + '&resumeLayer=' + encodeURIComponent(resumeLayer) : this.path, control.signal)
       if (control.signal.aborted || this.disposed) return
       if (!reply.ok) throw new Error(reply.error)
       // Local layout edits in flight win over a poll that read the older file.
@@ -201,11 +201,23 @@ export class CanvasModel extends Emitter<CanvasState> {
       this.accept(reply.value.canvas); this.onChange(); return true
     } catch (error) { this.set({ error: errorText(error, '删除画板失败。') }); return false }
   }
-  async decompose(input: { image: string; maxImages: number; prompt: string }): Promise<Composition> {
+  async layerQuote(maxImages: number, signal: AbortSignal): Promise<LayerQuote> {
+    const reply = await this.fetcher<LayerQuote>(`${ROUTE}/layer-quote?maxImages=${maxImages}`, signal)
+    if (!reply.ok) throw new Error(reply.error)
+    return reply.value
+  }
+  async dismissLayerTask(id: string) {
+    try {
+      const reply = await this.fetcher<Canvas>(this.path, new AbortController().signal, { dismissLayerTask: id }, 'PATCH')
+      if (!reply.ok) throw new Error(reply.error)
+      this.accept(reply.value)
+    } catch (error) { this.set({ error: errorText(error, '无法移除分层取回记录。') }) }
+  }
+  async decompose(input: { image: string; maxImages: number; prompt: string; quotedCredits: number }): Promise<Composition> {
     const key = `split-${++this.serial}`, parentId = input.image.slice(5)
     this.local = [...this.local, { key, prompt: `分图层 · ${this.state.canvas?.items.find(i => i.id === parentId)?.title ?? ''}`, parentId, startedAt: Date.now() }]; this.syncPending()
     try {
-      const reply = await this.fetcher<{ canvas: Canvas; composition: Composition }>(`${ROUTE}/decompose?session=${encodeURIComponent(this.sessionId)}`, new AbortController().signal, input)
+      const reply = await this.fetcher<{ canvas: Canvas; composition: Composition }>(`${ROUTE}/decompose?session=${encodeURIComponent(this.sessionId)}`, new AbortController().signal, { ...input, requestId: crypto.randomUUID() })
       if (!reply.ok) throw new Error(reply.error)
       this.accept(reply.value.canvas); this.onChange(); return reply.value.composition
     } finally { this.local = this.local.filter(p => p.key !== key); this.syncPending() }
@@ -308,7 +320,7 @@ export class Controller extends Emitter<State> {
     } catch (error) { this.set({ error: errorText(error, '保存设置失败。') }) }
     finally { this.set({ settingsBusy: false }) }
   }
-  /** Lists models with the saved key; never generates or bills. */
+  /** Checks the AI4Scholar balance and drawing capability for free. */
   async checkConnection(): Promise<void> {
     if (this.state.checkBusy || !this.state.catalog?.configured) return
     this.set({ checkBusy: true, error: undefined, message: undefined })
@@ -323,9 +335,11 @@ export class Controller extends Emitter<State> {
     if (!text.trim() || this.state.keyBusy || !this.state.catalog) return false
     this.set({ keyBusy: true, error: undefined, message: undefined })
     try {
-      const port = this.credentials(), ref = this.state.catalog.keyRef
-      if ((await port.describe(ref))?.writable === false) throw new Error('Key 由环境变量或只读来源管理，请在启动环境中修改。')
-      await port.set(ref, text.trim()); await this.attach(); this.set({ message: '方舟 API Key 已保存。' }); return true
+      const key = text.trim()
+      if (!isAI4ScholarKey(key)) throw new Error('请输入以 sk-user- 开头的 AI4Scholar API Key。')
+      const port = this.credentials()
+      if ((await port.describe(KEY_REF))?.writable === false) throw new Error('Key 由环境变量或只读来源管理，请在启动环境中修改。')
+      await port.set(KEY_REF, key); await this.attach(); this.set({ message: 'AI4Scholar API Key 已保存。' }); return true
     } catch (error) { this.set({ error: errorText(error, '保存失败。') }); return false }
     finally { this.set({ keyBusy: false }) }
   }
@@ -333,9 +347,9 @@ export class Controller extends Emitter<State> {
     if (!this.state.catalog || this.state.keyBusy) return
     this.set({ keyBusy: true, error: undefined })
     try {
-      const port = this.credentials(), ref = this.state.catalog.keyRef
-      if ((await port.describe(ref))?.writable === false) throw new Error('Key 由环境变量或只读来源管理，请在启动环境中移除。')
-      await port.unset(ref); await this.attach(); this.set({ message: '已移除方舟 API Key。' })
+      const port = this.credentials()
+      if ((await port.describe(KEY_REF))?.writable === false) throw new Error('Key 由环境变量或只读来源管理，请在启动环境中移除。')
+      await port.unset(KEY_REF); await this.attach(); this.set({ message: '已移除 AI4Scholar API Key。' })
     } catch (error) { this.set({ error: errorText(error, '移除失败。') }) }
     finally { this.set({ keyBusy: false }) }
   }

@@ -1,9 +1,9 @@
 import { PNG } from 'pngjs'
 import { resizePixels } from './pixels.js'
 import type { Pixels } from './pixels.js'
-import { arkEditDimensions } from './shared/image-edit.js'
+import { modelEditDimensions } from './shared/image-edit.js'
 import type { ExpandMargins } from './shared/image-edit.js'
-import type { ArkRequest } from './ark.js'
+import type { ImageRequest } from './ai4scholar.js'
 
 export type ExpansionSide = keyof ExpandMargins
 export interface ExpansionContext { side: ExpansionSide; amount: number; source: Pixels }
@@ -27,10 +27,10 @@ export function expansionContext(source: Pixels, margins: ExpandMargins): Expans
   return { side, amount, source: { width, height, data } }
 }
 
-export function expansionRequest(context: ExpansionContext, watermark: boolean, notes: string): ArkRequest {
+export function expansionRequest(context: ExpansionContext, watermark: boolean, notes: string): ImageRequest {
   const { source, amount, side } = context, h = horizontal(side)
-  const target = arkEditDimensions(source.width + (h ? amount : 0), source.height + (h ? 0 : amount))
-  const referenceSize = arkEditDimensions(source.width, source.height), reference = resizePixels(source, referenceSize.width, referenceSize.height)
+  const target = modelEditDimensions(source.width + (h ? amount : 0), source.height + (h ? 0 : amount))
+  const referenceSize = modelEditDimensions(source.width, source.height), reference = resizePixels(source, referenceSize.width, referenceSize.height)
   const data = new Uint8Array(reference.data)
   for (let i = 0; i < data.length; i += 4) {
     const alpha = data[i + 3]! / 255

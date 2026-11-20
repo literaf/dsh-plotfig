@@ -21,8 +21,12 @@ const bounds = (raw: unknown, width: number, height: number) => {
 }
 export const ocrPlainText = (ocr: OCRText): string => ocr.lines.map(l => l.runs.map(r => r.text).join('')).join('\n')
 
-/** Read the documented Ark contract without inventing OCR for a raster that has none. */
+/** Read saved Seedream OCR metadata without inventing OCR for a raster that has none. */
 export function readOCR(asset: CanvasItem | undefined, canvas: { width: number; height: number }): OCRText | undefined {
+  if (asset?.layerMetadata?.ocr) {
+    try { return parseOCR({ ...asset.layerMetadata.ocr, sourceAssetId: asset.id }, new Set([asset.id])) }
+    catch { return undefined }
+  }
   const raw = asset?.layerMetadata?.textRecognition, source = box(asset?.layerMetadata?.bounds)
   if (!asset || !source || !isRecord(raw) || !Array.isArray(raw.lines) || !raw.lines.length || raw.lines.length > MAX_OCR_LINES) return undefined
   const width = source[2] - source[0], height = source[3] - source[1]

@@ -162,7 +162,7 @@ export function styledPrompt(prompt: string, style: GenerationStyle): string {
 export const RESEARCH_TOOLS = [
   { id: 'generate', title: '科研插图', description: '描述想法，选择风格，开始创作', hint: '从机制、实验步骤或研究方法开始描述。' },
   { id: 'decompose', title: '拆分图层', description: '把图片拆成可独立调整的元素', hint: '选择原图，再设置分层范围和最多输出数量。原图会保留。' },
-  { id: 'text', title: '修改文字', description: '打开识别文字，调整内容与样式', hint: '已分层的画板可直接编辑。普通图片需要先分层识别，按实际输出图片数计费；识别后的改字在本地完成。' },
+  { id: 'text', title: '修改文字', description: '打开识别文字，调整内容与样式', hint: '已分层的画板可直接改字。普通图片需要先分层识别，提交前请确认本次分层所需的 AI4Scholar 积分。识别后的改字在本地完成。' },
   { id: 'remove-background', title: '移除背景', description: '提取主体，保留透明背景', hint: '选择图片，再确认需要保留的对象。每次处理生成一张计费图片。' },
   { id: 'reference', title: '参考生图', description: '结合参考图片与新的内容要求', hint: '选择参考图，然后描述你的新内容与需要保留的特征。' },
   { id: 'sketch', title: '草图生图', description: '沿着草图结构完善科研插图', hint: '选择 PNG 或 JPEG 草图，再说明对象、关系和标注内容。' },

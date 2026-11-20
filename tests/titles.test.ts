@@ -14,7 +14,7 @@ describe('canvas labels', () => {
     expect(labelOf({ title: prompt.slice(0, 24), prompt })).toBe('Draw a cross-section illustration…')
     expect(labelOf({ title: '雨林垂直分层剖面图', prompt })).toBe('雨林垂直分层剖面图')
   })
-  it('offers only ratio sizes Ark accepts, and shapes placeholders to match', () => {
+  it('offers only ratio sizes supported by Seedream, and shapes placeholders to match', () => {
     for (const r of RATIOS) expect(parseSize(r.size, '2K')).toBe(r.size)
     expect(pendingShape('2560x1440', 900)).toEqual({ width: 900, height: 506 })
     expect(pendingShape('2K', 900)).toEqual({ width: 900, height: 900 })

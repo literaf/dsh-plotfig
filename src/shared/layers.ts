@@ -5,7 +5,7 @@ import { isNode, updateConnectors } from './diagram.js'
 
 export const LAYER_ID = /^[a-zA-Z0-9_-]{1,80}$/
 export const MAX_LAYERS = 500
-export interface DecomposeInput { image: string; prompt: string; maxImages: number; size: string; watermark: boolean }
+export interface DecomposeInput { image: string; prompt: string; maxImages: number; size: string; watermark: boolean; quotedCredits?: number; requestId?: string }
 export function parseDecompose(raw: unknown, watermark: boolean): DecomposeInput {
   if (!isRecord(raw) || typeof raw.image !== 'string' || !/^item:[a-f0-9]{12}$/.test(raw.image)) throw new Error('请选择当前画布上的一张图片。')
   const maxImages = raw.maxImages ?? raw.max_images ?? 30
@@ -14,7 +14,11 @@ export function parseDecompose(raw: unknown, watermark: boolean): DecomposeInput
   if (typeof size !== 'string' || !['auto', ...SIZE_TIERS].includes(size)) throw new Error('分层尺寸须为 auto、1K、1.5K 或 2K。')
   const prompt = raw.prompt === undefined ? '将图片中的主要元素拆分为独立图层，保持原有位置、颜色和细节，补全移除元素后的底图。' : raw.prompt
   if (typeof prompt !== 'string' || prompt.length > MAX_PROMPT) throw new Error('分层说明过长或格式无效。')
-  return { image: raw.image, prompt: prompt.trim(), maxImages: maxImages as number, size, watermark }
+  const price = raw.quotedCredits ?? raw.quoted_credits
+  const requestId = raw.requestId ?? raw.request_id
+  if (requestId !== undefined && (typeof requestId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(requestId))) throw new Error('分层任务编号须为 UUID v4。')
+  if (price !== undefined && (typeof price !== 'number' || !Number.isSafeInteger(price) || price < 1 || price > 10000)) throw new Error('分层报价无效。')
+  return { image: raw.image, prompt: prompt.trim(), maxImages: maxImages as number, size, watermark, ...(typeof price === 'number' ? { quotedCredits: price } : {}), ...(typeof requestId === 'string' ? { requestId } : {}) }
 }
 const num = (value: unknown, min: number, max: number, name: string): number => {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) throw new Error(`${name}无效。`)

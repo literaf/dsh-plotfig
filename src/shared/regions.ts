@@ -2,7 +2,7 @@
 export interface PixelBox { x: number; y: number; width: number; height: number }
 export const MAX_REGIONS = 16
 /**
- * Ark coordinate tags use normalized integers in [0, 1000], ordered left, top, right, bottom,
+ * Seedream coordinate tags use normalized integers in [0, 1000], ordered left, top, right, bottom,
  * with the origin at the image's top-left corner.
  */
 export function bboxTag(box: PixelBox, width: number, height: number): string {

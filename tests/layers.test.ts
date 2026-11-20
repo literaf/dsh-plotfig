@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ArkClient } from '../src/ark.js'
+import { AI4ScholarClient } from '../src/ai4scholar.js'
 import { CanvasStore } from '../src/store.js'
 import { Seedream } from '../src/service.js'
 import { Preferences } from '../src/preferences.js'
@@ -18,28 +18,47 @@ afterEach(async () => { vi.useRealTimers(); await rm(root, { recursive: true, fo
 const meta = { title: '雨林', prompt: 'rainforest', refs: [], externalRefs: 0, size: '2K' }
 const shape = (id: string, x = 0, y = 0): CanvasLayer => ({ id, name: id, kind: 'rect', x, y, width: 100, height: 80, rotation: 0, opacity: 1, hidden: false, locked: false, fill: '#112233', stroke: '#ffffff', strokeWidth: 0 })
 const scene = (): Composition => ({ id: 'aaaaaaaaaaaa', title: '画板', sourceId: 'bbbbbbbbbbbb', x: 0, y: 0, width: 1000, height: 800, background: 'transparent', version: 0, layers: [shape('a'), shape('b', 200, 100)] })
-const status = async () => ({ version: '0', configured: true, keyRef: 'ARK_API_KEY', model: 'm', defaultSize: '2K', watermark: true })
+const status = async () => ({ version: '0', configured: true, keyRef: 'AI4SCHOLAR_API_KEY', model: 'm', defaultSize: '2K', watermark: true })
 const request = (name: string, body: unknown, method = 'POST', session = 's') => new Request(`http://local/api/seedream/${name}?session=${session}`, { method, body: JSON.stringify(body) })
+
+function layerFetch(layers: object[], download: (url: URL) => Response, onSubmit?: (body: Record<string, unknown>) => void | Promise<void>) {
+  return vi.fn<typeof fetch>(async (input, init) => {
+    const url = new URL(String(input))
+    if (url.origin === 'https://cdn.test') {
+      expect(new Headers(init?.headers).has('Authorization')).toBe(false)
+      return download(url)
+    }
+    expect(url.origin + url.pathname).toBe('https://ai4scholar.net/api/proxy/nano/layers')
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer sk-user-fixture')
+    if (init?.method === 'POST') {
+      const body = JSON.parse(String(init.body))
+      await onSubmit?.(body)
+      return Response.json({ taskId: body.requestId })
+    }
+    return Response.json({ taskId: url.searchParams.get('taskId'), status: 'completed', result: { version: 1, layers } })
+  })
+}
+const baseLayer = { id: 'base', name: '底图', url: 'https://cdn.test/base', zIndex: 0, x: 0, y: 0, width: 1000, height: 800 }
 
 describe('decomposition contract and persistence', () => {
   it('restores layers by their bounding boxes, keeps immutable originals and survives reload', async () => {
     const bodies: Record<string, unknown>[] = []
-    const fetch = vi.fn(async (_url, init) => {
-      if (init?.body) { bodies.push(JSON.parse(String(init.body))); return new Response(JSON.stringify({ data: [
-        { url: 'https://cdn.test/base', z_index: 0 },
-        { url: 'https://cdn.test/frog', z_index: 2, name: '树蛙', bounding_box: { absolute: [320, 280, 480, 400] }, text_recognition: { text: 'Tree frog' } },
-      ] })) }
-      return new Response(String(_url).endsWith('base') ? png(1000, 800) : png(1600, 1200))
-    }) as typeof globalThis.fetch
-    const store = new CanvasStore(root), api = new ArkClient({ apiKey: async () => 'test', timeoutMs: 5000, userAgent: 'test', fetch }), service = new Seedream(api, store)
+    const fetch = layerFetch([
+      baseLayer,
+      { id: 'frog', name: '树蛙', url: 'https://cdn.test/frog', zIndex: 2, x: 320, y: 280, width: 160, height: 120 },
+    ], url => new Response(url.pathname === '/base' ? png(1000, 800) : png(1600, 1200)), body => { bodies.push(body) })
+    const store = new CanvasStore(root), api = new AI4ScholarClient({ apiKey: async () => 'sk-user-fixture', timeoutMs: 5000, userAgent: 'test', fetch }), service = new Seedream(api, store)
     const { items: [source] } = await store.add('s', [{ bytes: png(1000, 800), width: 1000, height: 800 }], meta)
-    const result = await service.decompose('s', parseDecompose({ image: `item:${source!.id}`, max_images: 12 }, false), new AbortController().signal)
+    const input = parseDecompose({ image: `item:${source!.id}`, max_images: 12 }, false)
+    await expect(service.decompose('s', input, new AbortController().signal)).rejects.toThrow('积分报价')
+    expect(fetch).not.toHaveBeenCalled()
+    const result = await service.decompose('s', { ...input, quotedCredits: 41 }, new AbortController().signal)
     expect(bodies).toHaveLength(1)
-    expect(bodies[0]).toMatchObject({ layer_decomposition: true, layer_decomposition_options: { max_images: 12, text_recognition: true }, size: 'auto', output_format: 'png', watermark: false })
+    expect(bodies[0]).toMatchObject({ image: expect.stringMatching(/^data:image\/png;base64,/), maxImages: 12, quotedCredits: 41, size: 'auto', watermark: false })
     expect(bodies[0]).not.toHaveProperty('background')
     expect(result.composition.layers[0]).toMatchObject({ locked: true, width: 1000, height: 800 })
     expect(result.composition.layers[1]).toMatchObject({ name: '树蛙', x: 320, y: 280, width: 160, height: 120 })
-    expect(result.items[1]).toMatchObject({ width: 1600, height: 1200, role: 'layer', layerMetadata: { textRecognition: { text: 'Tree frog' } } })
+    expect(result.items[1]).toMatchObject({ width: 1600, height: 1200, role: 'layer', layerMetadata: { name: '树蛙', bounds: [320, 280, 480, 400], zIndex: 2 } })
     expect(await store.readImage('s', source!.id)).toEqual(Buffer.from(png(1000, 800)))
     const moved = { ...result.composition, layers: result.composition.layers.map((l, i) => i === 1 ? { ...l, x: 1250, rotation: 25 } : l) }
     const saved = await store.editComposition('s', moved.id, 0, moved)
@@ -53,26 +72,26 @@ describe('decomposition contract and persistence', () => {
     expect(await store.readImage('s', result.items[1]!.id)).toEqual(Buffer.from(png(1600, 1200)))
   })
   it('does not discard other billed files or retry generation after a download failure', async () => {
-    const fetch = vi.fn(async (url, init) => {
-      if (init?.body) return new Response(JSON.stringify({ data: [{ url: 'https://cdn.test/base', z_index: 0 }, { url: 'https://cdn.test/bad', z_index: 1 }, { url: 'https://cdn.test/good', z_index: 2, bounding_box: { absolute: [10, 20, 30, 40] } }] }))
-      if (String(url).endsWith('bad')) return new Response('gone', { status: 404 })
-      return new Response(png(1000, 800))
-    }) as typeof globalThis.fetch
-    const result = await new ArkClient({ apiKey: async () => 'test', timeoutMs: 5000, userAgent: 't', fetch }).generate({ prompt: 'split', images: ['https://source.test/a.png'], size: 'auto', watermark: false, decomposition: { maxImages: 3 } }, new AbortController().signal)
+    const fetch = layerFetch([
+      baseLayer,
+      { ...baseLayer, id: 'bad', url: 'https://cdn.test/bad', zIndex: 1 },
+      { ...baseLayer, id: 'good', url: 'https://cdn.test/good', zIndex: 2 },
+    ], url => url.pathname === '/bad' ? new Response('gone', { status: 404 }) : new Response(png(1000, 800)))
+    const api = new AI4ScholarClient({ apiKey: async () => 'sk-user-fixture', timeoutMs: 5000, userAgent: 'test', fetch })
+    const id = crypto.randomUUID()
+    await api.submitLayers(id, { image: 'https://source.test/a.png', prompt: 'split', size: 'auto', watermark: false, maxImages: 3, quotedCredits: 41 })
+    const result = await api.waitForLayers(id)
     expect(result.images.map(i => i.layer?.zIndex)).toEqual([0, 2]); expect(result.warnings).toHaveLength(1)
     expect(vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
-    expect(vi.mocked(fetch).mock.calls).toHaveLength(4)
+    expect(fetch.mock.calls).toHaveLength(5)
   })
   it('persists a completed split after the caller stops waiting', async () => {
     let finish!: () => void
     const gate = new Promise<void>(r => { finish = r })
-    const fetch = vi.fn(async (_url, init) => {
-      if (init?.body) { await gate; return new Response(JSON.stringify({ data: [{ url: 'https://cdn.test/base', z_index: 0 }] })) }
-      return new Response(png(1000, 800))
-    }) as typeof globalThis.fetch
-    const store = new CanvasStore(root), service = new Seedream(new ArkClient({ apiKey: async () => 'k', userAgent: 't', timeoutMs: 5000, fetch }), store)
+    const fetch = layerFetch([baseLayer], () => new Response(png(1000, 800)), () => gate)
+    const store = new CanvasStore(root), service = new Seedream(new AI4ScholarClient({ apiKey: async () => 'sk-user-fixture', userAgent: 't', timeoutMs: 5000, fetch }), store)
     const { items: [source] } = await store.add('s', [{ bytes: png(1000, 800), width: 1000, height: 800 }], meta)
-    const control = new AbortController(), running = service.decompose('s', parseDecompose({ image: `item:${source!.id}` }, false), control.signal)
+    const control = new AbortController(), running = service.decompose('s', parseDecompose({ image: `item:${source!.id}`, quoted_credits: 41 }, false), control.signal)
     await vi.waitFor(() => expect(service.pending('s')).toHaveLength(1))
     control.abort(); finish(); await running
     expect((await store.get('s')).compositions).toHaveLength(1); expect(service.pending('s')).toEqual([])
@@ -80,7 +99,7 @@ describe('decomposition contract and persistence', () => {
 })
 describe('edit route boundaries', () => {
   it('accepts local artboards without AI and rejects foreign assets, unsafe numbers and stale writes', async () => {
-    const fetch = vi.fn(), store = new CanvasStore(root), service = new Seedream(new ArkClient({ apiKey: async () => 'k', timeoutMs: 1000, userAgent: 't', fetch }), store)
+    const fetch = vi.fn(), store = new CanvasStore(root), service = new Seedream(new AI4ScholarClient({ apiKey: async () => 'sk-user-fixture', timeoutMs: 1000, userAgent: 't', fetch }), store)
     const h = createHandlers(service, new Preferences(join(root, 'prefs.json'), { size: '2K', watermark: true }), status)
     const { items: [source] } = await store.add('s', [{ bytes: png(1000, 800), width: 1000, height: 800 }], meta)
     const created = await (await h.composition(request('composition', { sourceId: source!.id }))).json() as { value: { composition: Composition } }

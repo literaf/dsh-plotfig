@@ -3,11 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CanvasStore, GAP } from '../src/store.js'
-import { ArkClient } from '../src/ark.js'
+import { AI4ScholarClient } from '../src/ai4scholar.js'
 import { Seedream } from '../src/service.js'
 import { createHandlers } from '../src/routes.js'
 import { Preferences } from '../src/preferences.js'
-import { png } from './fixtures.js'
+import { drawingFetch, png } from './fixtures.js'
 
 let root: string
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'seedream-')) })
@@ -16,12 +16,9 @@ const meta = { title: '雨林', prompt: 'rainforest', refs: [], externalRefs: 0,
 const image = (w = 1330, h = 1773) => ({ bytes: png(w, h), width: w, height: h })
 function service(fetch?: typeof globalThis.fetch) {
   const bodies: Array<Record<string, unknown>> = []
-  const f = fetch ?? vi.fn(async (_url: unknown, init?: RequestInit) => {
-    if (init?.body) { bodies.push(JSON.parse(init.body as string)); return new Response(JSON.stringify({ data: [{ url: 'https://cdn.example/r.png' }] })) }
-    return new Response(png(1024, 1024))
-  }) as unknown as typeof globalThis.fetch
+  const f = fetch ?? vi.fn(drawingFetch(body => { bodies.push(body) }))
   const store = new CanvasStore(join(root, 'canvases'))
-  return { store, bodies, fetch: f, seedream: new Seedream(new ArkClient({ apiKey: async () => 'k', timeoutMs: 5000, userAgent: 't', fetch: f }), store) }
+  return { store, bodies, fetch: f, seedream: new Seedream(new AI4ScholarClient({ apiKey: async () => 'sk-user-fixture', timeoutMs: 5000, userAgent: 't', fetch: f }), store) }
 }
 describe('canvas store', () => {
   it('lays out new images left to right with private files and bumps the revision', async () => {
@@ -68,7 +65,7 @@ describe('generation service', () => {
     const { seedream, store, bodies } = service()
     const { items: [source] } = await store.add('sess_a', [image()], meta)
     const result = await seedream.generate('sess_a', { prompt: '改成夜景', images: [`item:${source!.id}`], size: '2K', watermark: false }, new AbortController().signal)
-    expect(String(bodies[0]!.image)).toMatch(/^data:image\/png;base64,/)
+    expect(bodies[0]!.images).toEqual([expect.stringMatching(/^data:image\/png;base64,/)])
     expect(bodies[0]!.watermark).toBe(false)
     expect(result.items[0]).toMatchObject({ refs: [source!.id], y: source!.y, title: '改成夜景' })
     await expect(seedream.generate('sess_b', { prompt: 'x', images: [`item:${source!.id}`], size: '2K', watermark: true }, new AbortController().signal)).rejects.toThrow('没有图片')
@@ -78,7 +75,7 @@ describe('generation service', () => {
     const path = join(root, 'ref.jpg'); await writeFile(path, 'jpegbytes')
     await expect(seedream.generate('sess_a', { prompt: 'x', images: [path], size: '2K', watermark: true }, new AbortController().signal, false)).rejects.toThrow('无法识别')
     await seedream.generate('sess_a', { prompt: 'x', images: [path], size: '2K', watermark: true }, new AbortController().signal, true)
-    expect(bodies[0]!.image).toBe(`data:image/jpeg;base64,${Buffer.from('jpegbytes').toString('base64')}`)
+    expect(bodies[0]!.images).toEqual([`data:image/jpeg;base64,${Buffer.from('jpegbytes').toString('base64')}`])
     await expect(seedream.generate('sess_a', { prompt: 'x', images: ['data:image/PNG;base64,AA'], size: '2K', watermark: true }, new AbortController().signal)).rejects.toThrow('小写')
     await expect(seedream.generate('sess_a', { prompt: 'x', images: ['file:///etc/passwd'], size: '2K', watermark: true }, new AbortController().signal, true)).rejects.toThrow('无法识别')
   })
@@ -87,12 +84,9 @@ describe('in-flight generations', () => {
   it('reports a running conversation generation on the canvas and the catalogue, then clears it', async () => {
     let release!: () => void
     const gate = new Promise<void>(r => { release = r })
-    const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      if (init?.body) { await gate; return new Response(JSON.stringify({ data: [{ url: 'https://cdn.example/r.png' }] })) }
-      return new Response(png(1024, 1024))
-    }) as unknown as typeof globalThis.fetch
+    const fetch = vi.fn(drawingFetch(() => gate))
     const { seedream } = service(fetch)
-    const h = createHandlers(seedream, new Preferences(join(root, 'settings.json'), { size: '2K', watermark: true }), async () => ({ version: '0', configured: true, keyRef: 'ARK_API_KEY', model: 'm', defaultSize: '2K', watermark: true }))
+    const h = createHandlers(seedream, new Preferences(join(root, 'settings.json'), { size: '2K', watermark: true }), async () => ({ version: '0', configured: true, keyRef: 'AI4SCHOLAR_API_KEY', model: 'm', defaultSize: '2K', watermark: true }))
     const running = seedream.generate('sess_new', { prompt: '雨林动物分布图', images: [], size: '2K', watermark: true }, new AbortController().signal, true)
     await new Promise(r => setTimeout(r, 0))
     const canvas = await (await h.canvas(new Request('http://x/api/seedream/canvas?session=sess_new'))).json() as { value: { items: unknown[]; pending: Array<{ prompt: string }> } }
@@ -107,7 +101,7 @@ describe('in-flight generations', () => {
   })
 })
 describe('routes', () => {
-  const status = async () => ({ version: '0', configured: true, keyRef: 'ARK_API_KEY', model: 'm', defaultSize: '2K', watermark: true })
+  const status = async () => ({ version: '0', configured: true, keyRef: 'AI4SCHOLAR_API_KEY', model: 'm', defaultSize: '2K', watermark: true })
   it('serves images with safe headers and validates query ids', async () => {
     const { seedream, store } = service()
     const prefs = new Preferences(join(root, 'settings.json'), { size: '2K', watermark: true })

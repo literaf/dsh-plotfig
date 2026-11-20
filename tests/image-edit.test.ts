@@ -1,13 +1,14 @@
+import { drawingFetch } from './fixtures.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import jpeg from 'jpeg-js'
-import { ArkClient } from '../src/ark.js'
-import type { ArkImage } from '../src/ark.js'
+import { AI4ScholarClient } from '../src/ai4scholar.js'
+import type { GeneratedImage } from '../src/image-data.js'
 import { decodePixels, encodePixels, eraseMask, featherEraseMask, finishImageEdit, prepareImageEdit, refineCutoutEdges, resizePixels } from '../src/image-edit.js'
 import type { Pixels } from '../src/image-edit.js'
-import { arkEditDimensions, editDimensions, expandedLayerBox, parseImageEdit } from '../src/shared/image-edit.js'
+import { modelEditDimensions, editDimensions, expandedLayerBox, parseImageEdit } from '../src/shared/image-edit.js'
 import { parseSize } from '../src/shared/types.js'
 import { CanvasStore } from '../src/store.js'
 import { Seedream } from '../src/service.js'
@@ -15,7 +16,7 @@ import { Preferences } from '../src/preferences.js'
 import { createHandlers } from '../src/routes.js'
 
 const pixels = (width = 16, height = 16): Pixels => ({ width, height, data: Uint8Array.from({ length: width * height * 4 }, (_, i) => i * 37 % 256) })
-const image = (p: Pixels): ArkImage => ({ ...p, bytes: encodePixels(p), mime: 'image/png' })
+const image = (p: Pixels): GeneratedImage => ({ ...p, bytes: encodePixels(p), mime: 'image/png' })
 const maskUrl = (p: Pixels) => `data:image/png;base64,${Buffer.from(encodePixels(p)).toString('base64')}`
 const input = (patch: Record<string, unknown> = {}) => parseImageEdit({ operation: 'remove-background', image: 'item:aaaaaaaaaaaa', requestId: 'request-001', ...patch }, false)
 const meta = { title: '测试原图', prompt: 'fixture', refs: [], externalRefs: 0, size: '16x16' }
@@ -57,7 +58,7 @@ describe('image editing pixels and input contract', () => {
     expect(() => editDimensions(16000, 16000)).toThrow()
     expect(() => editDimensions(1000, 16)).toThrow('宽高比')
     for (const [w, h] of [[16, 16], [16000, 1000], [1000, 16000], [4000, 4000], [1776, 998], [15, 240]]) {
-      const size = arkEditDimensions(w!, h!)
+      const size = modelEditDimensions(w!, h!)
       expect(() => parseSize(`${size.width}x${size.height}`, '2K')).not.toThrow()
     }
   })
@@ -115,17 +116,13 @@ describe('image editing pixels and input contract', () => {
   })
   it('uses transparent output only for background removal and reports an opaque result', async () => {
     const p = pixels(), prepared = prepareImageEdit(input(), encodePixels(p)), bodies: Record<string, unknown>[] = []
-    const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      if (init?.body) { bodies.push(JSON.parse(String(init.body))); return new Response(JSON.stringify({ data: [{ url: 'https://cdn.test/cutout.png' }] })) }
-      return new Response(new Uint8Array(encodePixels(p)))
-    }) as typeof globalThis.fetch
-    const ark = new ArkClient({ apiKey: async () => 'test', userAgent: 'test', timeoutMs: 1000, fetch })
-    await ark.generate(prepared.request, new AbortController().signal)
-    expect(bodies[0]).toMatchObject({ background: 'transparent', output_format: 'png' })
+    const fetch = vi.fn(drawingFetch(body => { bodies.push(body) }, new Uint8Array(encodePixels(p))))
+    const api = new AI4ScholarClient({ apiKey: async () => 'sk-user-fixture', userAgent: 'test', timeoutMs: 1000, fetch })
+    await api.generate(prepared.request, new AbortController().signal)
+    expect(bodies[0]).toMatchObject({ background: 'transparent', model: 'seedream55', action: 'edit' })
     expect(finishImageEdit(prepared, image(p)).warnings).toEqual([])
     p.data.fill(255)
     expect(finishImageEdit(prepared, image(p)).warnings.join()).toContain('未返回透明')
-    await expect(ark.generate({ ...prepared.request, decomposition: { maxImages: 3 } }, new AbortController().signal)).rejects.toThrow()
     expect(bodies).toHaveLength(1)
   })
   it('flags changed expansion anchors before restoring original pixels, without certifying unchanged outputs', () => {
@@ -145,16 +142,16 @@ describe('editing persistence, cancellation and session isolation', () => {
   async function setup() {
     const store = new CanvasStore(root), source = image(pixels())
     const { items: [item] } = await store.add('session-a', [source], meta)
-    const ark = new ArkClient({ apiKey: async () => 'test', userAgent: 'test', timeoutMs: 1000, fetch: vi.fn() })
-    const generate = vi.spyOn(ark, 'generate').mockResolvedValue({ images: [source] })
-    const service = new Seedream(ark, store), request = input({ image: `item:${item!.id}` })
-    return { store, source, item: item!, ark, generate, service, request }
+    const api = new AI4ScholarClient({ apiKey: async () => 'sk-user-fixture', userAgent: 'test', timeoutMs: 1000, fetch: vi.fn() })
+    const generate = vi.spyOn(api, 'generate').mockResolvedValue({ images: [source] })
+    const service = new Seedream(api, store), request = input({ image: `item:${item!.id}` })
+    return { store, source, item: item!, api, generate, service, request }
   }
   it('deduplicates concurrent calls and persisted receipts after a service reload', async () => {
-    const { service, request, generate, ark, store, item, source } = await setup()
+    const { service, request, generate, api, store, item, source } = await setup()
     const [a, b] = await Promise.all([service.editImage('session-a', request, new AbortController().signal), service.editImage('session-a', request, new AbortController().signal)])
     expect(a.items[0]!.id).toBe(b.items[0]!.id); expect(generate).toHaveBeenCalledTimes(1)
-    const loaded = new Seedream(ark, new CanvasStore(root))
+    const loaded = new Seedream(api, new CanvasStore(root))
     expect((await loaded.editImage('session-a', request, new AbortController().signal)).items[0]!.id).toBe(a.items[0]!.id)
     await expect(loaded.editImage('session-a', { ...request, prompt: 'different' }, new AbortController().signal)).rejects.toThrow('不同参数')
     expect(generate).toHaveBeenCalledTimes(1)
@@ -166,7 +163,7 @@ describe('editing persistence, cancellation and session isolation', () => {
     generate.mockImplementation(async (_input, signal) => { await new Promise<void>(r => { finish = r }); expect(signal.aborted).toBe(false); return { images: [source] } })
     const control = new AbortController(), waiting = service.editImage('session-a', request, control.signal)
     await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(1))
-    const h = createHandlers(service, new Preferences(join(root, 'prefs.json'), { size: '2K', watermark: false }), async () => ({ version: '0.1.0', model: 'test', configured: true, keyRef: 'ARK_API_KEY', defaultSize: '2K', watermark: false }))
+    const h = createHandlers(service, new Preferences(join(root, 'prefs.json'), { size: '2K', watermark: false }), async () => ({ version: '0.1.0', model: 'test', configured: true, keyRef: 'AI4SCHOLAR_API_KEY', defaultSize: '2K', watermark: false }))
     expect((await h.removeItem(new Request(`http://local/item?session=session-a&id=${item.id}`, { method: 'DELETE' }))).status).not.toBe(200)
     control.abort(); finish(); await waiting
     expect((await store.get('session-a')).items).toHaveLength(2)
@@ -177,7 +174,7 @@ describe('editing persistence, cancellation and session isolation', () => {
     await expect(service.editImage('session-b', request, new AbortController().signal)).rejects.toThrow('没有')
     await expect(service.editImage('session-a', input({ ...request, operation: 'erase', requestId: 'bad-mask-01', mask: maskUrl({ ...pixels(), data: new Uint8Array(1024) }) }), new AbortController().signal)).rejects.toThrow('先涂抹')
     await expect(service.editImage('session-a', request, AbortSignal.abort())).rejects.toThrow()
-    const h = createHandlers(service, new Preferences(join(root, 'prefs.json'), { size: '2K', watermark: false }), async () => ({ version: '0', model: 'test', configured: true, keyRef: 'ARK_API_KEY', defaultSize: '2K', watermark: false }))
+    const h = createHandlers(service, new Preferences(join(root, 'prefs.json'), { size: '2K', watermark: false }), async () => ({ version: '0', model: 'test', configured: true, keyRef: 'AI4SCHOLAR_API_KEY', defaultSize: '2K', watermark: false }))
     expect((await h.editImage(new Request('http://local/edit-image?session=session-a', { method: 'POST', body: JSON.stringify({ ...request, image: '/tmp/private.png' }) }))).status).toBe(400)
     expect(generate).not.toHaveBeenCalled()
   })

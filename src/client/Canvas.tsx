@@ -6,6 +6,7 @@ import type { CanvasItem, Composition } from '../shared/types.js'
 import { isBoard, labelOf } from '../shared/types.js'
 import type { CanvasModel, PendingView } from './controller.js'
 import { imageUrl } from './controller.js'
+import type { LayerQuote } from '../shared/types.js'
 import type { ConversationActions, Outcome } from './handoff.js'
 import { Composer, SizePicker, TransparentToggle } from './Composer.js'
 import type { SizeChoice } from './Composer.js'
@@ -143,6 +144,19 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   // Regions are in the opened image's pixels; never carry them to another image.
   useEffect(() => setSplitRegions([]), [splitSource?.id])
   const [maxImages, setMaxImages] = useState(30), [operationBusy, setOperationBusy] = useState(false), [operationError, setOperationError] = useState('')
+  const [quote, setQuote] = useState<LayerQuote>(), [quoteError, setQuoteError] = useState('')
+  const splitCredits = quote?.enabled && quote.maxImages === maxImages ? quote.creditCost : null
+  useEffect(() => {
+    setQuote(undefined); setQuoteError('')
+    if (!splitSource || !Number.isInteger(maxImages) || maxImages < 2 || maxImages > 100) return
+    const control = new AbortController()
+    void model.layerQuote(maxImages, control.signal).then(value => {
+      if (!control.signal.aborted) setQuote(value)
+    }).catch(error => {
+      if (!control.signal.aborted) setQuoteError(error instanceof Error ? error.message : '报价获取失败')
+    })
+    return () => control.abort()
+  }, [model, splitSource, maxImages])
   const operation = useRef(false)
   const [history, setHistory] = useState<{ done: CanvasChange[]; undone: CanvasChange[] }>({ done: [], undone: [] })
   const fitted = useRef(false), seen = useRef<string | undefined>(undefined)
@@ -326,12 +340,12 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   }
   const createBoard = () => operate(async () => { if (item) { const created = await model.createComposition(item.id); setSelected(created.id); setEditorId(created.id) } })
   const split = () => operate(async () => {
-    if (!splitSource) return
+    if (!splitSource || splitCredits == null) return
     const source = splitSource, forText = splitForText
     setSplitSource(undefined)
-    const created = await model.decompose({ image: `item:${source.id}`, prompt: decomposePrompt(splitPrompt, splitRegions, source.width, source.height), maxImages })
+    const created = await model.decompose({ image: `item:${source.id}`, prompt: decomposePrompt(splitPrompt, splitRegions, source.width, source.height), maxImages, quotedCredits: splitCredits })
     setSplitRegions([])
-    setSelected(created.id); setSelectedLayers([]); flash('分层完成，直接点击图层编辑；Shift 可多选')
+    setSelected(created.id); setSelectedLayers([]); flash(created.layerTask?.billing ? `分层完成，实收 ${created.layerTask.billing.chargedCredits} 积分，已退回 ${created.layerTask.billing.refundedCredits} 积分。` : '分层完成，直接点击图层编辑；Shift 可多选')
     if (forText) openTextEditor(created)
   })
   const removeLayers = () => {
@@ -420,6 +434,10 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const empty = !items.length && !compositions.length && !state.pending.length && !state.loading
   if (opened) return <LayerEditor key={opened.id} model={model} initial={opened} initialSelectedId={editorFocus} conversation={conversation} onOpenCopy={setEditorId} onClose={() => { setEditorId(undefined); setEditorFocus(undefined); setSelected(opened.id) }}/>
   return <div className="sd-canvas-shell">
+    {state.canvas?.layerTasks?.filter(task => task.error).map(task => <div key={task.id} className="sd-alert" role="status">
+      {task.error} <button className="sd-button" disabled={state.pending.some(p => p.key === task.id)} onClick={() => { void model.refresh(task.id) }}>取回分层结果</button>
+      <button className="sd-button" disabled={state.pending.some(p => p.key === task.id)} onClick={() => { void model.dismissLayerTask(task.id) }}>移除取回记录</button>
+    </div>)}
     <div className="sd-canvas-bar" ref={viewControls}>
       <div className="sd-research-actions">
         <button type="button" className="sd-button" disabled={operationBusy} onClick={() => setToolMenu(true)} aria-haspopup="dialog">科研工具</button>
@@ -513,6 +531,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
         </>}
       </div>
       {layerPanel ? <aside className="sd-inline-layers" aria-label="画布图层" style={{ top: toolbarTop + toolbarHeight + 10, bottom }}>
+        {composition.layerTask?.billing ? <p className="sd-split-cost">分层实收 {composition.layerTask.billing.chargedCredits} 积分 · 已退回 {composition.layerTask.billing.refundedCredits} 积分</p> : null}
         <div className="sd-inline-layers-head"><strong>图层 <span>{composition.layers.length}</span></strong><button className="sd-icon-button" onClick={() => setLayerPanel(false)} aria-label="关闭图层列表"><CloseIcon/></button></div>
         <div className="sd-layer-list" role="listbox" aria-label="图层列表" aria-multiselectable="true">
           {[...composition.layers].reverse().map(l => <div key={l.id} className="sd-layer-row" data-selected={selectedLayers.includes(l.id)} data-hidden={l.hidden}>
@@ -551,8 +570,9 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
       <label>分层说明<textarea value={splitPrompt} onChange={e => setSplitPrompt(e.target.value)} rows={3} maxLength={4000}/></label>
       {splitRegions.length ? <p className="sd-split-cost">框选区域会以坐标写入分层说明，模型优先把每个区域内的元素拆成独立图层。</p> : null}
       <label>最多输出图片数（含底图）<input type="number" min={2} max={100} value={maxImages} onChange={e => setMaxImages(Number(e.target.value))}/></label>
-      <p className="sd-split-cost">此操作调用 Seedream，按实际返回图片数计费。之后拖动、加字和导出均在本地完成。</p>
-      <div className="sd-split-actions"><button className="sd-button" onClick={() => setSplitSource(undefined)}>取消</button><button className="sd-button sd-button-primary" disabled={operationBusy || !Number.isInteger(maxImages) || maxImages < 2 || maxImages > 100} onClick={() => { void split() }}>开始分层</button></div>
+      <p className="sd-split-cost" role="status">{quoteError || (quote?.maxImages !== maxImages ? '正在获取分层报价…' : !quote.enabled ? (quote.supportedMaxImages ? `当前最多支持 ${quote.supportedMaxImages} 张。` : '分层服务暂不可用。') : splitCredits == null ? '当前没有可用的积分报价。' : quote.pricing ? `最高预留 ${splitCredits} 积分，最多输出 ${maxImages} 张（含底图）。` : `本次分层共 ${splitCredits} 积分，最多输出 ${maxImages} 张（含底图）。`)}</p>
+      {splitCredits != null && quote?.pricing ? <p className="sd-split-cost">输入 {quote.pricing.inputCredits} 积分。每张交付图片在 {quote.pricing.standardMaxPixels / 10000} 万像素以内收 {quote.pricing.standardCredits} 积分，超过收 {quote.pricing.largeCredits} 积分。含文字识别，完成后退回差额。</p> : null}
+      <div className="sd-split-actions"><button className="sd-button" onClick={() => setSplitSource(undefined)}>取消</button><button className="sd-button sd-button-primary" disabled={operationBusy || splitCredits == null} onClick={() => { void split() }}>开始分层</button></div>
     </div></div> : null}
     {editSource ? <ImageEditDialog key={editSource.id} model={model} source={editSource} initialOperation="remove-background" onClose={() => setEditSource(undefined)} onComplete={result => setSelected(result.id)}/> : null}
     {toolMenu ? <ResearchDialog title="科研工具" onClose={() => setToolMenu(false)}><ResearchTools onSelect={launchTool}/></ResearchDialog> : null}

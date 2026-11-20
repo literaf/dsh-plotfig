@@ -25,7 +25,7 @@ const image = (): CanvasLayer => ({ id: 'text-layer', kind: 'image', name: 'æ–‡å
 const scene = (layers: CanvasLayer[]): Composition => ({ id: 'cccccccccccc', sourceId: 'bbbbbbbbbbbb', title: 'OCR', width: 2000, height: 1000, x: 0, y: 0, version: 0, background: 'transparent', layers })
 const measure = (r: TextRun, size: number) => Array.from(r.text).length * size * 0.6
 
-describe('Ark OCR import', () => {
+describe('Seedream OCR import', () => {
   it('uses base-image coordinates and source bounding-box scale, not the high-resolution layer PNG', () => {
     const source = asset(), before = JSON.stringify(source), ocr = readOCR(source, canvas)!
     expect(ocr).toMatchObject({ sourceAssetId: source.id, width: 400, height: 300 })

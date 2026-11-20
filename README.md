@@ -7,7 +7,7 @@
 
 # PlotFig (dsh-plotfig)
 
-An AI illustration plugin for researchers using DeepSeek Harness. Use Volcengine Ark **Seedream 5.5** (`doubao-seedream-5-5-261028`) for mechanism diagrams, method illustrations, graphical abstracts and presentation figures, then continue with layer editing, text changes and export. General image creation remains available. There are two kinds of canvas:
+An AI illustration plugin for researchers using DeepSeek Harness. Use **Seedream 5.5** through AI4Scholar for mechanism diagrams, method illustrations, graphical abstracts and presentation figures, then continue with layer editing, text changes and export. General image creation remains available. There are two kinds of canvas:
 
 - **Conversation canvas**: one per conversation. Images generated in the conversation land on it, and it opens in the right Sidebar when a generation starts (Harness ≥ 0.2.2).
 - **Standalone canvas**: created from the PlotFig panel with "新建画布". It belongs to no conversation.
@@ -29,13 +29,21 @@ An AI illustration plugin for researchers using DeepSeek Harness. Use Volcengine
 
 ![Toolbar for a selected image: edit, regenerate, split layers, AI edits, add as reference](docs/images/canvas-selected.jpg)
 
+The layer service places transparent inputs on white paper for decomposition. Original images and returned foreground transparency are preserved.
+
 ## Install
 
+Open DeepSeek Harness Desktop once to initialize the profile, then fully quit it. From the directory containing the beta package, run
+
 ```bash
-dsh plugin --profile desktop add dsh-plotfig
+dsh plugin --profile desktop add "$PWD/dsh-plotfig-0.1.0-beta.2.tgz"
 ```
 
-Save an Ark API key under Settings → PlotFig (credential `ARK_API_KEY`). **测试连接** in settings lists Ark models with the saved key to confirm it works and Seedream 5.5 is enabled; it generates nothing and is not billed. Use `--profile web` for the web host. Saved canvases remain available for local editing and export without a key; model operations require one.
+Reopen Desktop, go to **Plugins → Installed plugins**, and enable **dsh-plotfig**. Open **PlotFig** from the sidebar.
+
+PlotFig uses only AI4Scholar API keys for generation, editing, and layer splitting. If dsh-ai4scholar already has a key under `AI4SCHOLAR_API_KEY`, PlotFig uses it automatically. Otherwise, save your key under Settings → PlotFig. **测试连接** checks your balance and Seedream availability for free. [Get an AI4Scholar key](https://ai4scholar.net/resources/contact?tab=api-keys).
+
+Use `--profile web` for the web host. You can open, edit, and export saved canvases locally without a key.
 
 ## Generating
 
@@ -46,7 +54,7 @@ Save an Ark API key under Settings → PlotFig (credential `ARK_API_KEY`). **测
 - For a set of different images, the assistant uses `seedream_generate_batch` (2–10 items, one billed image each, run in order; failures are reported, not retried).
 - **加入参考** adds the selected canvas image to the prompt, up to 10 references. The main image (the one being edited or used for reference generation) is 图1 and the rest follow in order, so prompts can say "put the device from 图2 into 图1".
 - **透明背景** generates a PNG with a transparent background, for icons, devices and figure parts. A result without transparency is kept with a warning.
-- Repeated edits of one image request opaque output, as the Ark docs recommend for consistency, unless transparency is on.
+- Repeated edits use an opaque background for consistency. Turn on transparency to request a transparent image.
 - **风格** offers six appearance presets: flat, soft 2.5D, line art, naturalistic illustration, 3D rendering and ink with light washes. A preset is saved per canvas and adds appearance rules to later requests; choosing one makes no model call. **跟随描述** or `style: "auto"` leaves the prompt unchanged. Presets do not certify scientific accuracy or journal requirements.
 - Import a PNG or JPEG up to 30 MB, 16000 px per side and 32 million pixels. Importing makes no model call; PNG bytes and alpha are kept.
 - **模板** opens eight original local diagram templates (workflows, model architecture, cycles, timelines) in three palettes. Templates need no key and make no model call.
@@ -57,7 +65,7 @@ Each operation saves its result as a new canvas image; the original stays intact
 
 - **去背景**: transparent cutout of the main subject; detached titles and panels are removed unless requested.
 - **消除**: brush or rectangle masks with subtract, undo and redo. Every RGBA byte outside the mask is restored from the original; edges blend inward over 0–64 px (`feather`).
-- **局部重绘** (inpaint): box 1–16 regions and describe what to draw. Regions are sent as Ark `<bbox>` tags and every pixel outside them is restored. The whole box is redrawn; drawing that crosses a box edge is cut off on restore and flagged.
+- **局部重绘** (inpaint): box 1–16 regions and describe what to draw. Regions are sent as `<bbox>` tags and every pixel outside them is restored. The whole box is redrawn; drawing that crosses a box edge is cut off on restore and flagged.
 - **扩图**: one side per pass, using a cropped edge reference and conservative alignment; the original rectangle is restored byte for byte. Several sides run in sequence (left, right, top, bottom), one billed image per side; if a later pass fails, completed passes are kept. Seams, mismatched edges, wrong aspect ratios, unfilled pixels and frame lines drawn beside the seam are flagged.
 - **变清晰** (enhance): upscale and sharpen up to the ~4.62 MP model limit. The model can rewrite small text, so the result is compared with the source and changed areas are refilled from the upscaled original; those areas are slightly softer. Every enhanced result is marked for review.
 
@@ -65,9 +73,9 @@ Each operation saves its result as a new canvas image; the original stays intact
 
 ## Layers and text
 
-- **分图层** splits an image into a locked background and transparent layers (2–100 outputs including the background, default 30, billed per output). You can box regions to separate; they are added to the prompt as `<bbox>` tags. `seedream_decompose` offers the same operation.
+- **分图层** splits an image into a locked background and transparent layers (2–100 outputs including the background, default 30). You can box regions to separate; they are added to the prompt as `<bbox>` tags. `seedream_decompose` offers the same operation.
 - Layers are edited on the main canvas: click, Shift/Cmd/Ctrl multi-select, marquee, drag, resize, rotate, merge and arrange. **详细编辑** adds text, shapes, alignment, stacking and OCR editing. **加文字 / 图形** creates an artboard without splitting. Edits autosave and support undo/redo.
-- OCR text layers convert to locally editable rich text per line and style run. OCR font names follow Ark's 228-font list; each maps to a category fallback for display and a PostScript name for PSD.
+- OCR text layers convert to locally editable rich text per line and style run. PlotFig maps all 228 supported OCR fonts to display fallbacks and PostScript names for PSD export.
 
 ## Export
 
@@ -80,11 +88,11 @@ All exports are local and make no model calls.
 
 ## Billing and data
 
-Each generation is billed per output image by Ark. Stopping a wait does not cancel a submitted request, and the result still appears on the canvas. Result URLs expire after 24 hours, so images are downloaded at once to `$DSH_HOME/seedream/canvases/<canvas id>/` (owner-only files). The watermark is on by default, matching Ark; it can be turned off in settings.
+AI4Scholar bills ordinary generation per image and reserves the quoted maximum for a split. The final cost is 2 credits for the input plus 3 per delivered image up to 2.61 MP or 6 above it. The background counts as an output and OCR is included. Unused credits are returned, with a full refund on failure. Reopening a canvas retrieves existing split tasks by ID. Stopping a wait does not cancel a submitted request, and the result still appears on the canvas. Images are downloaded at once to `$DSH_HOME/seedream/canvases/<canvas id>/` (owner-only files). You can turn off the default watermark in Settings.
 
 ## Limitations
 
 - 500 objects per artboard, 32 million pixels per PNG export; undo history lasts for the current run.
 - AI results depend on the model. Pixel protection is exact; picture quality is not guaranteed. Expanding blank areas beside diagrams and tables is unreliable, cutouts lose glass-like translucency, combining several references can drop text labels, naturalistic and 3D presets look similar, and images in one batch are generated independently, so their look can differ even with the same style.
 - PSD files have been checked in Photopea and Adobe Illustrator 2025, not in Photoshop. Fonts missing on the target machine are substituted.
-- This is a beta release. Each AI operation was tested against the real Ark API, but on a limited set of samples. See [README_CN.md](README_CN.md) for the full Chinese guide and shortcuts.
+- This is a beta release. Earlier model-quality checks used a limited set of real Seedream outputs. The AI4Scholar integration has been tested with simulated API responses. See [README_CN.md](README_CN.md) for the full Chinese guide and shortcuts.

@@ -1,7 +1,7 @@
 {
   "name": "dsh-plotfig",
-  "version": "0.1.0-beta.1",
-  "description": "PlotFig for DeepSeek Harness: scientific figures with Seedream 5.5 — illustration styles, image generation and editing, layer splitting, editable OCR text, and PNG/SVG/PDF/PSD export.",
+  "version": "0.1.0-beta.2",
+  "description": "PlotFig for DeepSeek Harness: create scientific figures with Seedream 5.5 through AI4Scholar, edit images and OCR text, split layers, and export PNG/SVG/PDF/PSD.",
   "type": "module",
   "license": "MIT",
   "author": "ai4scholar",
@@ -34,7 +34,7 @@
     "dsh-plugin",
     "deepseek-harness",
     "seedream",
-    "volcengine",
+    "ai4scholar",
     "image-generation",
     "canvas",
     "scientific-illustration",

@@ -6,8 +6,10 @@ export const ROUTE = '/api/seedream'
 export const PANEL = 'seedream'
 export const TAB_KIND = 'seedream'
 export const TAB_ID = 'dsh-seedream'
-export const KEY_REF = 'ARK_API_KEY'
-export const MODEL = 'doubao-seedream-5-5-261028'
+export const KEY_REF = 'AI4SCHOLAR_API_KEY'
+/** Format check for user keys. AI4Scholar verifies the credential on each request. */
+export const isAI4ScholarKey = (key: string | undefined): boolean => !!key && /^sk-user-[a-zA-Z0-9_-]+$/.test(key)
+export const MODEL = 'seedream55'
 export const SIZE_TIERS = ['1K', '1.5K', '2K'] as const
 export type SizeTier = typeof SIZE_TIERS[number]
 export const MAX_REFS = 10
@@ -29,7 +31,7 @@ export interface GenerateInput {
   style?: GenerationStyle
   /** Native RGBA PNG output with a transparent background (Seedream 5.5). */
   transparent?: boolean
-  /** RGB output; Ark recommends it for consistency across repeated edits of one image. */
+  /** Request an opaque image for consistent backgrounds across repeated edits. */
   opaque?: boolean
   /** Regenerate this canvas item: the result takes its place and the old version is kept. */
   replaces?: string
@@ -50,6 +52,7 @@ export interface CanvasItem {
   createdAt: string
   /** Decomposition assets are kept for editing and undo, not laid out as separate originals. */
   role?: 'layer'
+  creditCost?: number
   layerMetadata?: LayerMetadata
   edit?: ImageEditReceipt
   warnings?: string[]
@@ -70,7 +73,24 @@ export interface LayerMetadata {
   description?: string
   /** Raw OCR stays with the immutable image; editor text is a separate, approximate reconstruction. */
   textRecognition?: unknown
+  ocr?: Omit<OCRText, 'sourceAssetId'>
 }
+export interface SavedLayerTask { id: string; sourceId: string; startedAt: string; fingerprint: string; error?: string }
+export interface LayerPricing {
+  mode: 'per_output_v1'
+  inputCredits: number
+  standardCredits: number
+  largeCredits: number
+  standardMaxPixels: number
+}
+export interface LayerBilling {
+  reservedCredits: number
+  chargedCredits: number
+  refundedCredits: number
+  standardOutputs: number
+  largeOutputs: number
+}
+export interface LayerQuote { pricing?: LayerPricing; enabled: boolean; maxImages: number; supportedMaxImages: number; creditCost: number | null }
 export interface Canvas {
   sessionId: string
   revision: number
@@ -79,6 +99,7 @@ export interface Canvas {
   updatedAt: string
   items: CanvasItem[]
   compositions?: Composition[]
+  layerTasks?: SavedLayerTask[]
   /** Persisted per canvas; changing this does not generate or alter any image. */
   generationStyle?: GenerationStyle
 }
@@ -146,6 +167,7 @@ export interface CanvasLayer {
 /** Layer coordinates are relative to the artboard, and may extend beyond it. */
 export interface Composition {
   id: string
+  layerTask?: { id: string; fingerprint: string; billing?: LayerBilling }
   title: string
   sourceId: string
   x: number
@@ -169,6 +191,7 @@ export interface CanvasEntry {
   diagramCover?: string
 }
 export interface Status {
+  provider?: 'ai4scholar'
   version: string
   configured: boolean
   keyRef: string
@@ -200,13 +223,13 @@ export function titleFrom(prompt: string, max = 18): string {
   const cut = clause.slice(0, limit), space = cut.lastIndexOf(' ')
   return (space > limit / 2 ? cut.slice(0, space) : cut) + '…'
 }
-/** Aspect presets offered by the canvas; each maps to an exact WxH inside Ark's pixel bounds at 2K. */
+/** Aspect presets offered by the canvas; each maps to an exact WxH within the model's pixel limits at 2K. */
 export const RATIOS = [
   { id: '1:1', size: '2048x2048' }, { id: '4:3', size: '2304x1728' }, { id: '3:4', size: '1728x2304' },
   { id: '16:9', size: '2560x1440' }, { id: '9:16', size: '1440x2560' }, { id: '3:2', size: '2496x1664' }, { id: '2:3', size: '1664x2496' },
 ] as const
 const PIXELS_MIN = 921_600, PIXELS_MAX = 4_624_220
-/** Ark accepts a tier or WxH within the documented pixel and ratio bounds, never both. */
+/** Seedream accepts a tier or WxH within the documented pixel and ratio bounds, never both. */
 export function parseSize(value: unknown, fallback: string): string {
   const v = value === undefined || value === '' ? fallback : value
   if (typeof v !== 'string') throw new Error('size 必须是 1K、1.5K、2K 或 宽x高。')

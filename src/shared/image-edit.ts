@@ -100,7 +100,7 @@ export function enhanceDimensions(width: number, height: number) {
   return { width: w, height: h }
 }
 /** Working resolution for the model; original-resolution pixels are restored after editing. */
-export function arkEditDimensions(width: number, height: number) {
+export function modelEditDimensions(width: number, height: number) {
   const pixels = width * height, scale = Math.sqrt(Math.max(921600, Math.min(4_624_220, pixels)) / pixels)
   let w = Math.max(16, Math.round(width * scale)), h = Math.max(16, Math.round(height * scale))
   while (w * h > 4_624_220) { if (w >= h) w--; else h-- }

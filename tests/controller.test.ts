@@ -6,7 +6,7 @@ import type { Canvas } from '../src/shared/types.js'
 
 const canvas = (revision: number, ids: string[] = []): Canvas => ({ sessionId: 's', revision, createdAt: '', updatedAt: '', items: ids.map((id, i) => ({ id, title: id, prompt: 'p', width: 10, height: 10, x: i * 90, y: 0, refs: [], externalRefs: 0, size: '2K', createdAt: '' })) })
 const port = { describe: vi.fn(), set: vi.fn(async () => {}), unset: vi.fn(async () => {}) }
-const catalog = { version: '0', configured: true, keyRef: 'ARK_API_KEY', model: 'm', defaultSize: '2K', watermark: true, canvases: [] }
+const catalog = { version: '0', configured: true, keyRef: 'AI4SCHOLAR_API_KEY', model: 'm', defaultSize: '2K', watermark: true, canvases: [] }
 afterEach(() => { vi.useRealTimers() })
 describe('canvas model', () => {
   it('polls only while held and ignores older revisions', async () => {
@@ -60,9 +60,17 @@ describe('canvas model', () => {
     finish({ ok: true, value: saved }); await moving
     expect(model.getSnapshot().canvas?.revision).toBe(2)
   })
-  it('writes only the Ark key reference', async () => {
-    const fetcher = vi.fn(async () => ({ ok: true, value: catalog })) as unknown as Fetcher
-    const c = new Controller(() => port, fetcher); await c.attach(); await c.saveKey(' k '); await c.removeKey()
-    expect(port.set).toHaveBeenCalledWith('ARK_API_KEY', 'k'); expect(port.unset).toHaveBeenCalledWith('ARK_API_KEY'); c.dispose()
+  it('saves and removes only the shared AI4Scholar key, even with stale catalog metadata', async () => {
+    const legacy = { ...catalog, keyRef: 'OTHER_DRAWING_API_KEY' }
+    const fetcher = vi.fn(async () => ({ ok: true, value: legacy })) as unknown as Fetcher
+    const c = new Controller(() => port, fetcher)
+    await c.attach()
+    expect(await c.saveKey('legacy-provider-token')).toBe(false)
+    expect(port.set).not.toHaveBeenCalled()
+    expect(await c.saveKey(' sk-user-fixture ')).toBe(true)
+    await c.removeKey()
+    expect(port.set.mock.calls).toEqual([['AI4SCHOLAR_API_KEY', 'sk-user-fixture']])
+    expect(port.unset.mock.calls).toEqual([['AI4SCHOLAR_API_KEY']])
+    c.dispose()
   })
 })

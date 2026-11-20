@@ -1,7 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Seedream } from './service.js'
 import { checkItem, checkSession, EditConflict } from './store.js'
-import { ArkError, imageInfo, MAX_BYTES } from './ark.js'
+import { AI4ScholarError } from './ai4scholar.js'
+import { imageInfo, MAX_BYTES } from './image-data.js'
 import { entryOf, isRecord, parseGenerate, parseSize, ROUTE } from './shared/types.js'
 import type { Status } from './shared/types.js'
 import type { Preferences } from './preferences.js'
@@ -14,7 +15,7 @@ interface Route { path: string; methods: readonly string[]; requestBody: 'buffer
 interface Connection { fetch?: { register(route: Route): () => Promise<void> } }
 const HEADERS = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }
 export const json = (value: unknown, status = 200): Response => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...HEADERS } })
-const fail = (error: unknown, fallback: string, status = 400) => json({ ok: false, error: error instanceof Error ? error.message : fallback }, error instanceof EditConflict ? 409 : error instanceof ArkError ? 502 : status)
+const fail = (error: unknown, fallback: string, status = 400) => json({ ok: false, error: error instanceof Error ? error.message : fallback }, error instanceof EditConflict ? 409 : error instanceof AI4ScholarError ? 502 : status)
 async function body(request: Request, limit: number): Promise<unknown> {
   const text = await request.text()
   if (text.length > limit) throw new Error('请求内容过长。')
@@ -33,13 +34,20 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
         const url = new URL(request.url), id = session(url)
         if (request.method === 'PATCH') {
           const raw = await body(request, 256 * 1024)
+          if (isRecord(raw) && typeof raw.dismissLayerTask === 'string') {
+            const task = (await service.store.get(id)).layerTasks?.find(job => job.id === raw.dismissLayerTask)
+            if (!task?.error || service.pending(id).some(job => job.key === task.id)) throw new Error('只能移除已停止取回的任务记录。')
+            return json({ ok: true, value: await service.store.setLayerTask(id, task, true) })
+          }
           if (isRecord(raw) && raw.generationStyle !== undefined && raw.positions === undefined) return json({ ok: true, value: await service.store.setGenerationStyle(id, raw.generationStyle) })
           if (isRecord(raw) && typeof raw.showVersion === 'string' && raw.positions === undefined) return json({ ok: true, value: await service.store.showVersion(id, raw.showVersion) })
           if (!isRecord(raw) || !Array.isArray(raw.positions)) throw new Error('无效的布局数据。')
           const positions = raw.positions.filter(isRecord).map(p => ({ id: String(p.id), x: Number(p.x), y: Number(p.y) }))
           return json({ ok: true, value: await service.store.move(id, positions) })
         }
-        return json({ ok: true, value: { ...await service.store.get(id), pending: service.pending(id) } })
+        const canvas = await service.store.get(id)
+        service.resumeLayerTasks(canvas, url.searchParams.get('resumeLayer'))
+        return json({ ok: true, value: { ...canvas, pending: service.pending(id) } })
       } catch (error) { return fail(error, '读取画布失败。') }
     },
     async generate(request: Request): Promise<Response> {
@@ -89,6 +97,10 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
         return json({ ok: true, value: { canvas: result.canvas, composition: result.composition } })
       } catch (error) { return fail(error, '分层失败。') }
     },
+    async layerQuote(request: Request): Promise<Response> {
+      try { return json({ ok: true, value: await service.layerQuote(Number(new URL(request.url).searchParams.get('maxImages'))) }) }
+      catch (error) { return fail(error, '分层报价暂不可用。') }
+    },
     async editImage(request: Request): Promise<Response> {
       try {
         const sid = session(new URL(request.url)), input = parseImageEdit(await body(request, Math.ceil(MAX_MASK_BYTES * 4 / 3) + 64 * 1024), (await prefs.get()).watermark)
@@ -136,7 +148,7 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
       } catch (error) { return fail(error, '删除失败。', 404) }
     },
     async check(): Promise<Response> {
-      try { return json({ ok: true, value: await service.ark.check(new AbortController().signal) }) }
+      try { return json({ ok: true, value: await service.client.check(new AbortController().signal) }) }
       catch (error) { return fail(error, '连接测试失败。') }
     },
     async settings(request: Request): Promise<Response> {
@@ -164,6 +176,7 @@ export function applyRoutes(ctx: Context, service: Seedream, prefs: Preferences,
     bridge.register({ path: `${ROUTE}/generate`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.generate(r) })
     bridge.register({ path: `${ROUTE}/composition`, methods: ['POST', 'PATCH', 'DELETE'], requestBody: 'buffered', fetch: r => h.composition(r) })
     bridge.register({ path: `${ROUTE}/decompose`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.decompose(r) })
+    bridge.register({ path: `${ROUTE}/layer-quote`, methods: ['GET'], requestBody: 'buffered', fetch: r => h.layerQuote(r) })
     bridge.register({ path: `${ROUTE}/edit-image`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.editImage(r) })
     bridge.register({ path: `${ROUTE}/import-image`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.importImage(r) })
     bridge.register({ path: `${ROUTE}/composite`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.composite(r) })

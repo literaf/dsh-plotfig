@@ -2,8 +2,8 @@ import { mkdir, readdir, readFile, writeFile, rename, rm } from 'node:fs/promise
 import { join } from 'node:path'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { entryOf, isRecord, ITEM_ID, SESSION_ID } from './shared/types.js'
-import type { Canvas, CanvasEntry, CanvasItem, CanvasLayer, Composition } from './shared/types.js'
-import type { ArkImage } from './ark.js'
+import type { Canvas, CanvasEntry, CanvasItem, CanvasLayer, Composition, LayerBilling, SavedLayerTask } from './shared/types.js'
+import type { GeneratedImage } from './image-data.js'
 import { parseCompositionEdit } from './shared/layers.js'
 import { parseGenerationStyle } from './shared/research.js'
 import { createDiagramTemplate } from './shared/templates.js'
@@ -110,6 +110,7 @@ export class CanvasStore {
     return this.serial(sessionId, async () => {
       const canvas = await this.get(sessionId)
       if (!canvas.items.some(i => i.id === checkItem(itemId))) throw new Error('图片不存在。')
+      if (canvas.layerTasks?.some(task => task.sourceId === itemId)) throw new Error('此图有待取回的分层结果。')
       if (canvas.compositions?.some(c => c.sourceId === itemId || c.layers.some(l => l.assetId === itemId || l.ocr?.sourceAssetId === itemId))) throw new Error('这张图仍被图层画板使用，请先删除相关画板。')
       // Deleting the shown version reveals the newest remaining one in the same place.
       const removed = canvas.items.find(i => i.id === itemId)!, group = removed.versionOf ?? removed.id
@@ -158,10 +159,26 @@ export class CanvasStore {
       return this.commit(canvas)
     })
   }
-  async addDecomposition(sessionId: string, sourceId: string, images: ArkImage[], warnings: string[] = []): Promise<{ canvas: Canvas; items: CanvasItem[]; composition: Composition }> {
+  async setLayerTask(sessionId: string, job: SavedLayerTask, remove = false) {
+    return this.serial(sessionId, async () => {
+      const canvas = await this.get(sessionId)
+      const others = (canvas.layerTasks ?? []).filter(task => task.id !== job.id)
+      if (!remove && !canvas.items.some(item => item.id === job.sourceId)) throw new Error('分层原图已被删除。')
+      canvas.layerTasks = remove ? others : [...others, job]
+      const source = canvas.items.find(item => item.id === job.sourceId)
+      if (remove && job.error && source) (source.warnings ??= []).push(job.error)
+      return this.commit(canvas)
+    })
+  }
+  async addDecomposition(sessionId: string, sourceId: string, images: GeneratedImage[], warnings: string[] = [], taskId?: string, billing?: LayerBilling): Promise<{ canvas: Canvas; items: CanvasItem[]; composition: Composition }> {
     return this.serial(sessionId, async () => {
       const canvas = await this.get(sessionId), source = canvas.items.find(i => i.id === checkItem(sourceId))
       if (!source) throw new Error('原图不存在，无法保存分层结果。')
+      const task = taskId ? canvas.layerTasks?.find(task => task.id === taskId) : undefined
+      if (taskId) {
+        if (!task) throw new Error('此分层任务已处理。')
+        canvas.layerTasks = canvas.layerTasks!.filter(task => task.id !== taskId)
+      }
       const base = images.find(i => i.layer?.zIndex === 0), width = base?.width ?? source.width, height = base?.height ?? source.height
       const messages = [...warnings], items: CanvasItem[] = [], layers: CanvasLayer[] = []
       if (!base) { messages.push('底图未返回或下载失败，暂用原图作为底层。'); layers.push({ ...imageLayer(source, { x: 0, y: 0, width, height }), locked: true }) }
@@ -177,7 +194,7 @@ export class CanvasStore {
         layers.push({ ...imageLayer(item, box), locked: z === 0 })
       }
       const composition: Composition = { id: randomBytes(6).toString('hex'), title: `${source.title} · 分图层`, sourceId, x: rightEdge(canvas), y: source.y,
-        width, height, background: 'transparent', version: 0, layers, ...(messages.length ? { warnings: messages } : {}) }
+        width, height, background: 'transparent', version: 0, layers, ...(task ? { layerTask: { id: task.id, fingerprint: task.fingerprint, ...(billing && { billing }) } } : {}), ...(messages.length ? { warnings: messages } : {}) }
       ;(canvas.compositions ??= []).push(composition)
       return { canvas: await this.commit(canvas), items, composition }
     })

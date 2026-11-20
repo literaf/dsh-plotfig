@@ -14,7 +14,7 @@ describe('PSD font fallback', () => {
     expect(runs.map(r => [r.length, r.style.font!.name])).toEqual([[3, 'ArialMT'], [2, 'PingFangSC-Regular'], [2, 'ArialMT']])
     expect(runs.reduce((n, r) => n + r.length, 0)).toBe('ABC中文🙂'.length)
   })
-  it('maps every Ark OCR font, including Chinese names, to PostScript and CSS fallbacks', () => {
+  it('maps every supported OCR font, including Chinese names, to PostScript and CSS fallbacks', () => {
     expect(OCR_FONT_COUNT).toBe(228)
     expect(psdFontName('苹方', '科研绘图')).toBe('PingFangSC-Regular')
     expect(psdFontName('思源黑体', '中文')).toBe('SourceHanSansCN-Regular')

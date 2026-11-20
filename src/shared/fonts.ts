@@ -1,5 +1,5 @@
 /**
- * Fonts returned by Seedream 5.5 rich-text OCR (`similar_font_family`), per the Ark
+ * Fonts returned by Seedream 5.5 rich-text OCR (`similar_font_family`), per the
  * "OCR 支持字体" list (2026-10-27): 101 Chinese and 127 other families. Each name maps
  * to a category for the closest fallback, and, where the PostScript name is well known,
  * to that name so PSD readers can find the installed font.

@@ -6,20 +6,20 @@ import { PNG } from 'pngjs'
 import jpeg from 'jpeg-js'
 import { CanvasStore } from '../src/store.js'
 import { Seedream } from '../src/service.js'
-import { ArkClient } from '../src/ark.js'
+import { AI4ScholarClient } from '../src/ai4scholar.js'
 import { Preferences } from '../src/preferences.js'
 import { createHandlers } from '../src/routes.js'
 import { applyTools } from '../src/tools.js'
 import { parseGenerate } from '../src/shared/types.js'
 import { RESEARCH_STYLES, parseGenerationStyle, styledPrompt, styleName } from '../src/shared/research.js'
 import { decodePixels } from '../src/pixels.js'
-import { png } from './fixtures.js'
+import { drawingFetch, png } from './fixtures.js'
 
 let root: string
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'seedream-research-')) })
 afterEach(async () => { await rm(root, { recursive: true, force: true }) })
 const defaults = { size: '2K', watermark: false }
-const status = async () => ({ version: '0.1.0', configured: false, keyRef: 'ARK_API_KEY', model: 'seedream', defaultSize: '2K', watermark: false })
+const status = async () => ({ version: '0.1.0', configured: false, keyRef: 'AI4SCHOLAR_API_KEY', model: 'seedream', defaultSize: '2K', watermark: false })
 const request = (body: unknown, session = 'first', method = 'POST') => new Request(`http://local/api/seedream/?session=${session}`, { method, body: JSON.stringify(body) })
 const realPng = () => {
   const picture = new PNG({ width: 16, height: 8 })
@@ -28,11 +28,8 @@ const realPng = () => {
 }
 function setup() {
   const bodies: Record<string, unknown>[] = []
-  const fetch = vi.fn(async (_url, init) => {
-    if (init?.body) { bodies.push(JSON.parse(String(init.body))); return new Response(JSON.stringify({ data: [{ url: 'https://cdn.test/generated.png' }] })) }
-    return new Response(png(1024, 1024))
-  }) as typeof globalThis.fetch
-  const store = new CanvasStore(join(root, 'canvases')), service = new Seedream(new ArkClient({ apiKey: async () => 'fixture-key', userAgent: 'test', timeoutMs: 5000, fetch }), store)
+  const fetch = vi.fn(drawingFetch(body => { bodies.push(body) }))
+  const store = new CanvasStore(join(root, 'canvases')), service = new Seedream(new AI4ScholarClient({ apiKey: async () => 'sk-user-fixture', userAgent: 'test', timeoutMs: 5000, fetch }), store)
   const h = createHandlers(service, new Preferences(join(root, 'preferences.json'), defaults), status)
   return { store, service, h, fetch, bodies }
 }

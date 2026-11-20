@@ -8,7 +8,7 @@ import { diagramSvg } from '../src/shared/diagram-svg.js'
 import { parseCompositionEdit, layerBounds } from '../src/shared/layers.js'
 import { CanvasStore } from '../src/store.js'
 import { createHandlers } from '../src/routes.js'
-import { ArkClient } from '../src/ark.js'
+import { AI4ScholarClient } from '../src/ai4scholar.js'
 import { Seedream } from '../src/service.js'
 import { Preferences } from '../src/preferences.js'
 import { EditorModel } from '../src/client/editor-model.js'
@@ -72,8 +72,8 @@ describe('local diagram templates', () => {
   })
   it('creates and copies without credentials, rejects foreign images, and never invokes the paid API', async () => {
     const fetch = vi.fn(), key = vi.fn(async () => { throw new Error('must stay local') }), store = new CanvasStore(root)
-    const service = new Seedream(new ArkClient({ apiKey: key, userAgent: 'test', timeoutMs: 1000, fetch }), store)
-    const handlers = createHandlers(service, new Preferences(join(root, 'prefs'), { size: '2K', watermark: true }), async () => ({ version: '0', configured: false, keyRef: 'ARK_API_KEY', model: 'test', defaultSize: '2K', watermark: true }))
+    const service = new Seedream(new AI4ScholarClient({ apiKey: key, userAgent: 'test', timeoutMs: 1000, fetch }), store)
+    const handlers = createHandlers(service, new Preferences(join(root, 'prefs'), { size: '2K', watermark: true }), async () => ({ version: '0', configured: false, keyRef: 'AI4SCHOLAR_API_KEY', model: 'test', defaultSize: '2K', watermark: true }))
     const request = (body: unknown) => new Request('http://local/api/seedream/composition?session=board-test', { method: 'POST', body: JSON.stringify(body) })
     const response = await handlers.composition(request({ templateId: 'screening', palette: 'mono' }))
     expect(response.status).toBe(200)
