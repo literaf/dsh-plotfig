@@ -55,3 +55,5 @@ Multi-reference and repeated-edit checks (2026-11-19): two real paid images, no 
 发布前检查（2026-11-20，提交 `f6d8898` 的干净克隆）：Node 22.23.5 与 24.5.0 下 `prepublishOnly`（171 项测试）通过；Harness 0.2.2-rc.5 原生页面兼容测试 2 项通过。发布包 2.2 MB、99 个文件（新增 3 张 README 截图，约 490 KB），未发现本机路径或凭据。尚未发布到 npm。
 
 改名为 dsh-plotfig 后的发布前检查（2026-11-20，提交 `9a4602c` 的干净克隆）：Node 22.23.5 与 24.5.0 下 `prepublishOnly`（171 项测试）通过；Harness 0.2.2-rc.5 原生页面兼容测试 2 项通过。发布包 `dsh-plotfig-0.1.0-beta.1.tgz` 2.2 MB、99 个文件，未发现本机路径或凭据。隔离宿主中侧边栏、面板标题和设置页显示 PlotFig，已有 9 个画布都能打开，付费调用 0。桌面端先移除 `dsh-seedream` 再安装 `dsh-plotfig`：99 个文件与安装包一致，`$DSH_HOME/seedream` 下 9 个画布、43 个文件改名前后一致，其他插件版本不变。尚未发布到 npm。
+
+换图标后的发布前检查（2026-11-20，提交 `20aa386` 的干净克隆）：Node 22.23.5 与 24.5.0 下 `prepublishOnly`（171 项测试）通过；原生页面兼容测试 2 项通过。发布包 2.2M、101 个文件，未发现本机路径或凭据。新图标在隔离宿主侧边栏的浅色、深色主题下都能看清，README 顶部的 logo 有浅色、深色两个版本。尚未发布到 npm。
