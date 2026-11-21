@@ -4,8 +4,7 @@
 
 ## 发布
 
-- [ ] 发布 `0.1.0-beta.2` 到 npm（`--tag beta`）。需要你明确要求后才执行；按 RELEASING.md 在发布提交上重跑 Node 22/24 与原生页面检查，发布后核对 registry 和 npmmirror。
-- [ ] beta 试用后发布正式版 `0.1.0`。
+- [ ] 核对正式版 `0.1.0` 在 npm 的 `latest` 标签、安装包完整性和 npmmirror 同步结果。
 
 ## 待集成的模型能力
 

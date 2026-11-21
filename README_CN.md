@@ -35,10 +35,10 @@
 
 ## 安装
 
-首次使用时先打开一次 DeepSeek Harness 桌面版以初始化配置，然后完全退出。在 beta 安装包所在目录运行
+首次使用时先打开一次 DeepSeek Harness 桌面版以初始化配置，然后完全退出。运行以下命令从 npm 安装 PlotFig。
 
 ```bash
-dsh plugin --profile desktop add "$PWD/dsh-plotfig-0.1.0-beta.2.tgz"
+dsh plugin --profile desktop add dsh-plotfig
 ```
 
 重新打开桌面版，在「插件 → 已安装插件」中启用 **dsh-plotfig**，再从侧栏打开 **PlotFig**。
@@ -167,4 +167,4 @@ Web 端使用 `--profile web`。未配置或移除 Key 后，已有画布仍可�
   - 批量生成时各张图独立生成，即使指定同一风格，配色和外形也可能不一致。
 - PSD 与 SVG 不嵌入字体，打开的软件缺少对应字体时会替换，基线和换行也可能与画布不同；需要固定外观时用「PSD（文字转图片）」。PSD 尚未在 Photoshop 中验收，已在 Photopea 和 Adobe Illustrator 2025 中检查文字层。
 - PDF 内容为图像，文字不可选中。
-- 当前为测试版。每项 AI 功能都经过真实付费接口测试，但样例数量有限；遇到效果问题欢迎反馈。
+- 生图、改图、分层和积分结算均已连接 AI4Scholar 生产服务验证。模型效果的实测样例有限。

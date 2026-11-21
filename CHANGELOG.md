@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0 (2026-11-21)
+
+First public npm release of PlotFig for DeepSeek Harness Desktop. Install with `dsh plugin --profile desktop add dsh-plotfig`.
+
+- Generate and edit scientific illustrations with Seedream 5.5 using your AI4Scholar key, or start with one of eight local diagram templates.
+- Split figures into movable layers and edit recognized text. The canvas shows the maximum credit reservation before a split and the actual charge after delivery.
+- Export figures as PNG, SVG, PDF or layered PSD. The README describes the supported content and font behavior for each format.
+
 ## 0.1.0-beta.2 (2026-11-21)
 
 Beta installation package for DeepSeek Harness Desktop. Transparent source images are composited onto white for the AI4Scholar layer request. The canvas keeps the source image and the foreground layers retain their alpha channels.
