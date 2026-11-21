@@ -35,7 +35,7 @@ export function Settings({ controller }: { controller: Controller }) {
     <div className="sd-key-status"><span className="sd-status-dot" data-ready={c?.configured ?? false}/>{keyStatus(state)}</div>
     {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}{state.message ? <div className="sd-alert" role="status">{state.message}</div> : null}
     <label htmlFor={keyId}>AI4Scholar API Key</label><div className="sd-key-row"><input id={keyId} type="password" autoComplete="off" spellCheck={false} placeholder="sk-user-…" value={key} onChange={e => setKey(e.target.value)} /><button className="sd-button sd-button-primary" disabled={!key.trim() || state.keyBusy || !c} onClick={() => { void controller.saveKey(key).then(ok => { if (ok) setKey('') }) }}>{state.keyBusy ? '保存中…' : '保存'}</button></div>
-    <p>Key 保存在本机凭据服务中。PlotFig 与 dsh-ai4scholar 共用此凭据，保存或移除会同步影响两个插件。<a href="https://ai4scholar.net/resources/contact?tab=api-keys" target="_blank" rel="noopener noreferrer">获取 API Key ↗</a></p>
+    <p>Key 保存在本机凭据服务中。PlotFig 与 dsh-ai4scholar 共用此凭据，保存或移除会同步影响两个插件。<a href="https://ai4scholar.net/docs/integrations/open-api?src=dsh_plotfig#获取-api-key" target="_blank" rel="noopener noreferrer">获取 API Key ↗</a></p>
     <div className="sd-settings-row">
       <label htmlFor={sizeId}>默认尺寸</label>
       <select id={sizeId} disabled={!c || state.settingsBusy} value={c && (SIZE_TIERS as readonly string[]).includes(c.defaultSize) ? c.defaultSize : '2K'} onChange={e => { void controller.saveSettings({ size: e.target.value }) }}>{SIZE_TIERS.map(s => <option key={s} value={s}>{s}</option>)}</select>

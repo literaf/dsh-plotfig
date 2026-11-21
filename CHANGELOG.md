@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The API key links in PlotFig settings and both READMEs open the setup instructions with the PlotFig referral source.
+
 ## 0.1.0 (2026-11-21)
 
 First public npm release of PlotFig for DeepSeek Harness Desktop. Install with `dsh plugin --profile desktop add dsh-plotfig`.

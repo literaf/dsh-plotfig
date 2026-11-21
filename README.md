@@ -41,7 +41,7 @@ dsh plugin --profile desktop add dsh-plotfig
 
 Reopen Desktop, go to **Plugins → Installed plugins**, and enable **dsh-plotfig**. Open **PlotFig** from the sidebar.
 
-PlotFig uses only AI4Scholar API keys for generation, editing, and layer splitting. If dsh-ai4scholar already has a key under `AI4SCHOLAR_API_KEY`, PlotFig uses it automatically. Otherwise, save your key under Settings → PlotFig. **测试连接** checks your balance and Seedream availability for free. [Get an AI4Scholar key](https://ai4scholar.net/resources/contact?tab=api-keys).
+PlotFig uses only AI4Scholar API keys for generation, editing, and layer splitting. If dsh-ai4scholar already has a key under `AI4SCHOLAR_API_KEY`, PlotFig uses it automatically. Otherwise, save your key under Settings → PlotFig. **测试连接** checks your balance and Seedream availability for free. [Get an AI4Scholar key](https://ai4scholar.net/en/docs/integrations/open-api?src=dsh_plotfig#get-an-api-key).
 
 Use `--profile web` for the web host. You can open, edit, and export saved canvases locally without a key.
 
