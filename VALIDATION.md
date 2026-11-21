@@ -85,3 +85,11 @@ ai4scholar.net 已部署 `98418d0a`。在网站验收账号的项目画布中，
 官方 npm 注册表和 npmmirror 的 `latest` 均指向 `dsh-plotfig@0.1.0`，两者的 SHA-512 与本地发布包一致。匿名从官方源下载的 2,256,075 字节与发布包逐字节一致。SHA-256 为 `26d5f3cf29900da8dd0e80c18c79e4a16168f37e32f97c42c636143cbecaaa3d`。
 
 在新初始化的 DeepSeek Harness Desktop `0.2.2-rc.5` 配置中运行 `dsh plugin --profile desktop add dsh-plotfig`，默认安装了正式版。磁盘上的 104 个包文件与公开安装包逐一相符。pnpm 提示宿主 peer 依赖，实际启用后服务报告版本 `0.1.0`。通过桌面界面创建「实验流程」画板并读回 12 个图层。
+
+## 2026-11-21 npm 正式版 0.1.1
+
+设置页和中英文 README 的「获取 API Key」链接带有 `src=dsh_plotfig`，分别定位到中文或英文指南的密钥申请小节。用未登录的浏览器访问线上指南，两种语言的访问和页面浏览请求都携带 `traffic_source=dsh_plotfig`。从指南点进开放平台后，登录页仍可从本地存储读出来源。验收时在浏览器内拦截了统计请求。
+
+发布提交 `ec8c00d` 在 Node 22.23.5 和 24.5.0 下各通过 175 项测试。npm 官方源和 npmmirror 的 `latest` 均为 `0.1.1`，从两处下载的安装包与本地发布包逐字节一致。SHA-256 为 `f8c8d334a711fc29350bc2ca16d9d378ed3869a299fff15b2185076a5d65a625`。
+
+在 DeepSeek Harness Desktop `0.2.2-rc.5` 的隔离配置里，从官方源将 `0.1.0` 升级到 `0.1.1`，启动并打开 PlotFig 设置页，核对了实际显示的链接。另用全新配置和空缓存从镜像执行 `dsh plugin --profile desktop add dsh-plotfig`，默认安装了 `0.1.1`。两次安装均逐一核对了全部 104 个文件。
