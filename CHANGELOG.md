@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 (2026-11-21)
 
 - The API key links in PlotFig settings and both READMEs open the setup instructions with the PlotFig referral source.
 

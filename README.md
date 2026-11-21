@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/npm/dsh-plotfig@0.1.0/docs/images/logo-dark.svg">
-    <img src="https://cdn.jsdelivr.net/npm/dsh-plotfig@0.1.0/docs/images/logo-light.svg" alt="PlotFig" width="360">
+    <source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/npm/dsh-plotfig@0.1.1/docs/images/logo-dark.svg">
+    <img src="https://cdn.jsdelivr.net/npm/dsh-plotfig@0.1.1/docs/images/logo-light.svg" alt="PlotFig" width="360">
   </picture>
 </p>
 
@@ -12,7 +12,7 @@ An AI illustration plugin for researchers using DeepSeek Harness. Use **Seedream
 - **Conversation canvas**: one per conversation. Images generated in the conversation land on it, and it opens in the right Sidebar when a generation starts (Harness ≥ 0.2.2).
 - **Standalone canvas**: created from the PlotFig panel with "新建画布". It belongs to no conversation.
 
-![PlotFig home: prompt box, styles, templates, transparent background and recent canvases](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.1.0/docs/images/home.jpg)
+![PlotFig home: prompt box, styles, templates, transparent background and recent canvases](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.1.1/docs/images/home.jpg)
 
 ## What it does
 
@@ -27,7 +27,7 @@ An AI illustration plugin for researchers using DeepSeek Harness. Use **Seedream
 | **分图层** | Splits into movable transparent layers with editable OCR text |
 | Export | PNG, SVG, PDF and layered PSD with editable text |
 
-![Toolbar for a selected image: edit, regenerate, split layers, AI edits, add as reference](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.1.0/docs/images/canvas-selected.jpg)
+![Toolbar for a selected image: edit, regenerate, split layers, AI edits, add as reference](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.1.1/docs/images/canvas-selected.jpg)
 
 The layer service places transparent inputs on white paper for decomposition. Original images and returned foreground transparency are preserved.
 
@@ -95,4 +95,4 @@ AI4Scholar bills ordinary generation per image and reserves the quoted maximum f
 - 500 objects per artboard, 32 million pixels per PNG export; undo history lasts for the current run.
 - AI results depend on the model. Pixel protection is exact; picture quality is not guaranteed. Expanding blank areas beside diagrams and tables is unreliable, cutouts lose glass-like translucency, combining several references can drop text labels, naturalistic and 3D presets look similar, and images in one batch are generated independently, so their look can differ even with the same style.
 - PSD files have been checked in Photopea and Adobe Illustrator 2025, not in Photoshop. Fonts missing on the target machine are substituted.
-- Generation, editing, layer splitting and credit settlement have been verified with the live AI4Scholar service. Model-quality checks covered a limited set of figures. [Full Chinese guide and shortcuts](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.1.0/README_CN.md)
+- Generation, editing, layer splitting and credit settlement have been verified with the live AI4Scholar service. Model-quality checks covered a limited set of figures. [Full Chinese guide and shortcuts](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.1.1/README_CN.md)
