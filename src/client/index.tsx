@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import { useEffect, useSyncExternalStore } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { Controller } from './controller.js'
+import type { PluginUpdateManager } from './plugin-update.js'
 import { resolveCredentialsPort } from './credentials-port.js'
 import { Workspace, Settings, Icon, keyStatus } from './Workspace.js'
 import { CanvasView } from './Canvas.js'
@@ -20,6 +21,16 @@ interface TabRegistry { register(definition: { id: string; kind: string; keepMou
 interface TabBodyProps { sessionId: string; useTabInfo(): { tab: { visible: boolean } } }
 export function apply(ctx: ClientContext): void {
   const controller = new Controller(() => resolveCredentialsPort({ connection: ctx.get('connection'), remoteCredentials: ctx.get('remote.credentials') }))
+  ctx.inject(['remote.pluginManager', 'remoteAccess'], child => {
+    const manager = child.get('remote.pluginManager' as never) as PluginUpdateManager | undefined
+    const access = child.get('remoteAccess' as never) as { whenAccess(action: string, setup: () => () => void): void } | undefined
+    if (typeof manager?.updateBundle === 'function' && typeof manager.listBundles === 'function') {
+      access?.whenAccess('pluginManager/updateBundle', () => {
+        controller.updateManager = manager
+        return () => { delete controller.updateManager }
+      })
+    }
+  })
   ctx.effect(() => installStyles(), 'seedream: styles')
   ctx.effect(() => () => controller.dispose(), 'seedream: state')
   const slots = ctx.slots as unknown as Slots

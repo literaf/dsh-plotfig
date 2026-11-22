@@ -6,6 +6,8 @@ import { IMAGE_EDIT_LABELS } from '../shared/image-edit.js'
 import type { ImageEditInput } from '../shared/image-edit.js'
 import type { GenerationStyle } from '../shared/research.js'
 import type { DrawingModel, DrawingRatio } from '../shared/models.js'
+import { checkInstallAction, installPlotFig } from './plugin-update.js'
+import type { CheckedRelease, Installation, PluginUpdateManager } from './plugin-update.js'
 export interface Catalog extends Status { canvases: CanvasEntry[]; active?: Record<string, PendingGeneration[]> }
 type CanvasReply = Canvas & { pending?: PendingGeneration[] }
 export interface State {
@@ -14,6 +16,7 @@ export interface State {
   keyBusy: boolean
   settingsBusy: boolean
   checkBusy?: boolean
+  installation?: Installation | undefined
   error?: string | undefined
   message?: string | undefined
 }
@@ -266,6 +269,7 @@ export class CanvasModel extends Emitter<CanvasState> {
 export const ACTIVE_MS = 2000
 /** Root state: status, settings and the canvas list; per-Session models are cached here. */
 export class Controller extends Emitter<State> {
+  updateManager?: PluginUpdateManager
   private refreshRequest: AbortController | undefined
   private models = new Map<string, CanvasModel>()
   private active: Record<string, PendingGeneration[]> = {}
@@ -321,13 +325,30 @@ export class Controller extends Emitter<State> {
     } catch (error) { this.set({ error: errorText(error, '保存设置失败。') }) }
     finally { this.set({ settingsBusy: false }) }
   }
-  async checkForUpdate(signal: AbortSignal): Promise<PluginUpdate> {
+  async checkForUpdate(signal: AbortSignal): Promise<CheckedRelease> {
+    if (this.state.installation?.phase === 'installing') return this.state.installation.release
     const reply = await this.fetcher<PluginUpdate>(ROUTE + '/update', signal)
     if (!reply.ok) throw new Error(reply.error)
     const result = reply.value
     if (!result || typeof result.currentVersion !== 'string' || typeof result.latestVersion !== 'string' ||
         !['available', 'current', 'ahead'].includes(result.status)) throw new Error('无效的版本检查结果。')
-    return result
+    const checked = await checkInstallAction(result, this.updateManager, signal)
+    // Another open view may have started updating while we were checking.
+    const active = this.getSnapshot().installation
+    if (active?.phase === 'installing') return active.release
+    if (!signal.aborted && active) this.set({ installation: undefined })
+    return checked
+  }
+  async installUpdate(release: CheckedRelease): Promise<void> {
+    if (release.status !== 'available' || release.action !== 'update' || this.state.installation) return
+    this.set({ installation: { phase: 'installing', release } })
+    try {
+      if (!this.updateManager) throw new Error('当前窗口没有插件更新权限。')
+      const phase = await installPlotFig(this.updateManager, release.latestVersion)
+      this.set({ installation: { phase, release } })
+    } catch (error) {
+      this.set({ installation: { phase: 'error', release, message: errorText(error, '未能确认更新结果，请重新检查版本。') } })
+    }
   }
   /** Checks the AI4Scholar balance and drawing capability for free. */
   async checkConnection(): Promise<void> {

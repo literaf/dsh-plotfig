@@ -43,7 +43,7 @@ dsh plugin --profile desktop add dsh-plotfig
 
 Reopen Desktop, go to **Plugins → Installed plugins**, and enable **dsh-plotfig**. Open **PlotFig** from the sidebar.
 
-Choose **检查更新** in the top-right corner of the PlotFig gallery to compare your installed version with the latest stable npm release. When an update is available, you can continue to the host plugin manager.
+Choose **检查更新** in the top-right corner of the PlotFig gallery to compare your installed version with the latest stable npm release. For an npm installation on a supported Harness host, choose **更新到 v…** to update in the dialog. It tells you if the host needs a restart. Older hosts offer a path to the plugin manager.
 
 PlotFig uses only AI4Scholar API keys for generation, editing, and layer splitting. If dsh-ai4scholar already has a key under `AI4SCHOLAR_API_KEY`, PlotFig uses it automatically. Otherwise, save your key under Settings → PlotFig. **测试连接** checks your balance and Seedream availability for free. [Get an AI4Scholar key](https://ai4scholar.net/en/docs/integrations/open-api?src=dsh_plotfig#get-an-api-key).
 

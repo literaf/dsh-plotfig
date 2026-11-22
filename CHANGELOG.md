@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Install a new stable PlotFig release directly from the gallery’s update dialog on supported Harness hosts. The dialog shows installation progress and whether a restart is needed.
+
 ## 0.2.1 (2026-11-22)
 
 - Fix installation and upgrades through the default DeepSeek Harness plugin manager. PlotFig now uses a prebuilt image decoder for JPEG and WebP results so the manager can install it with its standard build-script policy.
