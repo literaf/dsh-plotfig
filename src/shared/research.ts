@@ -159,8 +159,9 @@ export function styledPrompt(prompt: string, style: GenerationStyle): string {
   return `${prompt}\n\n视觉风格参考：${preset.name}\n${preset.prompt}\n风格只指导视觉呈现。严格遵循以上内容要求，保留指定的名称、数值、结构关系与箭头方向；不擅自添加结论或标注。用户明确要求保留的部分优先。`
 }
 
+export const ILLUSTRATION_PROMPT_HINT = '在输入框描述想画的内容，再点右侧箭头生成。'
 export const RESEARCH_TOOLS = [
-  { id: 'generate', title: '科研插图', description: '描述想法，选择风格，开始创作', hint: '从机制、实验步骤或研究方法开始描述。' },
+  { id: 'generate', title: '科研插图', description: '用文字描述生成新图', hint: ILLUSTRATION_PROMPT_HINT },
   { id: 'decompose', title: '拆分图层', description: '把图片拆成可独立调整的元素', hint: '选择原图，再设置分层范围和最多输出数量。原图会保留。' },
   { id: 'text', title: '修改文字', description: '打开识别文字，调整内容与样式', hint: '已分层的画板可直接改字。普通图片需要先分层识别，提交前请确认本次分层所需的 AI4Scholar 积分。识别后的改字在本地完成。' },
   { id: 'remove-background', title: '移除背景', description: '提取主体，保留透明背景', hint: '选择图片，再确认需要保留的对象。每次处理生成一张计费图片。' },

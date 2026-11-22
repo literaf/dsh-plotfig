@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The scientific illustration shortcut focuses the prompt and shows how to generate. Closing the tools menu preserves focus in the canvas or conversation input.
+
 ## 0.1.1 (2026-11-21)
 
 - The API key links in PlotFig settings and both READMEs open the setup instructions with the PlotFig referral source.

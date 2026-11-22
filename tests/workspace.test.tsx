@@ -73,6 +73,21 @@ describe('home generation entry', () => {
     const cleanup = async () => { await act(async () => root.unmount()); controller.dispose(); node.remove() }
     return { fetcher, node, render, type, pick, cleanup }
   }
+  it('takes the scientific illustration shortcut to the existing draft and explains how to generate', async () => {
+    const h = setup()
+    try {
+      await h.render()
+      await h.type('保留这份实验流程图描述')
+      const shortcut = h.node.querySelector<HTMLButtonElement>('[aria-label="科研插图"]')!
+      shortcut.focus()
+      await act(async () => shortcut.click())
+      const input = h.node.querySelector('textarea')!
+      expect(document.activeElement).toBe(input)
+      expect(input.value).toBe('保留这份实验流程图描述')
+      expect(h.node.querySelector('[role=status]')?.textContent).toContain('生成')
+      expect(vi.mocked(h.fetcher).mock.calls.every(([url]) => url === '/api/seedream')).toBe(true)
+    } finally { await h.cleanup() }
+  })
   it('keeps style selection local and submits a new canvas only once with the selected settings', async () => {
     const h = setup()
     try {

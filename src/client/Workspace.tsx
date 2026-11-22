@@ -8,6 +8,7 @@ import { CanvasView } from './Canvas.js'
 import type { ConversationActions } from './handoff.js'
 import { ResearchTools } from './ResearchTools.js'
 import { ResearchStyleButton, ResearchStylePicker } from './ResearchStyles.js'
+import { ILLUSTRATION_PROMPT_HINT } from '../shared/research.js'
 import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
 import { DiagramTemplates, TemplateButton } from './DiagramTemplates.js'
 import { Composer, SizePicker, TransparentToggle } from './Composer.js'
@@ -74,6 +75,12 @@ export function Workspace({ controller, openConversation, conversation }: { cont
   // created when the user starts a tool or explicitly submits generation.
   const start = (tool: ResearchToolId) => { setTemplateComposition(undefined); setLaunch({ tool, ...(style === 'auto' ? {} : { style }) }); setSettings(false); setOpen(BOARD_PREFIX + crypto.randomUUID()) }
   const create = () => start('generate')
+  const selectHomeTool = (tool: ResearchToolId) => {
+    if (tool === 'generate') {
+      homeInput.current?.querySelector('textarea')?.focus()
+      controller.notify(ILLUSTRATION_PROMPT_HINT)
+    } else start(tool)
+  }
   const generate = async () => {
     const submitted = prompt, text = submitted.trim()
     if (!text || submitting.current) return
@@ -134,7 +141,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
               <TransparentToggle value={transparent} onChange={setTransparent}/>
             </Composer>
           </div>
-          <nav className="sd-home-shortcuts" aria-label="常用工具"><ResearchTools compact disabled={starting} onSelect={tool => { if (tool === 'generate') homeInput.current?.querySelector('textarea')?.focus(); else start(tool) }}/></nav>
+          <nav className="sd-home-shortcuts" aria-label="常用工具"><ResearchTools compact disabled={starting} onSelect={selectHomeTool}/></nav>
         </section> : null}
         {!library && canvases.length ? <div className="sd-recent-title"><h2>最近画布</h2><button type="button" className="sd-all-canvases" onClick={() => setLibrary(true)} aria-label="全部画布"><span>全部画布</span><span className="sd-canvas-count">{canvases.length}</span><ChevronIcon size={14}/></button></div> : null}
         {canvases.length ? <ul className="sd-gallery" aria-label={library ? '全部画布' : '最近画布'} data-view={library ? 'all' : 'recent'}>

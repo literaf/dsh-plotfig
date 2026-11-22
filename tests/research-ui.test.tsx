@@ -37,6 +37,28 @@ function harness(sessionId = 'board-ui', items: CanvasItem[] = [source]) {
 }
 
 describe('scientific workflow entry points', () => {
+  it.each(['board-ui', 'session-ui'])('keeps keyboard focus in the illustration input after the tools menu closes: %s', async sessionId => {
+    const h = harness(sessionId)
+    const nativeInput = document.createElement('textarea')
+    document.body.appendChild(nativeInput)
+    h.actions.focus.mockImplementation(async () => { nativeInput.focus(); return 'filled' })
+    try {
+      await act(async () => { await h.model.refresh(); h.root.render(<CanvasView model={h.model} conversation={h.actions}/>) })
+      const menu = h.button('科研工具')
+      menu.focus()
+      await act(async () => menu.click())
+      await act(async () => h.button('关闭科研工具').click())
+      expect(document.activeElement).toBe(menu)
+      await act(async () => menu.click())
+      await act(async () => h.button('科研插图').click())
+      const target = sessionId === 'session-ui' ? nativeInput : h.node.querySelector('.sd-composer textarea')
+      expect(h.node.querySelector('[role=dialog]')).toBeNull()
+      expect(document.activeElement).toBe(target)
+      expect(h.node.querySelector('[role=status]')?.textContent).toContain('输入框')
+      expect(h.billable()).toHaveLength(0)
+      expect(h.actions.prompt).not.toHaveBeenCalled()
+    } finally { await h.cleanup(); nativeInput.remove() }
+  })
   it.each(['board-ui', 'session-ui'])('saves a style choice without generating or adding a second native composer: %s', async sessionId => {
     const h = harness(sessionId, [])
     try {

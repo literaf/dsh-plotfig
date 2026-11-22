@@ -21,7 +21,7 @@ import type { EditorModel } from './editor-model.js'
 import { ImageEditDialog } from './ImageEditDialog.js'
 import { exportPsd } from './psd-export.js'
 import { exportPdf } from './pdf-export.js'
-import { referencePrompt } from '../shared/research.js'
+import { ILLUSTRATION_PROMPT_HINT, referencePrompt } from '../shared/research.js'
 import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
 import { ResearchStyleButton, ResearchStylePicker } from './ResearchStyles.js'
 import { ResearchSourcePicker, ResearchTools } from './ResearchTools.js'
@@ -326,7 +326,10 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
     if (tool === 'generate') {
       setReferenceSource(undefined); setEditing(false)
       if (inConversation) void handoff(conversation?.focus, '请在对话输入框描述科研插图')
-      else host.current?.querySelector<HTMLTextAreaElement>('.sd-composer textarea')?.focus()
+      else {
+        host.current?.querySelector<HTMLTextAreaElement>('.sd-composer textarea')?.focus()
+        flash(ILLUSTRATION_PROMPT_HINT)
+      }
     } else if (tool === 'text' && composition) openTextEditor(composition)
     else if (item) useToolSource(item, tool)
     else setSourceTool(tool)
