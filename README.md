@@ -57,7 +57,7 @@ Use `--profile web` for the web host. You can open, edit, and export saved canva
 - Repeated edits use an opaque background for consistency. Turn on transparency to request a transparent image.
 - **风格** offers six appearance presets: flat, soft 2.5D, line art, naturalistic illustration, 3D rendering and ink with light washes. A preset is saved per canvas and adds appearance rules to later requests; choosing one makes no model call. **跟随描述** or `style: "auto"` leaves the prompt unchanged. Presets do not certify scientific accuracy or journal requirements.
 - Import a PNG or JPEG up to 30 MB, 16000 px per side and 32 million pixels. Importing makes no model call; PNG bytes and alpha are kept.
-- **模板** opens eight original local diagram templates (workflows, model architecture, cycles, timelines) in three palettes. Templates need no key and make no model call.
+- **模板** opens six local templates for model architectures, cycles and timelines, each with three palettes. Templates need no key. Previously saved flowcharts can still be opened, edited and exported from the gallery.
 
 ## Editing images (AI 处理)
 

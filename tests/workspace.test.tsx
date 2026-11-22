@@ -37,14 +37,32 @@ describe('saved canvas access without model credentials', () => {
       expect(vi.mocked(fetcher).mock.calls.every(([url]) => !String(url).includes('/generate') && !String(url).includes('/decompose'))).toBe(true)
     } finally { await act(async () => root.unmount()); controller.dispose() }
   })
-  it('offers local templates without credentials when there are no saved canvases', async () => {
-    const fetcher = vi.fn(async () => ({ ok: true, value: { version: '0.1.0', configured: false, canvases: [], defaultSize: '2K', watermark: false } })) as unknown as Fetcher
+  it('offers the six visible templates without credentials and creates the visible default', async () => {
+    const fetcher = vi.fn(async (path: string) => {
+      if (path.startsWith('/api/seedream/composition?')) return { ok: true, value: { canvas: { revision: 1, items: [] }, composition: { id: 'local-template' } } }
+      return { ok: true, value: { version: '0.1.0', configured: false, canvases: [], defaultSize: '2K', watermark: false } }
+    }) as unknown as Fetcher
     const controller = new Controller(() => { throw new Error('No credential read expected') }, fetcher)
     const node = document.createElement('div'), root = createRoot(node)
     try {
       await act(async () => { await controller.attach(); root.render(<Workspace controller={controller} openConversation={() => false} conversation={vi.fn()}/>) })
-      expect(node.querySelector('[aria-label="选择图形模板"]')).not.toBeNull()
       expect(node.querySelector('.sd-gallery')).toBeNull()
+      await act(async () => node.querySelector<HTMLButtonElement>('[aria-label="选择图形模板"]')!.click())
+      const tabs = Array.from(node.querySelectorAll<HTMLButtonElement>('.sd-template-tabs button'))
+      const cards = () => Array.from(node.querySelectorAll('.sd-template-card strong'), el => el.textContent)
+      const create = node.querySelector<HTMLButtonElement>('.sd-template-footer .sd-button-primary')!
+      expect(tabs.map(tab => tab.textContent)).toEqual(['全部', '模型架构', '循环图', '时间线'])
+      expect(cards()).toEqual(['编码器与解码器', '多路特征融合', '研究迭代', '反馈闭环', '研究计划', '里程碑'])
+      expect(create.textContent).toBe('使用「编码器与解码器」')
+      await act(async () => tabs.find(tab => tab.textContent === '循环图')!.click())
+      expect(cards()).toEqual(['研究迭代', '反馈闭环'])
+      expect(create.textContent).toBe('使用「研究迭代」')
+      await act(async () => node.querySelector<HTMLButtonElement>('[aria-label="关闭图形模板"]')!.click())
+      await act(async () => node.querySelector<HTMLButtonElement>('[aria-label="选择图形模板"]')!.click())
+      await act(async () => node.querySelector<HTMLButtonElement>('.sd-template-footer .sd-button-primary')!.click())
+      expect(vi.mocked(fetcher).mock.calls.filter(([url]) => url.includes('/composition?')).map(call => call[2]))
+        .toEqual([{ templateId: 'encoder-decoder', palette: 'ocean' }])
+      expect(node.querySelector('[data-saved-canvas]')).not.toBeNull()
     } finally { await act(async () => root.unmount()); controller.dispose() }
   })
 })

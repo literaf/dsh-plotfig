@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Temporarily hide the flowchart category and its two templates from the template picker. All six model architecture, cycle and timeline templates remain available, and saved flowcharts can still be edited and exported.
 - The scientific illustration shortcut focuses the prompt and shows how to generate. Closing the tools menu preserves focus in the canvas or conversation input.
 
 ## 0.1.1 (2026-11-21)
