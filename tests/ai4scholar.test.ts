@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PNG } from 'pngjs'
-import sharp from 'sharp'
+import jpeg from 'jpeg-js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AI4ScholarClient, AI4ScholarError } from '../src/ai4scholar.js'
 import { apply, Config } from '../src/index.js'
@@ -84,13 +84,26 @@ describe('AI4Scholar drawing contract', () => {
     expect(PNG.sync.read(Buffer.from(out.images[0]!.bytes)).data[3]).toBe(0)
   })
 
-  it.each(['jpeg', 'webp'] as const)('converts a %s provider image to PNG for subsequent editing', async format => {
-    const source = sharp({ create: { width: 20, height: 14, channels: 4, background: { r: 60, g: 72, b: 90, alpha: 0.5 } } })
-    const bytes = Uint8Array.from(await source.toFormat(format).toBuffer())
-    const result = await client(drawingFetch(() => {}, bytes)).generate({ model: 'gptimage', prompt: 'diagram', size: '2K', images: [], watermark: false }, new AbortController().signal)
-    const image = result.images[0]!
+  // Independently encoded, fractional-alpha WebP images, each 20 × 14.
+  const webpAlpha = 'UklGRmAAAABXRUJQVlA4WAoAAAAQAAAAEwAADQAAQUxQSAoAAAABB1DAiAhERP8DVlA4IDAAAADQAgCdASoUAA4APm0skkWkIqGYBABABsSzgF2AFpIAAP7xCo6tpg6rK0iC07gAAAA='
+  const webpLossless = 'UklGRh4AAABXRUJQVlA4TBEAAAAvE0ADEAdQpPJUq4CBiOh/AAA='
+  const convert = (data: Uint8Array) => client(drawingFetch(() => {}, Uint8Array.from(data))).generate(
+    { model: 'gptimage', prompt: 'diagram', size: '2K', images: [], watermark: false }, new AbortController().signal,
+  )
+  it.each([
+    ['JPEG', jpeg.encode({ width: 20, height: 14, data: Buffer.alloc(20 * 14 * 4, 72) }).data, 255],
+    ['WebP with alpha', Buffer.from(webpAlpha, 'base64'), 128],
+    ['lossless WebP', Buffer.from(webpLossless, 'base64'), 128],
+  ] as const)('converts %s to PNG for subsequent editing', async (_format, data, alpha) => {
+    const image = (await convert(data)).images[0]!
     expect(image).toMatchObject({ mime: 'image/png', width: 20, height: 14 })
-    expect(PNG.sync.read(Buffer.from(image.bytes)).data[3]).toBe(format === 'jpeg' ? 255 : 128)
+    const png = PNG.sync.read(Buffer.from(image.bytes))
+    expect([png.width, png.height, png.data[3]]).toEqual([20, 14, alpha])
+  })
+  it('rejects an oversized WebP canvas before decoding it', async () => {
+    const data = Buffer.from(webpAlpha, 'base64')
+    data.writeUIntLE(8191, 24, 3); data.writeUIntLE(8191, 27, 3)
+    await expect(convert(data)).rejects.toThrow('4000 万像素')
   })
 
   it('sends all edit references and uses generate for a prompt alone', async () => {

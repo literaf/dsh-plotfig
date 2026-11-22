@@ -1,4 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises'
+import { imageSize } from 'image-size'
 import { imageInfo, MAX_BYTES } from './image-data.js'
 import type { GeneratedImage } from './image-data.js'
 import { parseOCR } from './shared/ocr.js'
@@ -134,9 +135,11 @@ export class AI4ScholarClient {
     const webp = source.toString('ascii', 0, 4) === 'RIFF' && source.toString('ascii', 8, 12) === 'WEBP'
     if (info?.mime !== 'image/jpeg' && !webp) throw new Error('返回的图片须为 PNG、JPEG 或 WebP。')
     // Stored assets, references and the layer editor share a PNG representation.
-    const { default: sharp } = await import('sharp')
-    const png = await sharp(source, { limitInputPixels: 40_000_000 }).png().toBuffer({ resolveWithObject: true })
-    return { bytes: png.data, width: png.info.width, height: png.info.height, mime: 'image/png' }
+    const { width, height } = info ?? imageSize(source)
+    if (width < 1 || height < 1 || width * height > 40_000_000) throw new Error('生成结果尺寸无效或超过 4000 万像素。')
+    const { Transformer } = await import('@napi-rs/image')
+    const png = await new Transformer(source).png()
+    return { bytes: png, width, height, mime: 'image/png' }
   }
 
   async generate(input: ImageRequest, signal: AbortSignal): Promise<ImageResult> {

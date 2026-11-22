@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 (2026-11-22)
+
+- Fix installation and upgrades through the default DeepSeek Harness plugin manager. PlotFig now uses a prebuilt image decoder for JPEG and WebP results so the manager can install it with its standard build-script policy.
+
 ## 0.2.0 (2026-11-22)
 
 - Choose from the nine AI4Scholar canvas models in the composer, with Seedream 5.5 selected by default. Each canvas remembers its model across sessions, and regeneration uses the original image’s model. The gallery header now shows the canvas count and the idle composer footer shows the keyboard shortcuts. Canvases and images saved before this release use Seedream 5.5 by default.

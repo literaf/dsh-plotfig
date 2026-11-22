@@ -1,6 +1,6 @@
 {
   "name": "dsh-plotfig",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "PlotFig for DeepSeek Harness: create scientific figures with Seedream, GPT Image and Nano Banana through AI4Scholar, edit images and OCR text, split layers, and export PNG/SVG/PDF/PSD.",
   "type": "module",
   "license": "MIT",
@@ -77,9 +77,10 @@
     "sync-mirror": "node scripts/sync-mirror.mjs"
   },
   "dependencies": {
+    "@napi-rs/image": "1.16.0",
+    "image-size": "2.1.0",
     "jpeg-js": "0.4.4",
-    "pngjs": "7.0.0",
-    "sharp": "0.34.5"
+    "pngjs": "7.0.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.1",
