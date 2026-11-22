@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Show the PlotFig logo and name on a single line in the home header. The total appears beside the link to all canvases.
+
 ## 0.3.0 (2026-11-22)
 
 - Install a new stable PlotFig release directly from the gallery’s update dialog on supported Harness hosts. The dialog shows installation progress and whether a restart is needed.

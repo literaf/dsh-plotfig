@@ -125,8 +125,11 @@ export function Workspace({ controller, openConversation, conversation, openPlug
     <header className="sd-head">
       <div className="sd-title">
         {open || settings || library ? <button className="sd-icon-button" onClick={back} aria-label={backLabel} title={backLabel}><BackIcon/></button> : <Icon size={22}/>}
-        <div className="sd-title-text"><strong>{heading}</strong>
-          <span className="sd-brand">{open && current ? `${isBoard(open) ? '独立画布' : '对话画布'} · ${current.count} 张` : open ? (isBoard(open) ? '独立画布' : '对话画布') : `${canvases.length} 个画布`}</span></div>
+        <div className="sd-title-text">
+          <strong>{heading}</strong>
+          {open && <span className="sd-brand">{isBoard(open) ? '独立画布' : '对话画布'}{current && ` · ${current.count} 张`}</span>}
+          {!open && (library || settings) && <span className="sd-brand">{canvases.length} 个画布</span>}
+        </div>
       </div>
       <div className="sd-head-actions">
         {!open && !settings && c?.configured ? <button className="sd-button sd-button-primary" onClick={create}><NewIcon size={14}/>新建画布</button> : null}

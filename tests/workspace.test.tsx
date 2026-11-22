@@ -22,8 +22,11 @@ describe('saved canvas access without model credentials', () => {
       await act(async () => { await controller.attach(); render() })
       expect(node.querySelector('.sd-settings')).toBeNull()
       expect(node.textContent).toContain('已保存的画布可继续编辑和导出')
+      expect(node.querySelector('.sd-title')?.textContent).toBe('PlotFig')
+      expect(node.querySelector('.sd-all-canvases .sd-canvas-count')?.textContent).toBe('1')
       await act(async () => { node.querySelector<HTMLButtonElement>('.sd-card')!.click() })
       expect(node.querySelector('[data-saved-canvas]')).not.toBeNull()
+      expect(node.querySelector('.sd-brand')?.textContent).toBe('独立画布 · 2 张')
       expect(openConversation).not.toHaveBeenCalled()
       await act(async () => { await controller.attach() })
       expect(node.querySelector('[data-saved-canvas]')).not.toBeNull()
@@ -148,7 +151,7 @@ describe('home generation entry', () => {
     try {
       await h.render()
       const selector = () => h.node.querySelector<HTMLSelectElement>('select[aria-label="绘图模型"]')!
-      expect(h.node.querySelector('.sd-brand')?.textContent).toBe('0 个画布')
+      expect(h.node.querySelector('.sd-title .sd-brand')).toBeNull()
       expect(h.node.querySelector('.sd-composer-footer')?.textContent).toBe('Enter 生成 · Shift + Enter 换行')
       expect(selector().value).toBe('seedream55')
       expect(selector().options).toHaveLength(9)
