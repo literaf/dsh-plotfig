@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/npm/dsh-plotfig@0.2.1/docs/images/logo-dark.svg">
-    <img src="https://cdn.jsdelivr.net/npm/dsh-plotfig@0.2.1/docs/images/logo-light.svg" alt="PlotFig" width="360">
+    <source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/npm/dsh-plotfig@0.3.0/docs/images/logo-dark.svg">
+    <img src="https://cdn.jsdelivr.net/npm/dsh-plotfig@0.3.0/docs/images/logo-light.svg" alt="PlotFig" width="360">
   </picture>
 </p>
 
@@ -12,7 +12,7 @@ An AI illustration plugin for researchers using DeepSeek Harness. Choose an AI4S
 - **Conversation canvas**: one per conversation. Images generated in the conversation land on it, and it opens in the right Sidebar when a generation starts (Harness ≥ 0.2.2).
 - **Standalone canvas**: created from the PlotFig panel with "新建画布". It belongs to no conversation.
 
-![PlotFig home with GPT Image 2.6 Sunburst selected at 4K and 16:9, and the update button in the header](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.2.1/docs/images/home.jpg)
+![PlotFig home with GPT Image 2.6 Sunburst selected at 4K and 16:9, and the update button in the header](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.3.0/docs/images/home.jpg)
 
 ## What it does
 
@@ -29,7 +29,7 @@ Choose the model next to the send button. New canvases default to **Seedream 5.5
 | **分图层** | Splits into movable transparent layers with editable OCR text |
 | Export | PNG, SVG, PDF and layered PSD with editable text |
 
-![Toolbar for a selected image: edit, regenerate, split layers, AI edits, add as reference](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.2.1/docs/images/canvas-selected.jpg)
+![Toolbar for a selected image: edit, regenerate, split layers, AI edits, add as reference](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.3.0/docs/images/canvas-selected.jpg)
 
 The layer service places transparent inputs on white paper for decomposition. Original images and returned foreground transparency are preserved.
 
@@ -38,12 +38,14 @@ The layer service places transparent inputs on white paper for decomposition. Or
 Open DeepSeek Harness Desktop once to initialize the profile, then fully quit it. Install PlotFig from npm with this command.
 
 ```bash
-dsh plugin --profile desktop add dsh-plotfig
+dsh plugin --profile desktop add dsh-plotfig@0.3.0
 ```
 
 Reopen Desktop, go to **Plugins → Installed plugins**, and enable **dsh-plotfig**. Open **PlotFig** from the sidebar.
 
 Choose **检查更新** in the top-right corner of the PlotFig gallery to compare your installed version with the latest stable npm release. For an npm installation on a supported Harness host, choose **更新到 v…** to update in the dialog. It tells you if the host needs a restart. Older hosts offer a path to the plugin manager.
+
+If you already have 0.2.1, open **精选科研插件** and choose **更新到 v0.3.0** on the PlotFig card. Future releases can be installed from PlotFig.
 
 PlotFig uses only AI4Scholar API keys for generation, editing, and layer splitting. If dsh-ai4scholar already has a key under `AI4SCHOLAR_API_KEY`, PlotFig uses it automatically. Otherwise, save your key under Settings → PlotFig. **测试连接** checks your balance and Seedream availability for free. [Get an AI4Scholar key](https://ai4scholar.net/en/docs/integrations/open-api?src=dsh_plotfig#get-an-api-key).
 
@@ -99,4 +101,4 @@ AI4Scholar bills ordinary generation per image and reserves the quoted maximum f
 - 500 objects per artboard, 32 million pixels per PNG export; undo history lasts for the current run.
 - AI results depend on the model. Pixel protection is exact; picture quality is not guaranteed. Expanding blank areas beside diagrams and tables is unreliable, cutouts lose glass-like translucency, combining several references can drop text labels, naturalistic and 3D presets look similar, and images in one batch are generated independently, so their look can differ even with the same style.
 - PSD files have been checked in Photopea and Adobe Illustrator 2025, not in Photoshop. Fonts missing on the target machine are substituted.
-- Seedream generation, editing, layer splitting and credit settlement have been verified with the live AI4Scholar service. For the eight other models, release checks covered request parameters and simulated responses. [Full Chinese guide and shortcuts](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.2.1/README_CN.md)
+- Seedream generation, editing, layer splitting and credit settlement have been verified with the live AI4Scholar service. For the eight other models, release checks covered request parameters and simulated responses. [Full Chinese guide and shortcuts](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.3.0/README_CN.md)

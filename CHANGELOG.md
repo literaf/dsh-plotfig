@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-11-22)
 
 - Install a new stable PlotFig release directly from the gallery’s update dialog on supported Harness hosts. The dialog shows installation progress and whether a restart is needed.
 

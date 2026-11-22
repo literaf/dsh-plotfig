@@ -38,12 +38,14 @@
 首次使用时先打开一次 DeepSeek Harness 桌面版以初始化配置，然后完全退出。运行以下命令从 npm 安装 PlotFig。
 
 ```bash
-dsh plugin --profile desktop add dsh-plotfig
+dsh plugin --profile desktop add dsh-plotfig@0.3.0
 ```
 
 重新打开桌面版，在「插件 → 已安装插件」中启用 **dsh-plotfig**，再从侧栏打开 **PlotFig**。
 
 点击首页右上角的 **检查更新**，可查看已安装版本和 npm 上的最新正式版。通过包名安装的 PlotFig 在支持更新的 DSH 中会显示 **更新到 v…**。点击即可在弹窗内升级。如果需要重启，弹窗会提示。旧版 DSH 可从插件管理器更新。
+
+如果你已安装 0.2.1，这一次请到「精选科研插件」，在 PlotFig 卡片上点 **更新到 v0.3.0**。后续版本可直接在 PlotFig 内更新。
 
 PlotFig 的生图、编辑和分层只接受 AI4Scholar 签发的 Key。如果已在 dsh-ai4scholar 配置共享凭据 `AI4SCHOLAR_API_KEY`，安装 PlotFig 后即可复用。首次配置时，在「设置 → PlotFig」保存密钥，点「测试连接」可免费查看余额和 Seedream 配置状态。[获取 AI4Scholar API Key](https://ai4scholar.net/docs/integrations/open-api?src=dsh_plotfig#获取-api-key)
 
