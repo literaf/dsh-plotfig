@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PNG } from 'pngjs'
+import sharp from 'sharp'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AI4ScholarClient, AI4ScholarError } from '../src/ai4scholar.js'
 import { apply, Config } from '../src/index.js'
@@ -83,6 +84,15 @@ describe('AI4Scholar drawing contract', () => {
     expect(PNG.sync.read(Buffer.from(out.images[0]!.bytes)).data[3]).toBe(0)
   })
 
+  it.each(['jpeg', 'webp'] as const)('converts a %s provider image to PNG for subsequent editing', async format => {
+    const source = sharp({ create: { width: 20, height: 14, channels: 4, background: { r: 60, g: 72, b: 90, alpha: 0.5 } } })
+    const bytes = Uint8Array.from(await source.toFormat(format).toBuffer())
+    const result = await client(drawingFetch(() => {}, bytes)).generate({ model: 'gptimage', prompt: 'diagram', size: '2K', images: [], watermark: false }, new AbortController().signal)
+    const image = result.images[0]!
+    expect(image).toMatchObject({ mime: 'image/png', width: 20, height: 14 })
+    expect(PNG.sync.read(Buffer.from(image.bytes)).data[3]).toBe(format === 'jpeg' ? 255 : 128)
+  })
+
   it('sends all edit references and uses generate for a prompt alone', async () => {
     const posts: Record<string, unknown>[] = []
     const api = client(drawingFetch(body => { posts.push(body) }))
@@ -112,7 +122,7 @@ describe('AI4Scholar drawing contract', () => {
     await expect(generate('http://storage.test/a', skipped)).rejects.toThrow('图片地址无效')
     expect(skipped).not.toHaveBeenCalled()
     await expect(generate('https://storage.test/a', () => new Response('<html>'))).rejects.toThrow('PNG')
-    await expect(generate('https://storage.test/a', () => new Response('x', { headers: { 'content-length': String(31 * 1024 * 1024) } }))).rejects.toThrow('30 MB')
+    await expect(generate('https://storage.test/a', () => new Response('x', { headers: { 'content-length': String(65 * 1024 * 1024) } }))).rejects.toThrow('64 MB')
   })
 
   it('stops before sending an already cancelled request', async () => {

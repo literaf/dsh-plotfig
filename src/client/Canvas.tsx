@@ -8,8 +8,8 @@ import type { CanvasModel, PendingView } from './controller.js'
 import { imageUrl } from './controller.js'
 import type { LayerQuote } from '../shared/types.js'
 import type { ConversationActions, Outcome } from './handoff.js'
-import { Composer, SizePicker, TransparentToggle } from './Composer.js'
-import type { SizeChoice } from './Composer.js'
+import { Composer, ModelPicker, SizePicker, TransparentToggle, useDrawingOptions } from './Composer.js'
+import { MODEL } from '../shared/models.js'
 import { CloseIcon, DownloadIcon, EditIcon, FitIcon, HandIcon, ImageIcon, MinusIcon, PlusIcon, QuoteIcon, RedoIcon, SelectIcon, TrashIcon, UndoIcon } from './icons.js'
 import { useImage } from './images.js'
 import { LayerEditor, LayersIcon } from './LayerEditor.js'
@@ -22,7 +22,7 @@ import { ImageEditDialog } from './ImageEditDialog.js'
 import { exportPsd } from './psd-export.js'
 import { exportPdf } from './pdf-export.js'
 import { ILLUSTRATION_PROMPT_HINT, referencePrompt } from '../shared/research.js'
-import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
+import type { ResearchToolId } from '../shared/research.js'
 import { ResearchStyleButton, ResearchStylePicker } from './ResearchStyles.js'
 import { ResearchSourcePicker, ResearchTools } from './ResearchTools.js'
 import { ResearchDialog } from './ResearchDialog.js'
@@ -57,7 +57,7 @@ export function fit(box: Box, width: number, height: number, bottom = 0, top = 0
 }
 /** Expected output shape for a pending request, so the placeholder matches what will arrive. */
 export function pendingShape(size: string | undefined, fallbackHeight: number): { width: number; height: number } {
-  const m = size ? /^(\d+)x(\d+)$/.exec(size) : null
+  const m = size ? /^(\d+)[x:](\d+)$/.exec(size) : null
   if (!m) return { width: fallbackHeight, height: fallbackHeight }
   const w = Number(m[1]), h = Number(m[2]), k = fallbackHeight / Math.max(w, h)
   return { width: Math.round(w * k), height: Math.round(h * k) }
@@ -106,13 +106,13 @@ function PendingCard({ pending, rect }: { pending: PendingView; rect: { left: nu
   </div>
 }
 const EXAMPLES = ['热带雨林垂直分层剖面图，教材插画风格，标注每层高度和代表物种', '一只坐在苔藓石头上的红眼树蛙，自然博物水彩风格，浅色背景', '细胞有丝分裂各时期的示意图，扁平矢量风格，白色背景']
-export function CanvasView({ model, active = true, conversation, defaultSize, initialTool, initialStyle, initialCompositionId }: {
+export function CanvasView({ model, active = true, conversation, defaultSize, initialTool, initialCompositionId }: {
   model: CanvasModel; active?: boolean
   /** Absent for a standalone canvas: no conversation can read its items. */
   conversation?: ConversationActions | undefined
   defaultSize?: string | undefined
   initialCompositionId?: string | undefined
-  initialTool?: ResearchToolId | undefined; initialStyle?: GenerationStyle | undefined
+  initialTool?: ResearchToolId | undefined
 }) {
   const state = useSyncExternalStore(model.subscribe, model.getSnapshot)
   const inConversation = !isBoard(model.sessionId)
@@ -126,7 +126,11 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 0.3 })
   const [selected, setSelected] = useState<string | undefined>(initialCompositionId), [hovered, setHovered] = useState<string | undefined>()
   const [editing, setEditing] = useState(false), [confirming, setConfirming] = useState(false)
-  const [prompt, setPrompt] = useState(''), [genSize, setGenSize] = useState<SizeChoice>(''), [transparent, setTransparent] = useState(false)
+  const [prompt, setPrompt] = useState('')
+  const drawingModel = state.canvas?.generationModel ?? MODEL
+  const drawing = useDrawingOptions(drawingModel, defaultSize)
+  const modelPicker = <ModelPicker value={drawingModel} disabled={state.generationSettingsBusy || !state.canvas}
+    onChange={generationModel => { void model.setGenerationOptions({ generationModel }) }}/>
   const [templatePicker, setTemplatePicker] = useState(false)
   const [stylePicker, setStylePicker] = useState(false), [toolMenu, setToolMenu] = useState(false)
   const [sourceTool, setSourceTool] = useState<Exclude<ResearchToolId, 'generate'> | 'import' | undefined>(initialTool && initialTool !== 'generate' ? initialTool : undefined)
@@ -161,7 +165,6 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const [history, setHistory] = useState<{ done: CanvasChange[]; undone: CanvasChange[] }>({ done: [], undone: [] })
   const fitted = useRef(false), seen = useRef<string | undefined>(undefined)
   useEffect(() => active ? model.hold() : undefined, [model, active])
-  useEffect(() => { if (initialStyle !== undefined) void model.setGenerationStyle(initialStyle) }, [model, initialStyle])
   useLayoutEffect(() => {
     const el = host.current
     if (!el) return
@@ -223,8 +226,8 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   const canRegenerate = !!item && !item.imported && !item.edit && item.role !== 'layer' && !['本地导入图片', '本地合成图层'].includes(item.prompt) && !!item.prompt.trim()
   const regenerate = (target: CanvasItem) => {
     const refs = target.refs.filter(r => (state.canvas?.items ?? []).some(i => i.id === r)).map(r => `item:${r}`)
-    void model.generate({ prompt: target.sourcePrompt ?? target.prompt, ...(refs.length ? { images: refs } : {}), size: target.size, title: target.title,
-      ...(target.sourcePrompt ? {} : { style: 'auto' as const }), ...(target.transparent ? { transparent: true } : {}), replaces: target.id }, target.refs[0])
+    void model.generate({ prompt: target.sourcePrompt ?? target.prompt, ...(refs.length ? { images: refs } : {}), model: target.model ?? MODEL, size: target.size, ...(target.aspectRatio && { aspectRatio: target.aspectRatio }), title: target.title,
+      style: target.generationStyle ?? 'auto', ...(target.transparent ? { transparent: true } : {}), replaces: target.id }, target.refs[0])
   }
   const mainRef = referenceSource ? referenceSource.item : editing && item ? item : undefined
   // A reference deleted from the canvas drops out of the composer instead of failing the request.
@@ -292,12 +295,12 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
   }
   const submit = () => {
     const text = prompt.trim()
-    if (!text || inConversation || state.styleBusy) return
-    const options = { ...(genSize ? { size: genSize } : {}), ...(transparent ? { transparent } : {}) }
+    if (!text || inConversation || !state.canvas || model.getSnapshot().generationSettingsBusy) return
+    const options = drawing.request
     const extra = composerRefs.filter(r => r.id !== mainRef?.id).map(r => `item:${r.id}`)
     if (referenceSource) void model.generate({ prompt: text, images: [`item:${referenceSource.item.id}`, ...extra], ...options }, referenceSource.item.id)
     // Opaque output keeps repeated edits of one image consistent, unless transparency was asked for.
-    else if (editing && item) void model.generate({ prompt: text, images: [`item:${item.id}`, ...extra], title: `${labelOf(item)} · 编辑`, style: 'auto', ...(transparent ? {} : { opaque: true }), ...options }, item.id)
+    else if (editing && item) void model.generate({ prompt: text, images: [`item:${item.id}`, ...extra], title: `${labelOf(item)} · 编辑`, style: 'auto', ...(drawing.native && !drawing.transparent ? { opaque: true } : {}), ...options }, item.id)
     else if (extra.length) void model.generate({ prompt: text, images: extra, ...options }, composerRefs[0]!.id)
     else void model.generate({ prompt: text, ...options })
     setPrompt(''); setEditing(false); setReferenceSource(undefined); setExtraRefs([])
@@ -444,7 +447,8 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
     <div className="sd-canvas-bar" ref={viewControls}>
       <div className="sd-research-actions">
         <button type="button" className="sd-button" disabled={operationBusy} onClick={() => setToolMenu(true)} aria-haspopup="dialog">科研工具</button>
-        {inConversation ? <ResearchStyleButton value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.styleBusy} open={stylePicker} onClick={() => setStylePicker(true)}/> : null}
+        {inConversation && modelPicker}
+        {inConversation ? <ResearchStyleButton value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.generationSettingsBusy} open={stylePicker} onClick={() => setStylePicker(true)}/> : null}
         <button type="button" className="sd-icon-button sd-import-button" disabled={operationBusy} onClick={() => setSourceTool('import')} aria-label="导入图片" title="导入图片"><ImageIcon/></button>
       </div>
       <div className="sd-zoom" role="toolbar" aria-label="视图">
@@ -557,12 +561,12 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
         placeholder={editing ? '描述要修改的地方，以及需要保持不变的部分…' : '描述你想生成的画面…'}
         context={composerRefs.length ? <span className="sd-context-refs">{composerRefs.map((r, i) => <span key={r.id} className="sd-context-chip"><img src={imageUrl(model.sessionId, r.id)} alt=""/>{composerRefs.length > 1 ? `图${i + 1} · ` : ''}{i === 0 && referenceSource ? (referenceSource.kind === 'sketch' ? '草图' : '参考') : i === 0 && editing ? '编辑' : '参考'} · {labelOf(r)}{r.id !== mainRef?.id ? <button type="button" className="sd-icon-button sd-icon-small" aria-label={`移除参考图 ${labelOf(r)}`} onClick={() => setExtraRefs(v => v.filter(x => x.id !== r.id))}><CloseIcon size={10}/></button> : null}</span>)}</span> : undefined}
         onClearContext={() => { setEditing(false); if (referenceSource && prompt === referencePrompt(referenceSource.kind)) setPrompt(''); setReferenceSource(undefined); setExtraRefs([]) }}
-        disabled={state.styleBusy}
-        hint={state.styleBusy ? '正在保存风格…' : waiting ? '生成中…' : '每次生成都会计费'}>
-        <ResearchStyleButton value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.styleBusy} open={stylePicker} onClick={() => setStylePicker(true)}/>
+        modelPicker={modelPicker} disabled={state.generationSettingsBusy || !state.canvas}
+        hint={state.generationSettingsBusy ? '正在保存绘图设置…' : waiting ? '生成中…' : undefined}>
+        <ResearchStyleButton value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.generationSettingsBusy} open={stylePicker} onClick={() => setStylePicker(true)}/>
         <TemplateButton open={templatePicker} disabled={operationBusy} onClick={() => setTemplatePicker(true)}/>
-        <SizePicker value={genSize} onChange={setGenSize} fallback={defaultSize}/>
-        <TransparentToggle value={transparent} onChange={setTransparent}/>
+        <SizePicker options={drawing}/>
+        {drawing.native && <TransparentToggle value={drawing.transparent} onChange={drawing.setTransparent}/>}
       </Composer>}
     </div>
     </div>
@@ -583,7 +587,7 @@ export function CanvasView({ model, active = true, conversation, defaultSize, in
       const created = await model.createTemplate(id, palette)
       setSelected(created.id); setSelectedLayers([]); setEditorId(created.id); setTemplatePicker(false)
     }}/> : null}
-    {stylePicker ? <ResearchStylePicker value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.styleBusy} error={state.error} onPick={style => { void model.setGenerationStyle(style).then(ok => { if (ok) setStylePicker(false) }) }} onClose={() => setStylePicker(false)}/> : null}
+    {stylePicker ? <ResearchStylePicker value={state.canvas?.generationStyle ?? 'auto'} busy={!!state.generationSettingsBusy} error={state.error} onPick={style => { void model.setGenerationOptions({ generationStyle: style }).then(ok => { if (ok) setStylePicker(false) }) }} onClose={() => setStylePicker(false)}/> : null}
     {sourceTool ? <ResearchSourcePicker tool={sourceTool} model={model} items={items} compositions={compositions} onSelect={source => useToolSource(source, sourceTool)} onOpenComposition={id => { const c = compositions.find(c => c.id === id); if (c) openTextEditor(c) }} onClose={() => setSourceTool(undefined)}/> : null}
   </div>
 }

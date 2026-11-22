@@ -1,17 +1,39 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { RATIOS, SIZE_TIERS } from '../shared/types.js'
+import { RATIOS } from '../shared/types.js'
+import { defaultModelSize, DRAWING_MODELS, MODEL, MODEL_IDS, modelRatios, modelSizes } from '../shared/models.js'
+import type { DrawingModel, DrawingRatio } from '../shared/models.js'
 import { CheckIcon, ChevronIcon, CloseIcon, SendIcon, StopIcon } from './icons.js'
 
 /** '' means the default size from settings; otherwise a tier or one of RATIOS' WxH. */
-export type SizeChoice = string
+type SizeChoice = string
+export function useDrawingOptions(model: DrawingModel, preferredSize?: string) {
+  const [chosenSize, setSize] = useState(''), [chosenRatio, setRatio] = useState<DrawingRatio>('auto')
+  const [wantsTransparent, setTransparent] = useState(false)
+  const native = model === MODEL
+  const fallback = native ? preferredSize || '2K' : defaultModelSize(model, preferredSize)
+  const size = modelSizes(model).includes(chosenSize) || (native && RATIOS.some(r => r.size === chosenSize)) ? chosenSize : ''
+  const ratio = !native && modelRatios(model).includes(chosenRatio) ? chosenRatio : 'auto'
+  const transparent = native && wantsTransparent
+  return { model, native, fallback, size, setSize, ratio, setRatio, transparent, setTransparent,
+    request: { model, ...(size && { size }), ...(ratio !== 'auto' && { aspectRatio: ratio }), ...(transparent && { transparent }) } }
+}
+export function ModelPicker({ value, onChange, disabled }: { value: DrawingModel; onChange(model: DrawingModel): void; disabled?: boolean | undefined }) {
+  return <label className="sd-model-picker" title={DRAWING_MODELS[value].label}>
+    <span aria-hidden="true">{DRAWING_MODELS[value].label}</span><ChevronIcon size={12}/>
+    <select aria-label="绘图模型" value={value} disabled={disabled} onChange={e => onChange(e.target.value as DrawingModel)}>
+      {MODEL_IDS.map(id => <option key={id} value={id}>{DRAWING_MODELS[id].label}</option>)}
+    </select>
+  </label>
+}
 export function sizeLabel(size: SizeChoice, fallback?: string): string {
   if (!size) return fallback || '尺寸'
   return RATIOS.find(r => r.size === size)?.id ?? size
 }
 /** Rectangle preview for a ratio chip, scaled into a 16px box. */
 function RatioGlyph({ size }: { size: string }) {
-  const [w, h] = size.includes('x') ? size.split('x').map(Number) as [number, number] : [1, 1]
+  const match = /^(\d+)[x:](\d+)$/.exec(size)
+  const w = Number(match?.[1] ?? 1), h = Number(match?.[2] ?? 1)
   const k = 14 / Math.max(w, h)
   return <span className="sd-ratio-glyph"><span style={{ width: Math.max(4, w * k), height: Math.max(4, h * k) }}/></span>
 }
@@ -24,21 +46,25 @@ function useOutside(open: boolean, close: () => void, ref: React.RefObject<HTMLE
     return () => { document.removeEventListener('pointerdown', down, true); document.removeEventListener('keydown', key, true) }
   }, [open, close, ref])
 }
-export function SizePicker({ value, onChange, fallback }: { value: SizeChoice; onChange(v: SizeChoice): void; fallback?: string | undefined }) {
+export function SizePicker({ options }: { options: ReturnType<typeof useDrawingOptions> }) {
+  const { model, native, size: value, setSize, ratio, setRatio, fallback } = options
   const [open, setOpen] = useState(false), root = useRef<HTMLDivElement>(null)
   useOutside(open, () => setOpen(false), root)
   // Focus goes back to the prompt so Enter submits right after choosing.
-  const pick = (v: SizeChoice) => { onChange(v); setOpen(false); root.current?.closest('.sd-composer')?.querySelector('textarea')?.focus() }
+  const finish = () => { setOpen(false); root.current?.closest('.sd-composer')?.querySelector('textarea')?.focus() }
+  const pick = (v: SizeChoice) => { setSize(v); finish() }
+  const label = sizeLabel(value, fallback) + (ratio === 'auto' ? '' : ' · ' + ratio)
   return <div className="sd-size" ref={root}>
-    <button type="button" className="sd-chip" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} title="尺寸与比例" aria-label={`尺寸与比例：${value ? sizeLabel(value) : `默认${fallback ? ` ${fallback}` : ''}`}`}>
-      <RatioGlyph size={value || '1x1'}/>{sizeLabel(value, fallback)}<ChevronIcon size={12}/>
+    <button type="button" className="sd-chip" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} title="尺寸与比例" aria-label={`尺寸与比例：${value || ratio !== 'auto' ? label : '默认 ' + fallback}`}>
+      <RatioGlyph size={native ? value : ratio}/>{label}<ChevronIcon size={12}/>
     </button>
     {open ? <div className="sd-menu" role="menu">
-      <div className="sd-menu-head">比例 · 2K</div>
-      <div className="sd-ratio-grid">{RATIOS.map(r => <button type="button" role="menuitemradio" aria-checked={value === r.size} key={r.id} className="sd-ratio" onClick={() => pick(r.size)}>
-        <RatioGlyph size={r.size}/><span>{r.id}</span></button>)}</div>
-      <div className="sd-menu-head">清晰度 · 比例由模型决定</div>
-      {(['', ...SIZE_TIERS] as string[]).map(t => <button type="button" role="menuitemradio" aria-checked={value === t} key={t || 'default'} className="sd-menu-item" onClick={() => pick(t)}>
+      <div className="sd-menu-head">{native ? '比例 · 2K' : '画幅比例'}</div>
+      <div className="sd-ratio-grid">{native ? RATIOS.map(r => <button type="button" role="menuitemradio" aria-checked={value === r.size} key={r.id} className="sd-ratio" onClick={() => pick(r.size)}>
+        <RatioGlyph size={r.size}/><span>{r.id}</span></button>) : modelRatios(model).map(r => <button type="button" role="menuitemradio" aria-checked={ratio === r} key={r} className="sd-ratio" onClick={() => { setRatio(r); finish() }}>
+        <RatioGlyph size={r}/><span>{r === 'auto' ? '自动' : r}</span></button>)}</div>
+      <div className="sd-menu-head">{native ? '清晰度 · 比例由模型决定' : '清晰度'}</div>
+      {['', ...modelSizes(model)].map(t => <button type="button" role="menuitemradio" aria-checked={value === t} key={t || 'default'} className="sd-menu-item" onClick={() => pick(t)}>
         <span>{t ? t : `默认${fallback ? `（${fallback}）` : ''}`}</span>{value === t ? <CheckIcon size={14}/> : null}</button>)}
     </div> : null}
   </div>
@@ -54,11 +80,11 @@ export function TransparentToggle({ value, onChange }: { value: boolean; onChang
  * line, IME composition respected), and turns its send button into a stop
  * button while this view waits on a request.
  */
-export function Composer({ value, onChange, onSubmit, onStop, waiting, placeholder, autoFocus, children, context, onClearContext, hint, disabled }: {
+export function Composer({ value, onChange, onSubmit, onStop, waiting, placeholder, autoFocus, children, context, onClearContext, hint, disabled, modelPicker }: {
   value: string; onChange(v: string): void; onSubmit(): void; onStop?: (() => void) | undefined
   waiting?: boolean; placeholder: string; autoFocus?: boolean; children?: ReactNode
   /** A chip above the text naming what the prompt applies to (e.g. the image being edited). */
-  context?: ReactNode; onClearContext?: (() => void) | undefined; hint?: string
+  context?: ReactNode; onClearContext?: (() => void) | undefined; hint?: string | undefined; modelPicker: ReactNode
   disabled?: boolean | undefined
 }) {
   const area = useRef<HTMLTextAreaElement>(null)
@@ -75,7 +101,7 @@ export function Composer({ value, onChange, onSubmit, onStop, waiting, placehold
       onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (ready) onSubmit() } }}/>
     <div className="sd-composer-bar">
       <div className="sd-composer-tools">{children}</div>
-      <div className="sd-composer-submit"><span className="sd-composer-model" title="当前绘图模型">Seedream 5.5</span>
+      <div className="sd-composer-submit">{modelPicker}
       {waiting && onStop && !ready
         ? <button type="button" className="sd-send sd-send-stop" onClick={onStop} title="停止等待（已发出的请求仍可能计费）" aria-label="停止等待"><StopIcon size={14}/></button>
         : <button type="submit" className="sd-send" disabled={!ready} title="生成（Enter）" aria-label="生成"><SendIcon size={16}/></button>}

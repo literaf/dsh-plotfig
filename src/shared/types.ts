@@ -1,6 +1,9 @@
 import type { ImageEditReceipt } from './image-edit.js'
 import { parseGenerationStyle } from './research.js'
 import type { GenerationStyle } from './research.js'
+import { defaultModelSize, DRAWING_MODELS, MODEL, modelRatios, modelSizes, parseDrawingModel, SIZE_TIERS } from './models.js'
+import type { DrawingModel, DrawingRatio } from './models.js'
+export { MODEL, SIZE_TIERS }
 
 export const ROUTE = '/api/seedream'
 export const PANEL = 'seedream'
@@ -9,8 +12,6 @@ export const TAB_ID = 'dsh-seedream'
 export const KEY_REF = 'AI4SCHOLAR_API_KEY'
 /** Format check for user keys. AI4Scholar verifies the credential on each request. */
 export const isAI4ScholarKey = (key: string | undefined): boolean => !!key && /^sk-user-[a-zA-Z0-9_-]+$/.test(key)
-export const MODEL = 'seedream55'
-export const SIZE_TIERS = ['1K', '1.5K', '2K'] as const
 export type SizeTier = typeof SIZE_TIERS[number]
 export const MAX_REFS = 10
 export const MAX_PROMPT = 4000
@@ -22,6 +23,8 @@ export const BOARD_PREFIX = 'board-'
 export const isBoard = (id: string): boolean => id.startsWith(BOARD_PREFIX)
 export interface GenerateInput {
   prompt: string
+  model?: DrawingModel
+  aspectRatio?: DrawingRatio
   /** `item:<id>` references on the same canvas, https URLs, or data URLs. */
   images: string[]
   size: string
@@ -38,6 +41,9 @@ export interface GenerateInput {
 }
 export interface CanvasItem {
   id: string
+  /** Older generated images used Seedream. Imported images have no model. */
+  model?: DrawingModel
+  aspectRatio?: DrawingRatio
   title: string
   prompt: string
   width: number
@@ -102,6 +108,7 @@ export interface Canvas {
   layerTasks?: SavedLayerTask[]
   /** Persisted per canvas; changing this does not generate or alter any image. */
   generationStyle?: GenerationStyle
+  generationModel?: DrawingModel
 }
 export type LayerKind = 'image' | 'text' | 'rect' | 'ellipse' | 'diamond' | 'arrow'
 export interface ConnectorBinding { layerId: string; side: 'top' | 'right' | 'bottom' | 'left' }
@@ -247,7 +254,7 @@ export function parseSize(value: unknown, fallback: string): string {
   if (ratio < 1 / 16 || ratio > 16) throw new Error('size 宽高比需在 1:16 到 16:1 之间。')
   return `${w}x${h}`
 }
-export function parseGenerate(raw: unknown, defaults: { size: string; watermark: boolean }): GenerateInput {
+export function parseGenerate(raw: unknown, defaults: { size: string; watermark: boolean; model?: DrawingModel }): GenerateInput {
   if (!isRecord(raw)) throw new Error('无效的生成参数。')
   const prompt = typeof raw.prompt === 'string' ? raw.prompt.trim() : ''
   if (!prompt) throw new Error('请填写提示词。')
@@ -259,7 +266,24 @@ export function parseGenerate(raw: unknown, defaults: { size: string; watermark:
   if (raw.transparent !== undefined && typeof raw.transparent !== 'boolean') throw new Error('transparent 必须是布尔值。')
   if (raw.opaque !== undefined && typeof raw.opaque !== 'boolean') throw new Error('opaque 必须是布尔值。')
   if (raw.transparent && raw.opaque) throw new Error('transparent 与 opaque 不能同时开启。')
+  const model = parseDrawingModel(raw.model === undefined ? defaults.model ?? MODEL : raw.model)
+  let size: string
+  let aspectRatio: DrawingRatio | undefined
+  if (model === MODEL) {
+    size = parseSize(raw.size, defaults.size)
+    if (raw.aspectRatio !== undefined && raw.aspectRatio !== 'auto') throw new Error('Seedream 的画幅比例由 size 指定。')
+  } else {
+    const sizes = modelSizes(model)
+    const chosen = raw.size === undefined || raw.size === '' ? defaultModelSize(model, defaults.size) : raw.size
+    if (typeof chosen !== 'string' || !sizes.includes(chosen)) throw new Error(DRAWING_MODELS[model].label + ' 支持的分辨率为 ' + sizes.join('、') + '。')
+    size = chosen
+    const ratio = raw.aspectRatio === undefined ? 'auto' : raw.aspectRatio
+    if (!modelRatios(model).some(r => r === ratio)) throw new Error('此模型不支持所选画幅比例。')
+    aspectRatio = ratio as DrawingRatio
+    if (raw.transparent || raw.opaque || raw.watermark !== undefined) throw new Error('背景和水印参数仅适用于 Seedream 5.5。')
+  }
   if (raw.replaces !== undefined && (typeof raw.replaces !== 'string' || !ITEM_ID.test(raw.replaces))) throw new Error('replaces 必须是当前画布的图片 id。')
   const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim().slice(0, 80) : undefined
-  return { prompt, images: (images as string[]).map(x => x.trim()), size: parseSize(raw.size, defaults.size), watermark: raw.watermark ?? defaults.watermark, ...(title ? { title } : {}), ...(raw.transparent ? { transparent: true } : {}), ...(raw.opaque ? { opaque: true } : {}), ...(typeof raw.replaces === 'string' ? { replaces: raw.replaces } : {}), ...(raw.style === undefined ? {} : { style: parseGenerationStyle(raw.style) }) }
+  return { prompt, model, images: (images as string[]).map(x => x.trim()), size, watermark: raw.watermark ?? defaults.watermark,
+    ...(aspectRatio ? { aspectRatio } : {}), ...(title ? { title } : {}), ...(raw.transparent ? { transparent: true } : {}), ...(raw.opaque ? { opaque: true } : {}), ...(typeof raw.replaces === 'string' ? { replaces: raw.replaces } : {}), ...(raw.style === undefined ? {} : { style: parseGenerationStyle(raw.style) }) }
 }

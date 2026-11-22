@@ -12,6 +12,7 @@ import { createHandlers } from '../src/routes.js'
 import { applyTools } from '../src/tools.js'
 import { parseGenerate } from '../src/shared/types.js'
 import { RESEARCH_STYLES, parseGenerationStyle, styledPrompt, styleName } from '../src/shared/research.js'
+import { MODEL, MODEL_IDS, defaultModelSize } from '../src/shared/models.js'
 import { decodePixels } from '../src/pixels.js'
 import { drawingFetch, png } from './fixtures.js'
 
@@ -33,6 +34,40 @@ function setup() {
   const h = createHandlers(service, new Preferences(join(root, 'preferences.json'), defaults), status)
   return { store, service, h, fetch, bodies }
 }
+
+describe('drawing model selection', () => {
+  it.each(MODEL_IDS)('uses %s on the generation gateway and saves the image’s model', async model => {
+    const { h, store, bodies, fetch } = setup()
+    expect((await h.canvas(request({ generationModel: model }, 'first', 'PATCH'))).status).toBe(200)
+    expect(fetch).not.toHaveBeenCalled()
+    expect((await new CanvasStore(store.root).get('first')).generationModel).toBe(model)
+    expect((await store.get('second')).generationModel).toBeUndefined()
+    const result = await h.generate(request({ prompt: '实验装置' }))
+    expect(result.status).toBe(200)
+    const size = defaultModelSize(model)
+    expect(bodies).toEqual([{ model, action: 'generate', prompt: '实验装置', images: [],
+      ...(model === MODEL ? { size: '2K', watermark: false } : { imageSize: size, aspectRatio: 'auto' }) }])
+    expect(fetch.mock.calls.some(([url]) => String(url).includes('/layers?'))).toBe(model === MODEL)
+    expect((await store.get('first')).items[0]).toMatchObject({ model, size })
+  })
+  it('validates incompatible model options before submission and preserves the last valid selection', async () => {
+    const { h, store, fetch } = setup()
+    await h.canvas(request({ generationModel: 'bananalite', generationStyle: 'flat' }, 'first', 'PATCH'))
+    await h.canvas(request({ generationStyle: 'line-art' }, 'first', 'PATCH'))
+    expect((await h.canvas(request({ generationModel: 'unknown', generationStyle: 'auto' }, 'first', 'PATCH'))).status).toBe(400)
+    expect(await store.get('first')).toMatchObject({ generationModel: 'bananalite', generationStyle: 'line-art' })
+    for (const invalid of [{ model: 'unknown' }, { size: '4K' }, { size: '1024x1024' }, { aspectRatio: '8:1' }, { transparent: true }, { watermark: false }]) {
+      expect((await h.generate(request({ prompt: '测试', ...invalid }))).status).toBe(400)
+    }
+    expect(fetch).not.toHaveBeenCalled()
+  })
+  it('sends every reference to Nano Banana on the appropriate single or multi-image action', async () => {
+    const { h, bodies } = setup()
+    const images = ['https://example.com/a', 'https://example.com/b']
+    for (const refs of [images.slice(0, 1), images]) expect((await h.generate(request({ prompt: '按比例排布', model: 'flash31', size: '512px', aspectRatio: '8:1', images: refs }))).status).toBe(200)
+    expect(bodies).toEqual([['edit', images.slice(0, 1)], ['generate', images]].map(([action, refs]) => ({ action, images: refs, prompt: '按比例排布', model: 'flash31', imageSize: '512px', aspectRatio: '8:1' })))
+  })
+})
 
 describe('canvas style across UI routes and conversation tools', () => {
   it('persists a per-canvas choice without billing and applies it through the native tool', async () => {

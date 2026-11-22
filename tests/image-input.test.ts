@@ -10,7 +10,7 @@ describe('size and input validation', () => {
   })
   it('limits references, prompt length and types', () => {
     const defaults = { size: '2K', watermark: true }
-    expect(parseGenerate({ prompt: ' x ', title: ' 标题 ' }, defaults)).toEqual({ prompt: 'x', images: [], size: '2K', watermark: true, title: '标题' })
+    expect(parseGenerate({ prompt: ' x ', title: ' 标题 ' }, defaults)).toEqual({ prompt: 'x', model: 'seedream55', images: [], size: '2K', watermark: true, title: '标题' })
     for (const bad of [{}, { prompt: '' }, { prompt: 'x'.repeat(4001) }, { prompt: 'x', images: Array(11).fill('item:aaaaaaaaaaaa') }, { prompt: 'x', images: [1] }, { prompt: 'x', watermark: 'no' }]) expect(() => parseGenerate(bad, defaults)).toThrow()
   })
   it('reads PNG and JPEG dimensions', () => {

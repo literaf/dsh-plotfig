@@ -77,6 +77,15 @@ describe('batch generation tool', () => {
     expect(result.warnings[0]).toBe('批量生成：成功 2 / 共 3。')
     expect(result.warnings.join()).toContain('第 2 项失败，未自动重试')
   })
+  it('inherits the canvas model for batch and single calls and supports a one-off override', async () => {
+    const { store, tools, bodies, exec } = setup()
+    await store.setGenerationOptions('sess_one', { generationModel: 'flash' })
+    const batch = await tools.get('seedream_generate_batch')!.execute({ items: [{ prompt: 'A' }, { prompt: 'B' }], aspect_ratio: '3:4' }, exec)
+    expect(batch).toMatchObject({ generation_model: 'flash', created: [{ model: 'flash' }, { model: 'flash' }] })
+    await tools.get('seedream_generate')!.execute({ model: 'gpt26sunburst', prompt: 'C', size: '4K', aspect_ratio: '4:3' }, exec)
+    await tools.get('seedream_generate')!.execute({ prompt: 'D' }, exec)
+    expect(bodies.map(b => [b.model, b.imageSize, b.aspectRatio])).toEqual([['flash', '1K', '3:4'], ['flash', '1K', '3:4'], ['gpt26sunburst', '4K', '4:3'], ['flash', '1K', 'auto']])
+  })
   it('rejects a bad item before billing anything', async () => {
     const { tools, bodies, exec } = setup()
     await expect(tools.get('seedream_generate_batch')!.execute({ items: [{ prompt: 'a' }, { prompt: '' }] }, exec)).rejects.toThrow('第 2 项')

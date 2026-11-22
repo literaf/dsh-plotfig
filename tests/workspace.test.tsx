@@ -69,12 +69,18 @@ describe('saved canvas access without model credentials', () => {
 
 describe('home generation entry', () => {
   function setup(failStyle = false) {
+    const saved = new Map<string, object>()
     const catalog = { version: '0.1.0', configured: true, keyRef: 'AI4SCHOLAR_API_KEY', model: 'seedream', defaultSize: '2K', watermark: false, canvases: [] }
     const fetcher = vi.fn(async (path: string, _signal: AbortSignal, data?: unknown, method?: string) => {
       if (path === '/api/seedream') return { ok: true, value: catalog }
       const sessionId = new URL(path, 'http://local').searchParams.get('session')!
-      const canvas = { sessionId, revision: 1, items: [], createdAt: 'now', updatedAt: 'now', generationStyle: 'line-art' }
-      if (method === 'PATCH') return failStyle ? { ok: false, error: '风格未保存' } : { ok: true, value: canvas }
+      const canvas = { sessionId, revision: 1, items: [], createdAt: 'now', updatedAt: 'now', ...saved.get(sessionId) }
+      if (method === 'PATCH') {
+        if (failStyle) return { ok: false, error: '风格未保存' }
+        const updated = { ...canvas, ...(data as object) }
+        saved.set(sessionId, updated)
+        return { ok: true, value: updated }
+      }
       if (path.includes('/generate?')) return { ok: false, error: '模拟请求失败' }
       return { ok: true, value: canvas }
     }) as unknown as Fetcher
@@ -128,13 +134,46 @@ describe('home generation entry', () => {
       expect(generated).toHaveLength(1)
       expect(generated[0]![2]).toMatchObject({ prompt: '绘制 A → B 的信号通路', style: 'line-art' })
       const saved = calls.find(([, , , method]) => method === 'PATCH')!
-      expect(saved[2]).toEqual({ generationStyle: 'line-art' })
+      expect(saved[2]).toEqual({ generationStyle: 'line-art', generationModel: 'seedream55' })
       expect(saved[0].split('?')[1]).toBe(generated[0]![0].split('?')[1])
       expect(h.node.querySelector('[data-saved-canvas]')).not.toBeNull()
       // Failure does not retry, and returning home recovers the original draft.
       await act(async () => h.node.querySelector<HTMLButtonElement>('[aria-label="返回首页"]')!.click())
       expect(h.node.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('绘制 A → B 的信号通路')
       expect(vi.mocked(h.fetcher).mock.calls.filter(([url]) => url.includes('/generate?'))).toHaveLength(1)
+    } finally { await h.cleanup() }
+  })
+  it('keeps model selection in the draft and sends the chosen resolution and ratio once', async () => {
+    const h = setup()
+    try {
+      await h.render()
+      const selector = () => h.node.querySelector<HTMLSelectElement>('select[aria-label="绘图模型"]')!
+      expect(h.node.querySelector('.sd-brand')?.textContent).toBe('0 个画布')
+      expect(h.node.querySelector('.sd-composer-footer')?.textContent).toBe('Enter 生成 · Shift + Enter 换行')
+      expect(selector().value).toBe('seedream55')
+      expect(selector().options).toHaveLength(9)
+      await h.type('同一份描述')
+      await act(async () => h.node.querySelector<HTMLButtonElement>('.sd-transparent-chip')!.click())
+      const select = async (value: string) => act(async () => { selector().value = value; selector().dispatchEvent(new Event('change', { bubbles: true })) })
+      const openSize = async () => act(async () => h.node.querySelector<HTMLButtonElement>('[title="尺寸与比例"]')!.click())
+      const choice = (name: string) => Array.from(h.node.querySelectorAll<HTMLButtonElement>('[role=menuitemradio]')).find(b => b.textContent === name)
+      await select('bananalite')
+      expect(h.node.querySelector('.sd-transparent-chip')).toBeNull()
+      await openSize()
+      expect(choice('1K')).toBeDefined(); expect(choice('2K')).toBeUndefined()
+      await act(async () => choice('1K')!.click())
+      await select('gpt26flare')
+      await openSize(); await act(async () => choice('4K')!.click())
+      await openSize(); await act(async () => choice('16:9')!.click())
+      expect(h.node.querySelector('textarea')!.value).toBe('同一份描述')
+      expect(vi.mocked(h.fetcher).mock.calls.every(([url]) => url === '/api/seedream')).toBe(true)
+      await act(async () => h.node.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+      const calls = vi.mocked(h.fetcher).mock.calls
+      expect(calls.find(([, , , method]) => method === 'PATCH')?.[2]).toEqual({ generationModel: 'gpt26flare', generationStyle: 'auto' })
+      expect(calls.filter(([url]) => url.includes('/generate?')).map(call => call[2])).toEqual([{ prompt: '同一份描述', style: 'auto', model: 'gpt26flare', size: '4K', aspectRatio: '16:9' }])
+      expect(h.node.querySelector('[data-saved-canvas]')).not.toBeNull()
+      await act(async () => h.node.querySelector<HTMLButtonElement>('[aria-label="返回首页"]')!.click())
+      expect(selector().value).toBe('gpt26flare')
     } finally { await h.cleanup() }
   })
   it('preserves the home draft and avoids generation if its style cannot be saved', async () => {

@@ -12,8 +12,9 @@ import { ILLUSTRATION_PROMPT_HINT } from '../shared/research.js'
 import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
 import { DiagramTemplates, TemplateButton } from './DiagramTemplates.js'
 import { UpdateCheck } from './UpdateCheck.js'
-import { Composer, SizePicker, TransparentToggle } from './Composer.js'
-import type { SizeChoice } from './Composer.js'
+import { Composer, ModelPicker, SizePicker, TransparentToggle, useDrawingOptions } from './Composer.js'
+import { MODEL } from '../shared/models.js'
+import type { DrawingModel } from '../shared/models.js'
 const RECENT_CANVASES = 8
 
 export function Icon({ size = 20 }: { size?: number }) {
@@ -33,7 +34,7 @@ export function Settings({ controller }: { controller: Controller }) {
   const c = state.catalog
   useEffect(() => { void controller.attach() }, [controller])
   return <section className="sd-settings">
-    <h2>PlotFig 设置</h2><p>通过 AI4Scholar 使用 Seedream 5.5 生成和编辑图片。</p>
+    <h2>PlotFig 设置</h2><p>通过 AI4Scholar 生成和编辑图片，绘图模型可在输入框中选择。</p>
     <div className="sd-key-status"><span className="sd-status-dot" data-ready={c?.configured ?? false}/>{keyStatus(state)}</div>
     {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}{state.message ? <div className="sd-alert" role="status">{state.message}</div> : null}
     <label htmlFor={keyId}>AI4Scholar API Key</label><div className="sd-key-row"><input id={keyId} type="password" autoComplete="off" spellCheck={false} placeholder="sk-user-…" value={key} onChange={e => setKey(e.target.value)} /><button className="sd-button sd-button-primary" disabled={!key.trim() || state.keyBusy || !c} onClick={() => { void controller.saveKey(key).then(ok => { if (ok) setKey('') }) }}>{state.keyBusy ? '保存中…' : '保存'}</button></div>
@@ -42,7 +43,7 @@ export function Settings({ controller }: { controller: Controller }) {
       <label htmlFor={sizeId}>默认尺寸</label>
       <select id={sizeId} disabled={!c || state.settingsBusy} value={c && (SIZE_TIERS as readonly string[]).includes(c.defaultSize) ? c.defaultSize : '2K'} onChange={e => { void controller.saveSettings({ size: e.target.value }) }}>{SIZE_TIERS.map(s => <option key={s} value={s}>{s}</option>)}</select>
     </div>
-    <label className="sd-check"><input type="checkbox" disabled={!c || state.settingsBusy} checked={c?.watermark ?? true} onChange={e => { void controller.saveSettings({ watermark: e.target.checked }) }}/>添加「AI 生成」水印</label>
+    <label className="sd-check"><input type="checkbox" disabled={!c || state.settingsBusy} checked={c?.watermark ?? true} onChange={e => { void controller.saveSettings({ watermark: e.target.checked }) }}/>添加「AI 生成」水印（Seedream）</label>
     <div className="sd-settings-actions"><button className="sd-button" disabled={!c?.configured || state.checkBusy} onClick={() => { void controller.checkConnection() }} title="免费检查 AI4Scholar 密钥、余额和绘图接口">{state.checkBusy ? '测试中…' : '测试连接'}</button><button className="sd-button" disabled={!c?.configured || state.keyBusy} onClick={() => { void controller.removeKey() }}>移除 Key</button><button className="sd-button" disabled={state.loading} onClick={() => { void controller.attach() }}>刷新状态</button></div>
     <p>生图和编辑使用 AI4Scholar 积分，分层先预留最高积分，再按实际交付的图片结算。生成结果会立即下载到本机，按对话分别保存在各自的画布中。</p>
     <p>版本 {c?.version ?? '—'}</p>
@@ -56,8 +57,9 @@ export function Workspace({ controller, openConversation, conversation, openPlug
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
   const [open, setOpen] = useState<string | undefined>(), [settings, setSettings] = useState(false)
   const [library, setLibrary] = useState(false)
-  const [launch, setLaunch] = useState<{ tool: ResearchToolId; style?: GenerationStyle }>()
-  const [prompt, setPrompt] = useState(''), [style, setStyle] = useState<GenerationStyle>('auto'), [genSize, setGenSize] = useState<SizeChoice>(''), [transparent, setTransparent] = useState(false)
+  const [launch, setLaunch] = useState<ResearchToolId>()
+  const [prompt, setPrompt] = useState(''), [style, setStyle] = useState<GenerationStyle>('auto'), [drawingModel, setDrawingModel] = useState<DrawingModel>(MODEL)
+  const drawing = useDrawingOptions(drawingModel, state.catalog?.defaultSize)
   const [templatePicker, setTemplatePicker] = useState(false), [templateComposition, setTemplateComposition] = useState<string>()
   const [stylePicker, setStylePicker] = useState(false), [starting, setStarting] = useState(false)
   const homeInput = useRef<HTMLDivElement>(null), submitting = useRef(false)
@@ -75,9 +77,11 @@ export function Workspace({ controller, openConversation, conversation, openPlug
   const c = state.catalog, canvases = c?.canvases ?? []
   const current = canvases.find(x => x.sessionId === open)
   const visibleCanvases = library ? canvases : canvases.slice(0, RECENT_CANVASES)
-  // Choosing a style on the home page only updates its draft. A new canvas is
-  // created when the user starts a tool or explicitly submits generation.
-  const start = (tool: ResearchToolId) => { setTemplateComposition(undefined); setLaunch({ tool, ...(style === 'auto' ? {} : { style }) }); setSettings(false); setOpen(BOARD_PREFIX + crypto.randomUUID()) }
+  const openNew = (id: string, tool?: ResearchToolId, compositionId?: string) => {
+    if (drawingModel !== MODEL || style !== 'auto') void controller.canvas(id).setGenerationOptions({ generationModel: drawingModel, generationStyle: style })
+    setTemplateComposition(compositionId); setLaunch(tool); setSettings(false); setOpen(id)
+  }
+  const start = (tool: ResearchToolId) => openNew(BOARD_PREFIX + crypto.randomUUID(), tool)
   const create = () => start('generate')
   const selectHomeTool = (tool: ResearchToolId) => {
     if (tool === 'generate') {
@@ -92,11 +96,11 @@ export function Workspace({ controller, openConversation, conversation, openPlug
     submitting.current = true; setStarting(true)
     try {
       const id = BOARD_PREFIX + crypto.randomUUID(), model = controller.canvas(id)
-      if (!await model.setGenerationStyle(style)) { controller.notify(model.getSnapshot().error ?? '保存风格失败，请稍后再试。'); return }
+      if (!await model.setGenerationOptions({ generationStyle: style, generationModel: drawingModel })) { controller.notify(model.getSnapshot().error ?? '保存绘图设置失败，请稍后再试。'); return }
       setTemplateComposition(undefined); setLaunch(undefined); setOpen(id)
       // Dispatch only from this explicit submit, never from a mount effect.
       // Keep the home draft if the request fails so it can be recovered on return.
-      void model.generate({ prompt: text, style, ...(genSize ? { size: genSize } : {}), ...(transparent ? { transparent } : {}) }).then(ok => { if (ok) setPrompt(value => value === submitted ? '' : value) })
+      void model.generate({ prompt: text, style, ...drawing.request }).then(ok => { if (ok) setPrompt(value => value === submitted ? '' : value) })
     } finally { submitting.current = false; setStarting(false) }
   }
   const openCanvas = (id: string) => {
@@ -122,7 +126,7 @@ export function Workspace({ controller, openConversation, conversation, openPlug
       <div className="sd-title">
         {open || settings || library ? <button className="sd-icon-button" onClick={back} aria-label={backLabel} title={backLabel}><BackIcon/></button> : <Icon size={22}/>}
         <div className="sd-title-text"><strong>{heading}</strong>
-          <span className="sd-brand">{open && current ? `${isBoard(open) ? '独立画布' : '对话画布'} · ${current.count} 张` : open ? (isBoard(open) ? '独立画布' : '对话画布') : `Seedream 5.5 · ${canvases.length} 个画布`}</span></div>
+          <span className="sd-brand">{open && current ? `${isBoard(open) ? '独立画布' : '对话画布'} · ${current.count} 张` : open ? (isBoard(open) ? '独立画布' : '对话画布') : `${canvases.length} 个画布`}</span></div>
       </div>
       <div className="sd-head-actions">
         {!open && !settings && c?.configured ? <button className="sd-button sd-button-primary" onClick={create}><NewIcon size={14}/>新建画布</button> : null}
@@ -131,7 +135,7 @@ export function Workspace({ controller, openConversation, conversation, openPlug
       </div>
     </header>
     {settings ? <div className="sd-scroll"><Settings controller={controller}/></div>
-      : open ? <CanvasView key={open} model={controller.canvas(open)} defaultSize={c?.defaultSize} conversation={isBoard(open) ? undefined : conversation(open)} initialTool={launch?.tool} initialStyle={launch?.style} initialCompositionId={templateComposition}/>
+      : open ? <CanvasView key={open} model={controller.canvas(open)} defaultSize={c?.defaultSize} conversation={isBoard(open) ? undefined : conversation(open)} initialTool={launch} initialCompositionId={templateComposition}/>
       : <div className="sd-scroll" key={library ? 'all' : 'home'} ref={galleryScroll} onScroll={e => { scrollPositions.current[library ? 'all' : 'recent'] = e.currentTarget.scrollTop }}>
         {c && !c.configured ? <div className="sd-alert" role="status">已保存的画布可继续编辑和导出。生成或分图层前，请在设置中配置 AI4Scholar API Key。</div> : null}
         {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}
@@ -139,11 +143,12 @@ export function Workspace({ controller, openConversation, conversation, openPlug
         {!library ? <section className="sd-research-home">
           <div className="sd-home-input" ref={homeInput}>
             <h1>想画些什么？</h1>
-            <Composer value={prompt} onChange={setPrompt} onSubmit={() => { void generate() }} disabled={starting || !c} placeholder="描述你想生成的图片…" hint={starting ? '准备画布…' : '每次生成都会计费'}>
+            <Composer value={prompt} onChange={setPrompt} onSubmit={() => { void generate() }} disabled={starting || !c} placeholder="描述你想生成的图片…" hint={starting ? '准备画布…' : undefined}
+              modelPicker={<ModelPicker value={drawingModel} onChange={setDrawingModel} disabled={starting}/>}>
               <ResearchStyleButton value={style} busy={starting} open={stylePicker} onClick={() => setStylePicker(true)}/>
               <TemplateButton open={templatePicker} disabled={starting || !c} onClick={() => setTemplatePicker(true)}/>
-              <SizePicker value={genSize} onChange={setGenSize} fallback={c?.defaultSize}/>
-              <TransparentToggle value={transparent} onChange={setTransparent}/>
+              <SizePicker options={drawing}/>
+              {drawing.native && <TransparentToggle value={drawing.transparent} onChange={drawing.setTransparent}/>}
             </Composer>
           </div>
           <nav className="sd-home-shortcuts" aria-label="常用工具"><ResearchTools compact disabled={starting} onSelect={selectHomeTool}/></nav>
@@ -162,7 +167,7 @@ export function Workspace({ controller, openConversation, conversation, openPlug
       </div>}
     {templatePicker ? <DiagramTemplates onClose={() => setTemplatePicker(false)} onCreate={async (id, palette) => {
       const session = BOARD_PREFIX + crypto.randomUUID(), composition = await controller.canvas(session).createTemplate(id, palette)
-      setLaunch(undefined); setTemplateComposition(composition.id); setOpen(session); setTemplatePicker(false)
+      openNew(session, undefined, composition.id); setTemplatePicker(false)
     }}/> : null}
     {stylePicker ? <ResearchStylePicker newCanvas value={style} busy={false} onPick={value => { setStyle(value); setStylePicker(false) }} onClose={() => setStylePicker(false)}/> : null}
   </main>

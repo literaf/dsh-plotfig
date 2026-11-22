@@ -1,7 +1,7 @@
 {
   "name": "dsh-plotfig",
   "version": "0.1.1",
-  "description": "PlotFig for DeepSeek Harness: create scientific figures with Seedream 5.5 through AI4Scholar, edit images and OCR text, split layers, and export PNG/SVG/PDF/PSD.",
+  "description": "PlotFig for DeepSeek Harness: create scientific figures with AI4Scholar drawing models, edit images and OCR text, split layers, and export PNG/SVG/PDF/PSD.",
   "type": "module",
   "license": "MIT",
   "author": "ai4scholar",
@@ -78,7 +78,8 @@
   },
   "dependencies": {
     "jpeg-js": "0.4.4",
-    "pngjs": "7.0.0"
+    "pngjs": "7.0.0",
+    "sharp": "0.34.5"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.1",

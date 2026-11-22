@@ -44,7 +44,9 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
             if (!task?.error || service.pending(id).some(job => job.key === task.id)) throw new Error('只能移除已停止取回的任务记录。')
             return json({ ok: true, value: await service.store.setLayerTask(id, task, true) })
           }
-          if (isRecord(raw) && raw.generationStyle !== undefined && raw.positions === undefined) return json({ ok: true, value: await service.store.setGenerationStyle(id, raw.generationStyle) })
+          if (isRecord(raw) && (raw.generationStyle !== undefined || raw.generationModel !== undefined) && raw.positions === undefined) {
+            return json({ ok: true, value: await service.store.setGenerationOptions(id, { generationStyle: raw.generationStyle, generationModel: raw.generationModel }) })
+          }
           if (isRecord(raw) && typeof raw.showVersion === 'string' && raw.positions === undefined) return json({ ok: true, value: await service.store.showVersion(id, raw.showVersion) })
           if (!isRecord(raw) || !Array.isArray(raw.positions)) throw new Error('无效的布局数据。')
           const positions = raw.positions.filter(isRecord).map(p => ({ id: String(p.id), x: Number(p.x), y: Number(p.y) }))
@@ -59,13 +61,13 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
       let id: string, input
       try {
         id = session(new URL(request.url))
-        input = parseGenerate(await body(request, 64 * 1024), await prefs.get())
+        input = parseGenerate(await body(request, 64 * 1024), await service.generationDefaults(id, await prefs.get()))
       } catch (error) { return fail(error, '无效的生成参数。') }
       try {
         // Browser requests may reference canvas items and https URLs only.
         const result = await service.generate(id, input, request.signal, false)
         return json({ ok: true, value: { canvas: result.canvas, created: result.items.map(i => i.id) } })
-      } catch (error) { return fail(error, 'Seedream 生成失败。', 400) }
+      } catch (error) { return fail(error, '图片生成失败。', 400) }
     },
     async image(request: Request): Promise<Response> {
       try {
@@ -77,8 +79,9 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
           return new Response(svg, { headers: { ...HEADERS, 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'private, no-cache', 'Content-Security-Policy': "default-src 'none'; sandbox" } })
         }
         const data = await service.store.readImage(id, item)
-        return new Response(new Uint8Array(data), { headers: { 'Content-Type': 'image/png', ...HEADERS, 'Cache-Control': 'private, max-age=31536000, immutable',
-          'Content-Disposition': `${url.searchParams.has('download') ? 'attachment' : 'inline'}; filename="seedream-${item}.png"`, 'Content-Security-Policy': "default-src 'none'; sandbox" } })
+        const mime = imageInfo(data)?.mime ?? 'image/png'
+        return new Response(new Uint8Array(data), { headers: { 'Content-Type': mime, ...HEADERS, 'Cache-Control': 'private, max-age=31536000, immutable',
+          'Content-Disposition': `${url.searchParams.has('download') ? 'attachment' : 'inline'}; filename="seedream-${item}.${mime === 'image/jpeg' ? 'jpg' : 'png'}"`, 'Content-Security-Policy': "default-src 'none'; sandbox" } })
       } catch { return json({ ok: false, error: '图片不存在。' }, 404) }
     },
     async composition(request: Request): Promise<Response> {

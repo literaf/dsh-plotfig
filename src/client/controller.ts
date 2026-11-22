@@ -5,6 +5,7 @@ import { EditorModel } from './editor-model.js'
 import { IMAGE_EDIT_LABELS } from '../shared/image-edit.js'
 import type { ImageEditInput } from '../shared/image-edit.js'
 import type { GenerationStyle } from '../shared/research.js'
+import type { DrawingModel, DrawingRatio } from '../shared/models.js'
 export interface Catalog extends Status { canvases: CanvasEntry[]; active?: Record<string, PendingGeneration[]> }
 type CanvasReply = Canvas & { pending?: PendingGeneration[] }
 export interface State {
@@ -25,7 +26,7 @@ export interface CanvasState {
   message?: string | undefined
   /** Item ids created by the most recent generation, for selection and reveal. */
   created: string[]
-  styleBusy?: boolean
+  generationSettingsBusy?: boolean
 }
 export interface PendingView { key: string; prompt: string; size?: string | undefined; parentId?: string | undefined; startedAt: number; replaces?: string | undefined }
 export const MESSAGE_MS = 4000
@@ -116,12 +117,12 @@ export class CanvasModel extends Emitter<CanvasState> {
     } catch (error) { if (!control.signal.aborted) this.set({ loading: false, error: errorText(error, '读取画布失败。') }) }
     finally { if (this.reading === control) this.reading = undefined; if (this.state.loading) this.set({ loading: false }) }
   }
-  async generate(input: { prompt: string; images?: string[]; size?: string; title?: string; style?: GenerationStyle; transparent?: boolean; opaque?: boolean; replaces?: string }, parentId?: string): Promise<boolean> {
+  async generate(input: { prompt: string; model?: DrawingModel; aspectRatio?: DrawingRatio; images?: string[]; size?: string; title?: string; style?: GenerationStyle; transparent?: boolean; opaque?: boolean; replaces?: string }, parentId?: string): Promise<boolean> {
     const prompt = input.prompt.trim()
     if (!prompt) return false
     const key = `local-${++this.serial}`, control = new AbortController()
     this.generating.set(key, control)
-    this.local = [...this.local, { key, prompt, size: input.size, parentId, startedAt: Date.now(), replaces: input.replaces }]
+    this.local = [...this.local, { key, prompt, size: input.aspectRatio && input.aspectRatio !== 'auto' ? input.aspectRatio : input.size, parentId, startedAt: Date.now(), replaces: input.replaces }]
     this.set({ error: undefined, message: undefined }); this.syncPending()
     try {
       const reply = await this.fetcher<{ canvas: Canvas; created: string[] }>(`${ROUTE}/generate?session=${encodeURIComponent(this.sessionId)}`, control.signal, { ...input, prompt })
@@ -250,15 +251,15 @@ export class CanvasModel extends Emitter<CanvasState> {
     if (!reply.ok) throw new Error(reply.error)
     this.accept(reply.value.canvas); this.onChange(); return reply.value.item
   }
-  async setGenerationStyle(generationStyle: GenerationStyle): Promise<boolean> {
-    if (this.state.styleBusy) return false
-    this.set({ styleBusy: true, error: undefined }); this.writes++
+  async setGenerationOptions(options: { generationStyle?: GenerationStyle; generationModel?: DrawingModel }): Promise<boolean> {
+    if (this.state.generationSettingsBusy) return false
+    this.set({ generationSettingsBusy: true, error: undefined }); this.writes++
     try {
-      const reply = await this.fetcher<Canvas>(this.path, new AbortController().signal, { generationStyle }, 'PATCH')
+      const reply = await this.fetcher<Canvas>(this.path, new AbortController().signal, options, 'PATCH')
       if (!reply.ok) throw new Error(reply.error)
       this.accept(reply.value); return true
-    } catch (error) { this.set({ error: errorText(error, '保存风格失败。') }); return false }
-    finally { this.writes--; this.set({ styleBusy: false }) }
+    } catch (error) { this.set({ error: errorText(error, '保存绘图设置失败。') }); return false }
+    finally { this.writes--; this.set({ generationSettingsBusy: false }) }
   }
   override dispose() { clearInterval(this.timer); this.reading?.abort(); for (const e of this.editors.values()) e.dispose(); for (const c of this.generating.values()) c.abort(); super.dispose() }
 }

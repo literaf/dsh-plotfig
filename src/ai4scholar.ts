@@ -4,6 +4,8 @@ import type { GeneratedImage } from './image-data.js'
 import { parseOCR } from './shared/ocr.js'
 import { isAI4ScholarKey, isRecord, MODEL } from './shared/types.js'
 import type { LayerBilling, LayerMetadata, LayerPricing, LayerQuote } from './shared/types.js'
+import { DRAWING_MODELS } from './shared/models.js'
+import type { DrawingModel, DrawingRatio } from './shared/models.js'
 
 const origin = 'https://ai4scholar.net'
 const layersPath = '/api/proxy/nano/layers'
@@ -15,6 +17,8 @@ interface ClientOptions {
 }
 export interface ImageRequest {
   prompt: string
+  model?: DrawingModel
+  aspectRatio?: DrawingRatio
   images: string[]
   size: string
   watermark: boolean
@@ -52,9 +56,10 @@ function layerBilling(value: unknown): LayerBilling | undefined {
   return { reservedCredits, chargedCredits, refundedCredits, standardOutputs, largeOutputs }
 }
 
-async function readLimited(response: Response, signal: AbortSignal): Promise<Uint8Array> {
+const MAX_RESULT_BYTES = 64 * 1024 * 1024 // AI4Scholar’s per-image download limit, including 4K outputs.
+async function readLimited(response: Response, signal: AbortSignal, maxBytes: number): Promise<Uint8Array> {
   const declared = Number(response.headers.get('content-length') ?? 0)
-  if (declared > MAX_BYTES) throw new AI4ScholarError('生成结果超过 30 MB，已放弃下载。', 502)
+  if (declared > maxBytes) throw new AI4ScholarError(`生成结果超过 ${maxBytes / 1024 / 1024} MB，已放弃下载。`, 502)
   if (!response.body) return new Uint8Array(await response.arrayBuffer())
   const reader = response.body.getReader(), chunks: Uint8Array[] = []
   let total = 0
@@ -63,7 +68,7 @@ async function readLimited(response: Response, signal: AbortSignal): Promise<Uin
     const { done, value } = await reader.read()
     if (done) break
     total += value.byteLength
-    if (total > MAX_BYTES) { await reader.cancel(); throw new AI4ScholarError('生成结果超过 30 MB，已放弃下载。', 502) }
+    if (total > maxBytes) { await reader.cancel(); throw new AI4ScholarError(`生成结果超过 ${maxBytes / 1024 / 1024} MB，已放弃下载。`, 502) }
     chunks.push(value)
   }
   const out = new Uint8Array(total)
@@ -116,29 +121,41 @@ export class AI4ScholarClient {
       message: `AI4Scholar Key 有效${typeof available === 'number' ? `，可用余额 ${available} 积分` : ''}。${capability.generationConfigured ? 'Seedream 5.5 已配置。' : 'Seedream 5.5 尚未配置。'}` }
   }
 
-  private async download(value: unknown): Promise<GeneratedImage> {
+  private async download(value: unknown, maxBytes = MAX_BYTES): Promise<GeneratedImage> {
     if (typeof value !== 'string') throw new Error('缺少图片地址。')
     const url = new URL(value)
     if (url.protocol !== 'https:' || url.username || url.password) throw new Error('图片地址无效。')
     const signal = AbortSignal.timeout(60000)
     const response = await this.fetch(url, { redirect: 'error', signal })
     if (!response.ok) throw new Error(`图片下载失败（HTTP ${response.status}）。`)
-    const bytes = await readLimited(response, signal), info = imageInfo(bytes)
-    if (!info) throw new Error('返回的图片须为 PNG 或 JPEG。')
-    return { bytes, ...info }
+    const bytes = await readLimited(response, signal, maxBytes), info = imageInfo(bytes)
+    if (info?.mime === 'image/png') return { bytes, ...info }
+    const source = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    const webp = source.toString('ascii', 0, 4) === 'RIFF' && source.toString('ascii', 8, 12) === 'WEBP'
+    if (info?.mime !== 'image/jpeg' && !webp) throw new Error('返回的图片须为 PNG、JPEG 或 WebP。')
+    // Stored assets, references and the layer editor share a PNG representation.
+    const { default: sharp } = await import('sharp')
+    const png = await sharp(source, { limitInputPixels: 40_000_000 }).png().toBuffer({ resolveWithObject: true })
+    return { bytes: png.data, width: png.info.width, height: png.info.height, mime: 'image/png' }
   }
 
   async generate(input: ImageRequest, signal: AbortSignal): Promise<ImageResult> {
     if ('decomposition' in input) throw new Error('分层请通过分层任务提交。')
-    // Older gateway versions silently ignored native options. Check before spending credits.
-    const capability = await this.quote(2, AbortSignal.any([signal, AbortSignal.timeout(15000)]))
-    if (!capability.generationConfigured) throw new Error('AI4Scholar 的 Seedream 渠道尚未配置。')
+    const model = input.model ?? MODEL
+    if (model === MODEL) {
+      // Older gateways ignored Seedream's native options. Check its capability before submission.
+      const capability = await this.quote(2, AbortSignal.any([signal, AbortSignal.timeout(15000)]))
+      if (!capability.generationConfigured) throw new Error('AI4Scholar 的 Seedream 渠道尚未配置。')
+    }
     signal.throwIfAborted()
+    // The Gemini edit action reads one reference. Its generate action includes every supplied image.
+    const multiReferenceGemini = DRAWING_MODELS[model].family === 'gemini' && input.images.length > 1
     const data = await this.request('/api/proxy/nano/generate', AbortSignal.timeout(this.options.timeoutMs), {
-      model: MODEL, action: input.images.length ? 'edit' : 'generate', prompt: input.prompt,
-      images: input.images, size: input.size, watermark: input.watermark, background: input.background,
+      model, action: input.images.length && !multiReferenceGemini ? 'edit' : 'generate', prompt: input.prompt, images: input.images,
+      ...(model === MODEL ? { size: input.size, watermark: input.watermark, background: input.background }
+        : { imageSize: input.size, aspectRatio: input.aspectRatio ?? 'auto' }),
     })
-    return { images: [await this.download(data.imageUrl)], ...(typeof data.creditCost === 'number' ? { creditCost: data.creditCost } : {}) }
+    return { images: [await this.download(data.imageUrl, MAX_RESULT_BYTES)], ...(typeof data.creditCost === 'number' ? { creditCost: data.creditCost } : {}) }
   }
 
   async submitLayers(id: string, input: { image: string; prompt: string; size: string; watermark: boolean; maxImages: number; quotedCredits: number }) {

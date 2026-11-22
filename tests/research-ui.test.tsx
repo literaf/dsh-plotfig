@@ -21,9 +21,9 @@ const events = () => ({ reference: vi.fn(), edit: vi.fn(), prompt: vi.fn(async (
 function harness(sessionId = 'board-ui', items: CanvasItem[] = [source]) {
   let canvas: Canvas = { sessionId, revision: 0, createdAt: 'now', updatedAt: 'now', items }
   const fetcher = vi.fn(async (path: string, _signal: AbortSignal, data?: unknown) => {
-    const body = data as { generationStyle?: Canvas['generationStyle'] } | undefined
+    const body = data as Pick<Canvas, 'generationStyle' | 'generationModel'> | undefined
     if (path.includes('/layer-quote?')) return { ok: true, value: { enabled: true, maxImages: 30, supportedMaxImages: 100, creditCost: 182, pricing: { mode: 'per_output_v1', inputCredits: 2, standardCredits: 3, largeCredits: 6, standardMaxPixels: 2610000 } } }
-    if (body?.generationStyle) canvas = { ...canvas, revision: canvas.revision + 1, generationStyle: body.generationStyle }
+    if (body?.generationStyle || body?.generationModel) canvas = { ...canvas, revision: canvas.revision + 1, ...body }
     if (path.includes('/import-image')) { canvas = { ...canvas, revision: canvas.revision + 1, items: [source] }; return { ok: true, value: { canvas, item: source } } }
     return { ok: true, value: canvas }
   }) as unknown as Fetcher
@@ -72,6 +72,22 @@ describe('scientific workflow entry points', () => {
       expect(h.button('选择生图风格').textContent).toContain('清晰线稿')
       expect(h.node.querySelectorAll('.sd-composer textarea')).toHaveLength(sessionId.startsWith('session-') ? 0 : 1)
       expect(h.billable()).toHaveLength(0); expect(h.actions.prompt).not.toHaveBeenCalled()
+    } finally { await h.cleanup() }
+  })
+  it.each(['board-ui', 'session-ui'])('persists a model switch on the standalone or conversation canvas without generating: %s', async sessionId => {
+    const h = harness(sessionId)
+    try {
+      const view = <CanvasView model={h.model} conversation={sessionId === 'session-ui' ? h.actions : undefined}/>
+      await act(async () => { await h.model.refresh(); h.root.render(view) })
+      const picker = () => h.node.querySelector<HTMLSelectElement>('select[aria-label="绘图模型"]')!
+      expect(picker().value).toBe('seedream55')
+      await act(async () => { picker().value = 'banana21'; picker().dispatchEvent(new Event('change', { bubbles: true })) })
+      expect(h.model.getSnapshot().canvas?.generationModel).toBe('banana21')
+      await act(async () => h.root.render(null))
+      await act(async () => { await h.model.refresh(); h.root.render(view) })
+      expect(picker().value).toBe('banana21')
+      expect(h.billable()).toHaveLength(0)
+      expect(h.actions.prompt).not.toHaveBeenCalled()
     } finally { await h.cleanup() }
   })
   it('takes an existing image to a split confirmation without spending on a menu click', async () => {
@@ -143,7 +159,7 @@ describe('scientific workflow entry points', () => {
   })
   it('regenerates a generated image in place and switches versions without billing', async () => {
     const v1: CanvasItem = { ...source, id: 'cccccccccccc', title: '雨林', prompt: '雨林剖面\n\n视觉风格参考：…', sourcePrompt: '雨林剖面', imported: false, superseded: true }
-    const v2: CanvasItem = { ...v1, id: 'dddddddddddd', versionOf: v1.id, superseded: false }
+    const v2: CanvasItem = { ...v1, id: 'dddddddddddd', versionOf: v1.id, superseded: false, model: 'gptimage', size: '4K', aspectRatio: '4:3', generationStyle: 'line-art' }
     const h = harness('board-ui', [v1, v2])
     try {
       await act(async () => { await h.model.refresh(); h.root.render(<CanvasView model={h.model} initialCompositionId={v2.id}/>) })
@@ -154,7 +170,7 @@ describe('scientific workflow entry points', () => {
       expect(h.billable()).toHaveLength(0)
       await act(async () => h.button('重新生成').click())
       const calls = h.billable(); expect(calls).toHaveLength(1)
-      expect(calls[0]![2]).toMatchObject({ prompt: '雨林剖面', replaces: v2.id, title: '雨林' })
+      expect(calls[0]![2]).toMatchObject({ prompt: '雨林剖面', replaces: v2.id, title: '雨林', model: 'gptimage', size: '4K', aspectRatio: '4:3', style: 'line-art' })
     } finally { await h.cleanup() }
   })
   it('offers no regenerate button for imported images', async () => {

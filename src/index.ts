@@ -47,12 +47,13 @@ export function apply(ctx: Context, config: Config): void {
   })
   ctx.systemPrompt.section({ name: 'seedream:workflow', order: 159, text: [
     'dsh-plotfig (PlotFig) provides /seedream and a per-conversation canvas (right sidebar tab "PlotFig 画布"). Use seedream_generate to create or edit images and seedream_canvas to list what is already on the canvas.',
+    'Single and batch generation inherit the canvas model (default Seedream 5.5). Supply a model override only when the user requests one. Specialized AI edits and layer splitting use Seedream.',
     'Every seedream_generate call is billed per output image. Do not call it again to retry or to produce variants unless the user asks. Read the canvas first instead of regenerating an existing image.',
     'When the user asks for a set of different images (several figures for one paper, a series in one style), use seedream_generate_batch with one complete prompt per image instead of repeated seedream_generate calls. It bills one image per item and reports any failed item without retrying.',
     'All model calls use AI4Scholar credits. For layer splitting, use seedream_layer_quote with the requested output cap and show the quoted credits before submitting seedream_decompose with quoted_credits. Never retry a paid submission automatically. Local artboard edits and exports are free.',
     'Use seedream_edit only when the user requests background removal, erasing objects, redrawing boxed regions (inpaint), expanding or enhancing an image. Read seedream_canvas first and use its item reference and exact pixel dimensions. Erase requires rectangles; expand requires added pixel margins. Each edit is billed for one image, never retry automatically, and originals are retained. The UI also offers painted masks, editable OCR and local layered PSD export.',
     'Write rich, specific prompts (subject, composition, style, text to render, colors). For edits pass the source as images: ["item:<id>"] and say what to change and what must stay the same.',
     'A user message may contain [PlotFig 图片 item:<id>] references from the canvas (older conversations show [Seedream 图片 item:<id>]); pass those exact item:<id> references in images.',
-    'After generating, describe the result briefly and give the local file path. The image is already on the canvas; the user can open it from the conversation header or the Seedream panel.',
+    'After generating, describe the result briefly and give the local file path. The image is already on the canvas; the user can open it from the conversation header or the PlotFig panel.',
   ].join('\n') })
 }

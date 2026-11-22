@@ -7,7 +7,7 @@
 
 # PlotFig (dsh-plotfig)
 
-An AI illustration plugin for researchers using DeepSeek Harness. Use **Seedream 5.5** through AI4Scholar for mechanism diagrams, method illustrations, graphical abstracts and presentation figures, then continue with layer editing, text changes and export. General image creation remains available. There are two kinds of canvas:
+An AI illustration plugin for researchers using DeepSeek Harness. Choose an AI4Scholar drawing model for mechanism diagrams, method illustrations, graphical abstracts and presentation figures, then continue with layer editing, text changes and export. General image creation remains available. There are two kinds of canvas:
 
 - **Conversation canvas**: one per conversation. Images generated in the conversation land on it, and it opens in the right Sidebar when a generation starts (Harness ≥ 0.2.2).
 - **Standalone canvas**: created from the PlotFig panel with "新建画布". It belongs to no conversation.
@@ -15,6 +15,8 @@ An AI illustration plugin for researchers using DeepSeek Harness. Use **Seedream
 ![PlotFig home: prompt box, styles, templates, transparent background and recent canvases](https://cdn.jsdelivr.net/npm/dsh-plotfig@0.1.1/docs/images/home.jpg)
 
 ## What it does
+
+Choose the model next to the send button. New canvases default to **Seedream 5.5**. The GPT Image and Nano Banana families offer additional models and resolutions. The canvas remembers the selection for new images and reference edits. Regenerating an existing image uses its original model. Transparent output, specialized AI edits and layer splitting use Seedream.
 
 | You say or do | The plugin |
 |---|---|

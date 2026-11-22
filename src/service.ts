@@ -1,13 +1,14 @@
 import { readFile, stat } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import { extname, isAbsolute } from 'node:path'
-import { MAX_BYTES } from './image-data.js'
+import { imageInfo, MAX_BYTES } from './image-data.js'
 import { AI4ScholarError } from './ai4scholar.js'
 import type { AI4ScholarClient, ImageResult } from './ai4scholar.js'
 import type { CanvasStore } from './store.js'
 import type { Canvas, CanvasItem, GenerateInput, LayerQuote, PendingGeneration, SavedLayerTask } from './shared/types.js'
 import { ITEM_ID, MAX_PROMPT, titleFrom } from './shared/types.js'
 import { parseGenerationStyle, styledPrompt } from './shared/research.js'
+import { MODEL } from './shared/models.js'
 import type { DecomposeInput } from './shared/layers.js'
 import { editDimensions, EXPAND_SIDES, expansionSteps, IMAGE_EDIT_LABELS } from './shared/image-edit.js'
 import type { ExpandMargins, ImageEditInput } from './shared/image-edit.js'
@@ -33,6 +34,10 @@ export class Seedream {
   pending(sessionId: string): PendingGeneration[] { return this.inflight.get(sessionId) ?? [] }
   /** Sessions with a generation running now, for the client to open their canvas. */
   active(): Record<string, PendingGeneration[]> { return Object.fromEntries(this.inflight) }
+  async generationDefaults(sessionId: string, settings: { size: string; watermark: boolean }) {
+    const canvas = await this.store.get(sessionId)
+    return { ...settings, model: canvas.generationModel ?? MODEL }
+  }
   /**
    * Resolve canvas items and references for the AI4Scholar API. Canvas items are read from this
    * Session only; local paths are accepted only for tool calls made by the
@@ -47,7 +52,8 @@ export class Seedream {
         if (!ITEM_ID.test(item)) throw new Error(`无效的画布图片引用：${ref}`)
         const canvas = await this.store.get(sessionId)
         if (!canvas.items.some(i => i.id === item)) throw new Error(`当前对话的画布中没有图片 ${ref}。`)
-        images.push(`data:image/png;base64,${(await this.store.readImage(sessionId, item)).toString('base64')}`); items.push(item)
+        const data = await this.store.readImage(sessionId, item)
+        images.push(`data:${imageInfo(data)?.mime ?? 'image/png'};base64,${data.toString('base64')}`); items.push(item)
       } else if (/^https:\/\//i.test(ref)) {
         try { new URL(ref) } catch { throw new Error(`无效的图片地址：${ref}`) }
         images.push(ref); external++
@@ -66,19 +72,21 @@ export class Seedream {
     return { images, items, external }
   }
   async generate(sessionId: string, input: GenerateInput, signal: AbortSignal, allowLocal = false): Promise<GenerateResult> {
+    const model = input.model ?? MODEL
     const style = parseGenerationStyle(input.style ?? (await this.store.get(sessionId)).generationStyle ?? 'auto')
     const prompt = styledPrompt(input.prompt, style)
     if (prompt.length > MAX_PROMPT) throw new Error('提示词与风格要求合计超过 4000 个字符，请缩短描述或选择“跟随描述”。')
     const refs = await this.resolve(sessionId, input.images, allowLocal)
     signal.throwIfAborted()
-    const entry: PendingGeneration = { key: randomUUID(), prompt: input.prompt, size: input.size, startedAt: new Date().toISOString(), ...(refs.items[0] ? { parentId: refs.items[0] } : {}), ...(input.replaces ? { replaces: input.replaces } : {}) }
+    const entry: PendingGeneration = { key: randomUUID(), prompt: input.prompt, size: input.aspectRatio && input.aspectRatio !== 'auto' ? input.aspectRatio : input.size, startedAt: new Date().toISOString(), ...(refs.items[0] ? { parentId: refs.items[0] } : {}), ...(input.replaces ? { replaces: input.replaces } : {}) }
     this.inflight.set(sessionId, [...this.pending(sessionId), entry])
     try {
-      const result = await this.client.generate({ prompt: input.transparent ? `${prompt}\n\n输出透明背景：只保留主体，主体之外完全透明，不画背景、地面、阴影或边框。` : prompt, images: refs.images, size: input.size, watermark: input.watermark, ...(input.transparent ? { background: 'transparent' as const } : input.opaque ? { background: 'opaque' as const } : {}) }, signal)
+      const result = await this.client.generate({ model, ...(input.aspectRatio && { aspectRatio: input.aspectRatio }), prompt: input.transparent ? `${prompt}\n\n输出透明背景：只保留主体，主体之外完全透明，不画背景、地面、阴影或边框。` : prompt, images: refs.images, size: input.size, watermark: input.watermark, ...(input.transparent ? { background: 'transparent' as const } : input.opaque ? { background: 'opaque' as const } : {}) }, signal)
       const warnings = input.transparent && result.images.some(i => !hasTransparency(i)) ? ['模型未返回透明区域，已保存结果；请检查背景或改用“移除背景”。'] : []
       // Billed output is saved even if the caller stopped waiting meanwhile.
       return await this.store.add(sessionId, result.images, {
-        title: input.title ?? titleFrom(input.prompt), prompt, refs: refs.items, externalRefs: refs.external, size: input.size, ...(style === 'auto' ? {} : { generationStyle: style }),
+        title: input.title ?? titleFrom(input.prompt), prompt, model, refs: refs.items, externalRefs: refs.external, size: input.size,
+        ...(input.aspectRatio && { aspectRatio: input.aspectRatio }), ...(style === 'auto' ? {} : { generationStyle: style }),
         ...(result.creditCost === undefined ? {} : { creditCost: result.creditCost }),
         ...(input.transparent ? { transparent: true } : {}), ...(warnings.length ? { warnings } : {}), sourcePrompt: input.prompt,
       }, refs.items[0], input.replaces)

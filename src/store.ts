@@ -6,6 +6,7 @@ import type { Canvas, CanvasEntry, CanvasItem, CanvasLayer, Composition, LayerBi
 import type { GeneratedImage } from './image-data.js'
 import { parseCompositionEdit } from './shared/layers.js'
 import { parseGenerationStyle } from './shared/research.js'
+import { parseDrawingModel } from './shared/models.js'
 import { createDiagramTemplate } from './shared/templates.js'
 export const GAP = 80
 async function atomic(path: string, data: string | Uint8Array): Promise<void> {
@@ -53,11 +54,16 @@ export class CanvasStore {
     return canvas
   }
   readImage(sessionId: string, itemId: string): Promise<Buffer> { return readFile(this.imagePath(sessionId, itemId)) }
-  async setGenerationStyle(sessionId: string, style: unknown): Promise<Canvas> {
-    const generationStyle = parseGenerationStyle(style)
+  setGenerationStyle(sessionId: string, generationStyle: unknown): Promise<Canvas> {
+    return this.setGenerationOptions(sessionId, { generationStyle })
+  }
+  async setGenerationOptions(sessionId: string, options: { generationStyle?: unknown; generationModel?: unknown }): Promise<Canvas> {
+    const style = options.generationStyle === undefined ? undefined : parseGenerationStyle(options.generationStyle)
+    const model = options.generationModel === undefined ? undefined : parseDrawingModel(options.generationModel)
     return this.serial(sessionId, async () => {
       const canvas = await this.get(sessionId)
-      canvas.generationStyle = generationStyle
+      if (style !== undefined) canvas.generationStyle = style
+      if (model !== undefined) canvas.generationModel = model
       return this.commit(canvas)
     })
   }

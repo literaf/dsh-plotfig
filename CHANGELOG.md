@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Choose from the nine AI4Scholar canvas models in the composer, with Seedream 5.5 selected by default. Each canvas remembers its model across sessions, and regeneration uses the original image’s model. The gallery header now shows the canvas count and the idle composer footer shows the keyboard shortcuts.
+
 - Add a manual PlotFig update check to the gallery header. It compares the installed version with the latest stable npm release and offers a shortcut to the host plugin manager when an update is available.
 - Temporarily hide the flowchart category and its two templates from the template picker. All six model architecture, cycle and timeline templates remain available, and saved flowcharts can still be edited and exported.
 - The scientific illustration shortcut focuses the prompt and shows how to generate. Closing the tools menu preserves focus in the canvas or conversation input.
