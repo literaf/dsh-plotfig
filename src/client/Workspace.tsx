@@ -11,6 +11,7 @@ import { ResearchStyleButton, ResearchStylePicker } from './ResearchStyles.js'
 import { ILLUSTRATION_PROMPT_HINT } from '../shared/research.js'
 import type { GenerationStyle, ResearchToolId } from '../shared/research.js'
 import { DiagramTemplates, TemplateButton } from './DiagramTemplates.js'
+import { UpdateCheck } from './UpdateCheck.js'
 import { Composer, SizePicker, TransparentToggle } from './Composer.js'
 import type { SizeChoice } from './Composer.js'
 const RECENT_CANVASES = 8
@@ -48,7 +49,10 @@ export function Settings({ controller }: { controller: Controller }) {
   </section>
 }
 /** Main panel: gallery and settings; conversation canvases reopen their native Session. */
-export function Workspace({ controller, openConversation, conversation }: { controller: Controller; openConversation(id: string): boolean; conversation(id: string): ConversationActions }) {
+export function Workspace({ controller, openConversation, conversation, openPluginManager }: {
+  controller: Controller; openConversation(id: string): boolean; conversation(id: string): ConversationActions
+  openPluginManager?: (() => void) | undefined
+}) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
   const [open, setOpen] = useState<string | undefined>(), [settings, setSettings] = useState(false)
   const [library, setLibrary] = useState(false)
@@ -122,6 +126,7 @@ export function Workspace({ controller, openConversation, conversation }: { cont
       </div>
       <div className="sd-head-actions">
         {!open && !settings && c?.configured ? <button className="sd-button sd-button-primary" onClick={create}><NewIcon size={14}/>新建画布</button> : null}
+        {!open && !settings && <UpdateCheck controller={controller} currentVersion={c?.version} openPluginManager={openPluginManager}/>}
         {!settings ? <button className="sd-icon-button" onClick={() => setSettings(true)} aria-label="设置" title="设置"><GearIcon/></button> : null}
       </div>
     </header>

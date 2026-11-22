@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -15,9 +14,10 @@ import { Seedream } from './service.js'
 import { Preferences } from './preferences.js'
 import { applyRoutes } from './routes.js'
 import { applyTools } from './tools.js'
+import { VERSION } from './update.js'
 export const name = 'seedream'
 export const inject = ['tools', 'systemPrompt']
-export const VERSION: string = createRequire(import.meta.url)('../package.json').version
+export { VERSION }
 export interface Config { defaultSize: SizeTier; watermark: boolean; requestTimeoutMs: number; dataDirectory?: string }
 export const Config: Schema<Config> = Schema.object({
   defaultSize: Schema.union([...SIZE_TIERS]).default('2K').description('Initial default output size; can be changed in the settings card.'),

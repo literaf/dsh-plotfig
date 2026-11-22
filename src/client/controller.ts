@@ -1,5 +1,5 @@
 import { isAI4ScholarKey, KEY_REF, ROUTE } from '../shared/types.js'
-import type { Canvas, CanvasEntry, CanvasItem, Composition, LayerQuote, PendingGeneration, Status } from '../shared/types.js'
+import type { Canvas, CanvasEntry, CanvasItem, Composition, LayerQuote, PendingGeneration, PluginUpdate, Status } from '../shared/types.js'
 import type { CredentialsPort } from './credentials-port.js'
 import { EditorModel } from './editor-model.js'
 import { IMAGE_EDIT_LABELS } from '../shared/image-edit.js'
@@ -319,6 +319,14 @@ export class Controller extends Emitter<State> {
       this.set({ catalog: { ...this.state.catalog, ...reply.value }, message: '设置已保存。' })
     } catch (error) { this.set({ error: errorText(error, '保存设置失败。') }) }
     finally { this.set({ settingsBusy: false }) }
+  }
+  async checkForUpdate(signal: AbortSignal): Promise<PluginUpdate> {
+    const reply = await this.fetcher<PluginUpdate>(ROUTE + '/update', signal)
+    if (!reply.ok) throw new Error(reply.error)
+    const result = reply.value
+    if (!result || typeof result.currentVersion !== 'string' || typeof result.latestVersion !== 'string' ||
+        !['available', 'current', 'ahead'].includes(result.status)) throw new Error('无效的版本检查结果。')
+    return result
   }
   /** Checks the AI4Scholar balance and drawing capability for free. */
   async checkConnection(): Promise<void> {

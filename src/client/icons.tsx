@@ -11,6 +11,7 @@ export const TrashIcon = icon(<><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><
 export const UndoIcon = icon(<><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></>)
 export const RedoIcon = icon(<><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></>)
 export const MinusIcon = icon(<path d="M5 12h14"/>)
+export const RefreshIcon = icon(<path d="M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17"/>)
 export const PlusIcon = icon(<><path d="M12 5v14"/><path d="M5 12h14"/></>)
 export const FitIcon = icon(<><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></>)
 export const SendIcon = icon(<><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></>)

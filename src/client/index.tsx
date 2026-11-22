@@ -25,7 +25,11 @@ export function apply(ctx: ClientContext): void {
   const slots = ctx.slots as unknown as Slots
   const navigation = new CanvasNavigation(ctx)
   ctx.effect(() => () => navigation.dispose(), 'seedream: navigation')
-  const Root = () => <Workspace controller={controller} openConversation={id => navigation.open(id)} conversation={id => conversationActions(ctx, id)}/>
+  const Root = () => {
+    const manager = ctx.get('pluginNavigation' as never) as { openBundle(name: string): void } | undefined
+    return <Workspace controller={controller} openConversation={id => navigation.open(id)} conversation={id => conversationActions(ctx, id)}
+      openPluginManager={manager?.openBundle ? () => manager.openBundle('dsh-plotfig') : undefined}/>
+  }
   slots.inject('main', () => slots.register({ name: 'main', key: PANEL }, Root))
   slots.inject('sidebar.panellist', () => slots.register({ name: 'sidebar.panellist', id: PANEL, order: 67, label: () => 'PlotFig' }, () => <Icon/>))
   const Config = ({ view = 'page' }: { view?: 'summary' | 'page' }) => {

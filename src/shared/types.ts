@@ -199,6 +199,11 @@ export interface Status {
   defaultSize: string
   watermark: boolean
 }
+export interface PluginUpdate {
+  currentVersion: string
+  latestVersion: string
+  status: 'available' | 'current' | 'ahead'
+}
 export const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 /** 0.1.0 builds titled images with the first 24 characters of the prompt; show those as a readable label instead. */
 export const labelOf = (item: Pick<CanvasItem, 'title' | 'prompt'>): string =>

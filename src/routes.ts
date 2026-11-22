@@ -10,6 +10,7 @@ import { parseCompositionEdit, parseDecompose } from './shared/layers.js'
 import { diagramSvg } from './shared/diagram-svg.js'
 import { MAX_MASK_BYTES, parseImageEdit } from './shared/image-edit.js'
 import { decodePixels, encodePixels } from './pixels.js'
+import { checkForUpdate } from './update.js'
 
 interface Route { path: string; methods: readonly string[]; requestBody: 'buffered'; fetch(request: Request): Promise<Response> }
 interface Connection { fetch?: { register(route: Route): () => Promise<void> } }
@@ -29,6 +30,10 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
       catch (error) { return fail(error, '读取画布失败。', 500) }
     },
     active(): Response { return json({ ok: true, value: { active: service.active() } }) },
+    async update(request: Request): Promise<Response> {
+      try { return json({ ok: true, value: await checkForUpdate(request.signal) }) }
+      catch { return json({ ok: false, error: '版本检查失败，请检查网络连接后重试。' }, 502) }
+    },
     async canvas(request: Request): Promise<Response> {
       try {
         const url = new URL(request.url), id = session(url)
@@ -171,6 +176,7 @@ export function applyRoutes(ctx: Context, service: Seedream, prefs: Preferences,
     const bridge = (child.get('connection') as Connection | undefined)?.fetch
     if (!bridge?.register) return
     bridge.register({ path: ROUTE, methods: ['GET'], requestBody: 'buffered', fetch: () => h.catalog() })
+    bridge.register({ path: ROUTE + '/update', methods: ['GET'], requestBody: 'buffered', fetch: r => h.update(r) })
     bridge.register({ path: `${ROUTE}/active`, methods: ['GET'], requestBody: 'buffered', fetch: async () => h.active() })
     bridge.register({ path: `${ROUTE}/canvas`, methods: ['GET', 'PATCH'], requestBody: 'buffered', fetch: r => h.canvas(r) })
     bridge.register({ path: `${ROUTE}/generate`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.generate(r) })
