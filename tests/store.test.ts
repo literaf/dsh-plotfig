@@ -6,6 +6,7 @@ import { CanvasStore, GAP } from '../src/store.js'
 import { AI4ScholarClient } from '../src/ai4scholar.js'
 import { Seedream } from '../src/service.js'
 import { createHandlers } from '../src/routes.js'
+import { Config } from '../src/index.js'
 import { Preferences } from '../src/preferences.js'
 import { drawingFetch, png } from './fixtures.js'
 
@@ -102,6 +103,21 @@ describe('in-flight generations', () => {
 })
 describe('routes', () => {
   const status = async () => ({ version: '0', configured: true, keyRef: 'AI4SCHOLAR_API_KEY', model: 'm', defaultSize: '2K', watermark: true })
+  it.each([
+    ['a new profile', undefined, false],
+    ['a saved size only', { size: '1K' }, false],
+    ['a saved opt-in', { size: '1K', watermark: true }, true],
+    ['a saved opt-out', { size: '1K', watermark: false }, false],
+  ] as const)('sends the correct Seedream watermark for %s', async (_label, saved, expected) => {
+    const path = join(root, 'settings.json')
+    if (saved) await writeFile(path, JSON.stringify(saved))
+    const config = Config()
+    const prefs = new Preferences(path, { size: config.defaultSize, watermark: config.watermark })
+    const { seedream, bodies } = service()
+    const request = new Request('http://host/api/seedream/generate?session=sess_a', { method: 'POST', body: JSON.stringify({ prompt: '雨林' }) })
+    expect((await createHandlers(seedream, prefs, status).generate(request)).status).toBe(200)
+    expect(bodies).toMatchObject([{ size: saved?.size ?? '2K', watermark: expected }])
+  })
   it('serves images with safe headers and validates query ids', async () => {
     const { seedream, store } = service()
     const prefs = new Preferences(join(root, 'settings.json'), { size: '2K', watermark: true })

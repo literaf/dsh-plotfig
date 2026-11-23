@@ -10,6 +10,7 @@ export const PANEL = 'seedream'
 export const TAB_KIND = 'seedream'
 export const TAB_ID = 'dsh-seedream'
 export const KEY_REF = 'AI4SCHOLAR_API_KEY'
+export const DEFAULT_WATERMARK = false
 /** Format check for user keys. AI4Scholar verifies the credential on each request. */
 export const isAI4ScholarKey = (key: string | undefined): boolean => !!key && /^sk-user-[a-zA-Z0-9_-]+$/.test(key)
 export type SizeTier = typeof SIZE_TIERS[number]

@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { MARK_BODY, MARK_LEAF, MARK_TRANSFORM, MARK_VIEWBOX } from './mark.js'
-import { BOARD_PREFIX, isBoard, SIZE_TIERS } from '../shared/types.js'
+import { BOARD_PREFIX, DEFAULT_WATERMARK, isBoard, SIZE_TIERS } from '../shared/types.js'
 import { BackIcon, GearIcon, NewIcon, RefreshIcon } from './icons.js'
 import type { Controller, State } from './controller.js'
 import { CanvasGallery } from './CanvasGallery.js'
@@ -72,7 +72,7 @@ export function Settings({ controller }: { controller: Controller }) {
       </div>
       <label className="sd-settings-row">
         <span>Seedream「AI 生成」水印</span>
-        <input className="sd-settings-switch" type="checkbox" role="switch" disabled={!c || state.settingsBusy} checked={c?.watermark ?? true}
+        <input className="sd-settings-switch" type="checkbox" role="switch" disabled={!c || state.settingsBusy} checked={c?.watermark ?? DEFAULT_WATERMARK}
           onChange={e => void controller.saveSettings({ watermark: e.target.checked })}/>
       </label>
     </div>

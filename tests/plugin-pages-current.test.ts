@@ -60,6 +60,7 @@ describe.skipIf(!compatRoot)('native pages in the current published Harness', ()
       const inputs = [...container.querySelectorAll<HTMLInputElement>('input[type="password"]')]
       expect(inputs).toHaveLength(3); expect(new Set(inputs.map(x => x.id)).size).toBe(3)
       expect(container.querySelectorAll('.sd-settings-heading a[href="https://ai4scholar.net/?src=dsh_plotfig"]')).toHaveLength(3)
+      expect(container.querySelectorAll('input[role="switch"]:disabled:not(:checked)')).toHaveLength(3)
       expect(container.querySelectorAll('[role="alert"]')).toHaveLength(3)
       expect(container.textContent).toContain('fixture host unavailable')
       await act(async () => { root.render(createElement(pages[0]!.component, { view: 'summary' })) })

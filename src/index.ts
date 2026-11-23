@@ -6,7 +6,7 @@ import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-commands'
-import { isAI4ScholarKey, KEY_REF, MODEL, SIZE_TIERS } from './shared/types.js'
+import { DEFAULT_WATERMARK, isAI4ScholarKey, KEY_REF, MODEL, SIZE_TIERS } from './shared/types.js'
 import type { SizeTier } from './shared/types.js'
 import { AI4ScholarClient } from './ai4scholar.js'
 import { CanvasStore } from './store.js'
@@ -21,7 +21,7 @@ export { VERSION }
 export interface Config { defaultSize: SizeTier; watermark: boolean; requestTimeoutMs: number; dataDirectory?: string }
 export const Config: Schema<Config> = Schema.object({
   defaultSize: Schema.union([...SIZE_TIERS]).default('2K').description('Initial default output size; can be changed in the settings card.'),
-  watermark: Schema.boolean().default(true).description('Add the “AI 生成” watermark at the bottom right.'),
+  watermark: Schema.boolean().default(DEFAULT_WATERMARK).description('Add the “AI 生成” watermark to the bottom right of Seedream images.'),
   requestTimeoutMs: Schema.natural().min(10000).max(600000).default(360000),
   dataDirectory: Schema.string().description('Optional absolute data directory. Defaults to $DSH_HOME/seedream.'),
 })
@@ -33,7 +33,7 @@ export function apply(ctx: Context, config: Config): void {
     return value?.trim() || undefined
   }
   const root = config.dataDirectory ? resolve(config.dataDirectory) : join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'seedream')
-  const prefs = new Preferences(join(root, 'settings.json'), { size: config.defaultSize ?? '2K', watermark: config.watermark ?? true })
+  const prefs = new Preferences(join(root, 'settings.json'), { size: config.defaultSize ?? '2K', watermark: config.watermark ?? DEFAULT_WATERMARK })
   const client = new AI4ScholarClient({
     timeoutMs: config.requestTimeoutMs ?? 360000,
     userAgent: `dsh-plotfig/${VERSION}`,

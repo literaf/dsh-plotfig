@@ -96,7 +96,7 @@ All exports are local and make no model calls.
 
 ## Billing and data
 
-AI4Scholar bills ordinary generation per image and reserves the quoted maximum for a split. The final cost is 2 credits for the input plus 3 per delivered image up to 2.61 MP or 6 above it. The background counts as an output and OCR is included. Unused credits are returned, with a full refund on failure. Reopening a canvas retrieves existing split tasks by ID. Stopping a wait does not cancel a submitted request, and the result still appears on the canvas. Images are downloaded at once to `$DSH_HOME/seedream/canvases/<canvas id>/` (owner-only files). You can turn off the default watermark in Settings.
+AI4Scholar bills ordinary generation per image and reserves the quoted maximum for a split. The final cost is 2 credits for the input plus 3 per delivered image up to 2.61 MP or 6 above it. The background counts as an output and OCR is included. Unused credits are returned, with a full refund on failure. Reopening a canvas retrieves existing split tasks by ID. Stopping a wait does not cancel a submitted request, and the result still appears on the canvas. Images are downloaded at once to `$DSH_HOME/seedream/canvases/<canvas id>/` (owner-only files). The Seedream “AI 生成” watermark is off by default. You can enable it in Settings.
 
 ## Limitations
 
