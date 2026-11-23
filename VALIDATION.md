@@ -149,3 +149,7 @@ Node 22.23.5 和 24.5.0 各通过 211 项测试。模拟宿主覆盖需要重启
 发布提交 `d85ab10` 在 Node 22.23.5 和 24.5.0 上各通过 211 项测试。npm 和 npmmirror 的 `latest` 均为 `0.3.1`，两个注册表的常规下载地址返回的安装包与本地归档逐字节一致，SHA-256 为 `ed4552e95bc6c13c157757d48f745e37ccfaca4c2591cce766d6474d6c12e32b`。dsh-research.com 的中英文详情页显示 `0.3.1`，对应的「精选科研插件」目录均指向 `dsh-plotfig@0.3.1`。
 
 在 DeepSeek Harness Desktop `0.2.2-rc.5` 的隔离配置中，从 npm 正式版 `0.3.0` 的 PlotFig 首页点击「检查更新」和「更新到 v0.3.1」完成升级。重启后插件保持启用，11 个画布和已保存的 Nano Banana Pro 选择均可读取。首页标题显示单行 PlotFig，「全部画布」旁显示 11。重新检查更新时，已安装版本和最新正式版均为 `0.3.1`。另一份隔离配置通过国内镜像指定版本升级，安装的 111 个文件均与归档一致。
+
+## 2026-11-23 设置页的 AI4Scholar 首页链接
+
+在 DeepSeek Harness Desktop `0.2.2-rc.5` 的隔离配置中点击「前往 AI4Scholar 首页」，窗口请求的地址为 `https://ai4scholar.net/?src=dsh_plotfig`。中文 README 使用相同地址，英文 README 指向 `https://ai4scholar.net/en?src=dsh_plotfig`。独立浏览器访问两个地址均得到 HTTP 200，并显示对应语言的首页。两种语言的首页都保存了 PlotFig 来源，测试在浏览器内拦截了带有该来源的访问和页面浏览统计请求。211 项测试通过。

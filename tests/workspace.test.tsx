@@ -32,9 +32,10 @@ describe('saved canvas access without model credentials', () => {
       expect(node.querySelector('[data-saved-canvas]')).not.toBeNull()
       await act(async () => { node.querySelector<HTMLButtonElement>('[aria-label="设置"]')!.click() })
       expect(node.querySelector('.sd-settings')).not.toBeNull()
-      const keyGuide = node.querySelector<HTMLAnchorElement>('.sd-settings a')!
-      expect(keyGuide.origin).toBe('https://ai4scholar.net')
-      expect(new URLSearchParams(keyGuide.search).get('src')).toBe('dsh_plotfig')
+      const homeLink = node.querySelector<HTMLAnchorElement>('.sd-settings a')!
+      expect(homeLink.textContent).toBe('前往 AI4Scholar 首页 ↗')
+      expect(homeLink.href).toBe('https://ai4scholar.net/?src=dsh_plotfig')
+      expect(homeLink.target).toBe('_blank')
       await act(async () => { node.querySelector<HTMLButtonElement>('[aria-label="返回首页"]')!.click() })
       expect(node.querySelector('.sd-card')).not.toBeNull()
       expect(vi.mocked(fetcher).mock.calls.every(([url]) => !String(url).includes('/generate') && !String(url).includes('/decompose'))).toBe(true)

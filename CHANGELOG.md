@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The AI4Scholar link in PlotFig settings opens the homepage. The Chinese and English guides link to the homepage in their respective languages.
+
 ## 0.3.1 (2026-11-22)
 
 - Show the PlotFig logo and name on a single line in the home header. The total appears beside the link to all canvases.
