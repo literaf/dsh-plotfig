@@ -54,7 +54,7 @@ export function apply(ctx: ClientContext): void {
   const Config = ({ view = 'page' }: { view?: 'summary' | 'page' }) => {
     const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
     return <div className="sd" style={{ height: 'auto', overflow: 'visible' }}>{view === 'summary'
-      ? <p style={{ margin: 0, color: 'var(--sd-muted)', fontSize: 12 }}>{keyStatus(state)} · 打开详情配置 AI4Scholar Key</p>
+      ? <p style={{ margin: 0, color: 'var(--sd-muted)', fontSize: 12 }}>AI4Scholar API Key · {keyStatus(state)}</p>
       : <Settings controller={controller}/>}</div>
   }
   slots.inject('plugins.bundle.config', () => slots.register({ name: 'plugins.bundle.config', key: 'dsh-plotfig' }, Config))

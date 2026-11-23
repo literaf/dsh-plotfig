@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Send `/plotfig` in the DSH chat composer to open the current conversation’s canvas, or follow it with a description to generate or edit an image. The existing `/seedream` drawing command is also available.
+- Put a prominent Get Key button beside the API key field in Settings. The key status sits beside the field label, and credit details expand on demand.
 
 ## 0.4.0 (2026-11-23)
 

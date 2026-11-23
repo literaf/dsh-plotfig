@@ -47,7 +47,7 @@ Choose **检查更新** in the top-right corner of the PlotFig gallery to compar
 
 In PlotFig 0.3.0 through 0.3.2, choose **检查更新 → 更新到 v0.4.0**. With 0.2.1 or earlier, open **精选科研插件** and choose **更新到 v0.4.0** on the PlotFig card.
 
-PlotFig uses only AI4Scholar API keys for generation, editing, and layer splitting. If dsh-ai4scholar already has a key under `AI4SCHOLAR_API_KEY`, PlotFig uses it automatically. Otherwise, save your key under Settings → PlotFig. **测试连接** checks your balance and Seedream availability for free. To create a key, sign in and open the Open Platform. [Visit the AI4Scholar homepage](https://ai4scholar.net/en?src=dsh_plotfig).
+PlotFig uses an AI4Scholar API key for generation, editing, and layer splitting. If dsh-ai4scholar already has a key under `AI4SCHOLAR_API_KEY`, PlotFig uses it automatically. To create one, select **获取密钥** in PlotFig settings, sign in, and open the Open Platform. Paste the key into the field and save it. **测试连接** checks your balance and Seedream availability for free. [Visit the AI4Scholar homepage](https://ai4scholar.net/en?src=dsh_plotfig).
 
 Use `--profile web` for the web host. You can open, edit, and export saved canvases locally without a key.
 

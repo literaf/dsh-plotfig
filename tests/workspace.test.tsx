@@ -3,13 +3,47 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Simulate } from 'react-dom/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Workspace } from '../src/client/Workspace.js'
+import { Settings, Workspace } from '../src/client/Workspace.js'
 import { Controller } from '../src/client/controller.js'
 import type { Fetcher } from '../src/client/controller.js'
 
 vi.mock('../src/client/Canvas.js', () => ({ CanvasView: () => <div data-saved-canvas>本地画布编辑器</div> }))
 beforeEach(() => vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true))
 afterEach(() => vi.unstubAllGlobals())
+it('saves the key from the form and offers connection testing and removal for the configured key', async () => {
+  let configured = false
+  const port = {
+    describe: async () => ({ configured, writable: true }),
+    set: vi.fn(async () => { configured = true }),
+    unset: vi.fn(async () => { configured = false }),
+  }
+  const fetcher = vi.fn(async (path: string) => ({ ok: true, value: path.endsWith('/check')
+    ? { ok: true, modelAvailable: true, message: '连接成功' }
+    : { version: '0.4.0', configured, defaultSize: '2K', watermark: true, canvases: [] } })) as unknown as Fetcher
+  const controller = new Controller(() => port, fetcher)
+  const node = document.createElement('div'), root = createRoot(node)
+  try {
+    await act(async () => root.render(<Settings controller={controller}/>))
+    const field = node.querySelector<HTMLInputElement>('input[type="password"]')!
+    const form = field.form!
+    const save = form.querySelector('button')!
+    expect(save.disabled).toBe(true)
+    await act(async () => Simulate.change(field, { target: { value: 'sk-user-fixture' } } as never))
+    expect(save.disabled).toBe(false)
+    await act(async () => Simulate.submit(form))
+    expect(port.set).toHaveBeenCalledExactlyOnceWith('AI4SCHOLAR_API_KEY', 'sk-user-fixture')
+    expect(field.value).toBe('')
+    expect(node.querySelector('.sd-key-status')?.textContent).toBe('已配置')
+    const buttons = [...node.querySelectorAll<HTMLButtonElement>('.sd-settings-actions button')]
+    await act(async () => buttons.find(b => b.textContent === '测试连接')!.click())
+    expect(node.querySelector('[role="status"]')?.textContent).toBe('连接成功')
+    await act(async () => buttons.find(b => b.textContent === '移除密钥')!.click())
+    expect(port.unset).toHaveBeenCalledExactlyOnceWith('AI4SCHOLAR_API_KEY')
+    expect(node.querySelector('.sd-key-status')?.textContent).toBe('未配置')
+    expect(node.querySelector('.sd-settings-actions')).toBeNull()
+  } finally { await act(async () => root.unmount()); controller.dispose() }
+})
+
 describe('saved canvas access without model credentials', () => {
   it('keeps saved canvases accessible after removing the key, including settings roundtrips', async () => {
     const catalog = { version: '0.1.0', configured: false, keyRef: 'AI4SCHOLAR_API_KEY', model: 'seedream', defaultSize: '2K', watermark: false, canvases: [{ sessionId: 'board-local', title: '已有分层画布', count: 2, updatedAt: new Date().toISOString() }] }
@@ -32,10 +66,20 @@ describe('saved canvas access without model credentials', () => {
       expect(node.querySelector('[data-saved-canvas]')).not.toBeNull()
       await act(async () => { node.querySelector<HTMLButtonElement>('[aria-label="设置"]')!.click() })
       expect(node.querySelector('.sd-settings')).not.toBeNull()
-      const homeLink = node.querySelector<HTMLAnchorElement>('.sd-settings a')!
-      expect(homeLink.textContent).toBe('前往 AI4Scholar 首页 ↗')
+      expect(node.querySelector('.sd-title')?.textContent).toBe('PlotFig 设置')
+      const homeLink = node.querySelector<HTMLAnchorElement>('.sd-settings-heading a.sd-button-primary')!
+      expect(homeLink.textContent).toContain('获取密钥')
       expect(homeLink.href).toBe('https://ai4scholar.net/?src=dsh_plotfig')
       expect(homeLink.target).toBe('_blank')
+      expect(homeLink.relList.contains('noopener')).toBe(true)
+      expect(homeLink.relList.contains('noreferrer')).toBe(true)
+      expect(node.querySelector('.sd-key-status')?.textContent).toBe('未配置')
+      expect(node.querySelector('.sd-settings-actions')).toBeNull()
+      const billing = node.querySelector('details')!
+      expect(billing.open).toBe(false)
+      billing.querySelector('summary')!.click()
+      expect(billing.open).toBe(true)
+      expect(billing.textContent).toContain('按实际交付的图片结算')
       await act(async () => { node.querySelector<HTMLButtonElement>('[aria-label="返回首页"]')!.click() })
       expect(node.querySelector('.sd-card')).not.toBeNull()
       expect(vi.mocked(fetcher).mock.calls.every(([url]) => !String(url).includes('/generate') && !String(url).includes('/decompose'))).toBe(true)

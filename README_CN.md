@@ -47,7 +47,7 @@ dsh plugin --profile desktop add dsh-plotfig@0.4.0
 
 使用 0.3.0 至 0.3.2 时，点 PlotFig 首页右上角的 **检查更新 → 更新到 v0.4.0**。使用 0.2.1 或更早版本时，在「精选科研插件」的 PlotFig 卡片上点 **更新到 v0.4.0**。
 
-PlotFig 的生图、编辑和分层只接受 AI4Scholar 签发的 Key。如果已在 dsh-ai4scholar 配置共享凭据 `AI4SCHOLAR_API_KEY`，安装 PlotFig 后即可复用。首次配置时，在「设置 → PlotFig」保存密钥，点「测试连接」可免费查看余额和 Seedream 配置状态。需要新密钥时，登录后可在「开放平台」创建。[前往 AI4Scholar 首页](https://ai4scholar.net/?src=dsh_plotfig)
+绘图、编辑和分层使用 AI4Scholar 密钥。已在 dsh-ai4scholar 配置过 `AI4SCHOLAR_API_KEY` 的用户可以直接复用。首次使用可在 PlotFig 设置中点 **获取密钥**，登录后进入「开放平台」创建密钥。将密钥粘贴到输入框并保存，点 **测试连接** 可免费查看余额和 Seedream 配置状态。[前往 AI4Scholar 首页](https://ai4scholar.net/?src=dsh_plotfig)
 
 Web 端使用 `--profile web`。未配置或移除 Key 后，已有画布仍可打开、本地编辑和导出；调用模型时需要配置 Key。
 

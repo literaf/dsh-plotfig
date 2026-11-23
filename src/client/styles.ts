@@ -55,9 +55,36 @@ export function installStyles(): () => void {
 .sd-toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);max-width:calc(100% - 32px);padding:7px 14px;border-radius:999px;background:var(--sd-text);color:var(--sd-bg);font-size:12px;z-index:4;box-shadow:var(--sd-shadow-lg);animation:sd-in .2s ease;overflow-wrap:anywhere}
 .sd-bottom .sd-toast{position:static;transform:none;align-self:center;max-width:100%}
 .sd-review-warning{padding:9px 14px;border:1px solid var(--sd-line);border-radius:10px;background:var(--sd-bg);color:var(--sd-text);font-size:12px;line-height:1.5;box-shadow:var(--sd-shadow);overflow-wrap:anywhere}
-.sd-settings{padding:32px 24px;max-width:640px;width:100%;margin:0 auto}.sd-settings h2{font-size:18px;font-weight:600;margin:0 0 8px}.sd-settings p{color:var(--sd-muted);font-size:13px;line-height:1.75}.sd-settings label{display:block;font-size:12px;color:var(--sd-muted);margin:20px 0 7px}.sd-key-row{display:flex;gap:8px}.sd-key-row input{flex:1;min-width:0;height:36px;background:var(--sd-bg);border:1px solid var(--sd-line);border-radius:9px;padding:0 12px}.sd-key-row .sd-button{height:36px}
-.sd-settings-row{display:flex;align-items:center;gap:12px;margin-top:8px}.sd-settings-row label{margin:0}.sd-settings-row select{height:32px;border:1px solid var(--sd-line);border-radius:8px;padding:0 8px;background:var(--sd-bg)}.sd-settings .sd-check{display:flex;gap:8px;align-items:center;color:var(--sd-text);font-size:13px}.sd-settings-actions{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}.sd-settings a{color:var(--sd-accent)}
-.sd-key-status{display:flex;align-items:center;padding:12px 14px;background:var(--sd-fill);border-radius:10px;font-size:12.5px}.sd-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#8590a2;margin-right:8px}.sd-status-dot[data-ready=true]{background:#2fa37a;box-shadow:0 0 0 3px #2fa37a26}
+.sd-settings{width:100%;max-width:640px;margin:0 auto;padding:clamp(20px,4%,36px) clamp(16px,4%,28px)}
+.sd-settings h2{margin:0;font-size:16px;font-weight:600;line-height:1.45}
+.sd-settings-heading,.sd-key-heading,.sd-key-status,.sd-settings-actions{display:flex;align-items:center}
+.sd-settings-heading{flex-wrap:wrap;justify-content:space-between;gap:10px 16px}
+.sd-key-heading{flex:1 1 155px;flex-wrap:wrap;gap:3px 12px}
+.sd-settings-heading .sd-button-primary{height:34px;padding:0 14px;font-weight:600}
+.sd-key-status{gap:2px;color:var(--sd-muted);font-size:12px;white-space:nowrap}
+.sd-key-status>span{display:inline-flex;align-items:center;gap:6px}
+.sd-key-status .sd-icon-button{width:26px;height:26px}
+.sd-status-dot{width:6px;height:6px;border-radius:50%;background:var(--sd-muted)}
+.sd-status-dot[data-ready=true]{background:#2fa37a}
+.sd-key-row{display:flex;gap:8px;margin:14px 0 0}
+.sd-key-row input{flex:1;min-width:0;height:36px;padding:0 12px;border:1px solid var(--sd-line);border-radius:8px;background:var(--sd-bg)}
+.sd-key-row .sd-button{height:36px;padding:0 16px}
+.sd-settings-note,.sd-settings-footer p{margin:8px 0 0;color:var(--sd-muted);font-size:12.5px;line-height:1.6}
+.sd-settings-actions{flex-wrap:wrap;gap:8px;margin-top:14px}
+.sd-settings .sd-alert{margin:12px 0 0}
+.sd-settings-group~.sd-settings-group,.sd-settings-footer{margin-top:24px;padding-top:20px;border-top:1px solid var(--sd-line)}
+.sd-settings-group>h2{margin-bottom:8px}
+.sd-settings-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:42px}
+.sd-settings-row select{height:32px;padding:0 8px;border:1px solid var(--sd-line);border-radius:8px;background:var(--sd-bg)}
+.sd-settings-switch{appearance:none;flex:none;display:inline-flex;align-items:center;width:34px;height:20px;margin:0;padding:2px;border:1px solid var(--sd-line);border-radius:10px;background:var(--sd-fill-strong);cursor:pointer}
+.sd-settings-switch::before{content:"";width:14px;height:14px;border-radius:50%;background:var(--sd-muted)}
+.sd-settings-switch:checked{border-color:var(--sd-text);background:var(--sd-text)}
+.sd-settings-switch:checked::before{transform:translateX(14px);background:var(--sd-bg)}
+.sd-settings-switch:disabled{opacity:.45;cursor:default}
+@media (forced-colors:active){.sd-settings-switch{appearance:auto}.sd-settings-switch::before{display:none}}
+.sd-settings-footer{display:flex;align-items:baseline;justify-content:space-between;gap:16px;color:var(--sd-muted);font-size:12px}
+.sd-settings-footer summary{width:fit-content;cursor:pointer}.sd-settings-footer summary:hover{color:var(--sd-text)}
+.sd-settings-footer>span{white-space:nowrap}
 @container sdcanvas (max-width:900px){.sd-bottom{left:12px;transform:none;width:calc(100% - 24px);bottom:12px}}
 @container sdcomposer (max-width:430px){.sd-composer-bar{flex-wrap:wrap}.sd-composer-tools{flex:1 1 100%}.sd-model-picker{max-width:160px}.sd-composer-keyboard{display:none}.sd-composer-footer{justify-content:center}.sd-composer textarea{padding-left:16px;padding-right:16px}.sd-composer-bar{padding-left:8px;padding-right:10px}.sd-composer-submit{gap:8px}}
 .sd-float{max-width:calc(100% - 16px);flex-wrap:wrap}.sd-float-text{white-space:normal}

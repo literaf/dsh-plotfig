@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { MARK_BODY, MARK_LEAF, MARK_TRANSFORM, MARK_VIEWBOX } from './mark.js'
 import { BOARD_PREFIX, isBoard, SIZE_TIERS } from '../shared/types.js'
-import { BackIcon, GearIcon, NewIcon } from './icons.js'
+import { BackIcon, GearIcon, NewIcon, RefreshIcon } from './icons.js'
 import type { Controller, State } from './controller.js'
 import { CanvasGallery } from './CanvasGallery.js'
 import { CanvasView } from './Canvas.js'
@@ -25,27 +25,64 @@ export function Icon({ size = 20 }: { size?: number }) {
 }
 export function keyStatus(state: State): string {
   const c = state.catalog
-  if (!c) return state.loading ? '正在读取配置…' : '配置暂不可用'
-  return `${c.configured ? '已配置' : '尚未配置'} AI4Scholar API Key`
+  if (!c) return state.loading ? '读取中…' : '配置暂不可用'
+  return c.configured ? '已配置' : '未配置'
 }
 export function Settings({ controller }: { controller: Controller }) {
-  const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot), [key, setKey] = useState(''), keyId = useId(), sizeId = useId()
+  const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
+  const [key, setKey] = useState('')
+  const keyId = useId(), sizeId = useId()
   const c = state.catalog
   useEffect(() => { void controller.attach() }, [controller])
-  return <section className="sd-settings">
-    <h2>PlotFig 设置</h2><p>通过 AI4Scholar 生成和编辑图片，绘图模型可在输入框中选择。</p>
-    <div className="sd-key-status"><span className="sd-status-dot" data-ready={c?.configured ?? false}/>{keyStatus(state)}</div>
-    {state.error ? <div className="sd-alert" role="alert">{state.error}</div> : null}{state.message ? <div className="sd-alert" role="status">{state.message}</div> : null}
-    <label htmlFor={keyId}>AI4Scholar API Key</label><div className="sd-key-row"><input id={keyId} type="password" autoComplete="off" spellCheck={false} placeholder="sk-user-…" value={key} onChange={e => setKey(e.target.value)} /><button className="sd-button sd-button-primary" disabled={!key.trim() || state.keyBusy || !c} onClick={() => { void controller.saveKey(key).then(ok => { if (ok) setKey('') }) }}>{state.keyBusy ? '保存中…' : '保存'}</button></div>
-    <p>Key 保存在本机凭据服务中。PlotFig 与 dsh-ai4scholar 共用此凭据，保存或移除会同步影响两个插件。登录后可在「开放平台」创建 API Key。<a href="https://ai4scholar.net/?src=dsh_plotfig" target="_blank" rel="noopener noreferrer">前往 AI4Scholar 首页 ↗</a></p>
-    <div className="sd-settings-row">
-      <label htmlFor={sizeId}>默认尺寸</label>
-      <select id={sizeId} disabled={!c || state.settingsBusy} value={c && (SIZE_TIERS as readonly string[]).includes(c.defaultSize) ? c.defaultSize : '2K'} onChange={e => { void controller.saveSettings({ size: e.target.value }) }}>{SIZE_TIERS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+  return <section className="sd-settings" aria-label="PlotFig 设置">
+    <div className="sd-settings-group">
+      <div className="sd-settings-heading">
+        <div className="sd-key-heading">
+          <h2><label htmlFor={keyId}>AI4Scholar API Key</label></h2>
+          <div className="sd-key-status">
+            <span aria-live="polite"><span className="sd-status-dot" aria-hidden="true" data-ready={c?.configured}/>{keyStatus(state)}</span>
+            <button type="button" className="sd-icon-button" disabled={state.loading} aria-label="刷新状态" title="刷新状态" onClick={() => void controller.attach()}><RefreshIcon size={14}/></button>
+          </div>
+        </div>
+        <a className="sd-button sd-button-primary" href="https://ai4scholar.net/?src=dsh_plotfig" target="_blank" rel="noopener noreferrer"
+          title="前往 AI4Scholar 首页，登录后在「开放平台」创建密钥">获取密钥<span aria-hidden="true">↗</span></a>
+      </div>
+      <form className="sd-key-row" aria-busy={state.keyBusy} onSubmit={async e => {
+        e.preventDefault()
+        if (await controller.saveKey(key)) setKey('')
+      }}>
+        <input id={keyId} type="password" autoComplete="off" spellCheck={false} placeholder="sk-user-…" aria-describedby={keyId + '-note'}
+          value={key} readOnly={state.keyBusy} onChange={e => setKey(e.target.value)}/>
+        <button type="submit" className="sd-button" disabled={!key.trim() || state.keyBusy || !c}>{state.keyBusy && key ? '保存中…' : '保存'}</button>
+      </form>
+      <p className="sd-settings-note" id={keyId + '-note'}>本机密钥与 dsh-ai4scholar 共享，修改和移除会同步生效。</p>
+      {c?.configured && <div className="sd-settings-actions">
+        <button type="button" className="sd-button" disabled={state.checkBusy} title="免费检查密钥、余额和绘图接口" onClick={() => void controller.checkConnection()}>{state.checkBusy ? '测试中…' : '测试连接'}</button>
+        <button type="button" className="sd-button" disabled={state.keyBusy} onClick={() => void controller.removeKey()}>移除密钥</button>
+      </div>}
     </div>
-    <label className="sd-check"><input type="checkbox" disabled={!c || state.settingsBusy} checked={c?.watermark ?? true} onChange={e => { void controller.saveSettings({ watermark: e.target.checked }) }}/>添加「AI 生成」水印（Seedream）</label>
-    <div className="sd-settings-actions"><button className="sd-button" disabled={!c?.configured || state.checkBusy} onClick={() => { void controller.checkConnection() }} title="免费检查 AI4Scholar 密钥、余额和绘图接口">{state.checkBusy ? '测试中…' : '测试连接'}</button><button className="sd-button" disabled={!c?.configured || state.keyBusy} onClick={() => { void controller.removeKey() }}>移除 Key</button><button className="sd-button" disabled={state.loading} onClick={() => { void controller.attach() }}>刷新状态</button></div>
-    <p>生图和编辑使用 AI4Scholar 积分，分层先预留最高积分，再按实际交付的图片结算。生成结果会立即下载到本机，按对话分别保存在各自的画布中。</p>
-    <p>版本 {c?.version ?? '—'}</p>
+    {state.error && <div className="sd-alert" role="alert">{state.error}</div>}
+    {state.message && <div className="sd-alert" role="status">{state.message}</div>}
+    <div className="sd-settings-group">
+      <h2>绘图偏好</h2>
+      <div className="sd-settings-row">
+        <label htmlFor={sizeId}>默认尺寸</label>
+        <select id={sizeId} disabled={!c || state.settingsBusy} value={c && (SIZE_TIERS as readonly string[]).includes(c.defaultSize) ? c.defaultSize : '2K'}
+          onChange={e => void controller.saveSettings({ size: e.target.value })}>{SIZE_TIERS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+      </div>
+      <label className="sd-settings-row">
+        <span>Seedream「AI 生成」水印</span>
+        <input className="sd-settings-switch" type="checkbox" role="switch" disabled={!c || state.settingsBusy} checked={c?.watermark ?? true}
+          onChange={e => void controller.saveSettings({ watermark: e.target.checked })}/>
+      </label>
+    </div>
+    <footer className="sd-settings-footer">
+      <details>
+        <summary>积分说明</summary>
+        <p>生图和编辑使用 AI4Scholar 积分。分层先预留最高积分，再按实际交付的图片结算。</p>
+      </details>
+      {c?.version && <span>版本 {c.version}</span>}
+    </footer>
   </section>
 }
 /** Main panel: gallery and settings; conversation canvases reopen their native Session. */
@@ -106,7 +143,7 @@ export function Workspace({ controller, openConversation, conversation, openPlug
     try { if (isBoard(id) || !openConversation(id)) setOpen(id) }
     catch (error) { controller.notify(error instanceof Error ? error.message : '无法打开原对话') }
   }
-  const heading = settings ? '设置' : open ? current?.title ?? (isBoard(open) ? '新画布' : '画布') : library ? '全部画布' : 'PlotFig'
+  const heading = settings ? 'PlotFig 设置' : open ? current?.title ?? (isBoard(open) ? '新画布' : '画布') : library ? '全部画布' : 'PlotFig'
   const backLabel = (open || settings) && library ? '返回全部画布' : '返回首页'
   const back = () => {
     if (open || settings) { setOpen(undefined); setSettings(false) } else setLibrary(false)
@@ -118,8 +155,8 @@ export function Workspace({ controller, openConversation, conversation, openPlug
         {open || settings || library ? <button className="sd-icon-button" onClick={back} aria-label={backLabel} title={backLabel}><BackIcon/></button> : <Icon size={22}/>}
         <div className="sd-title-text">
           <strong>{heading}</strong>
-          {open && <span className="sd-brand">{isBoard(open) ? '独立画布' : '对话画布'}{current && ` · ${current.count} 张`}</span>}
-          {!open && (library || settings) && <span className="sd-brand">{canvases.length} 个画布</span>}
+          {open && !settings && <span className="sd-brand">{isBoard(open) ? '独立画布' : '对话画布'}{current && ` · ${current.count} 张`}</span>}
+          {!open && library && !settings && <span className="sd-brand">{canvases.length} 个画布</span>}
         </div>
       </div>
       <div className="sd-head-actions">
