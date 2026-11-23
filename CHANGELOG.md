@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-11-23)
 
 - Delete a canvas from Recent or All Canvases. Use Manage Canvases in the full gallery to select several or all eligible canvases and confirm one batch deletion.
+- The confirmation lists the selected canvases. Deleting removes their local images and layers while preserving the associated conversations. Canvases with running jobs or layer results awaiting retrieval are protected. If a canvas changes before confirmation, review the updated canvas before deleting it.
 
 ## 0.3.2 (2026-11-23)
 
