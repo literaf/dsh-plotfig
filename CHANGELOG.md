@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Send `/plotfig` in the DSH chat composer to open the current conversation’s canvas, or follow it with a description to generate or edit an image. The existing `/seedream` drawing command is also available.
+
 ## 0.4.0 (2026-11-23)
 
 - Delete a canvas from Recent or All Canvases. Use Manage Canvases in the full gallery to select several or all eligible canvases and confirm one batch deletion.

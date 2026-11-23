@@ -176,20 +176,31 @@ export function applyTools(ctx: Context, service: Seedream, defaults: Defaults):
   }))
   ctx.inject(['commands'], child => {
     const seen = new WeakMap<object, Set<string>>()
-    child.commands.register({ name: 'seedream', description: 'PlotFig 画图 · 生成或修改图片，结果放到画布上',
-      input: { hint: '画一张热带雨林垂直分层剖面图，教材插画风格', images: false },
-      async handler(invocation) {
-        const text = invocation.rawInput.trim()
-        if (!text) return { kind: 'success', text: '用法：/seedream + 画面描述。例：/seedream 画一张热带雨林垂直分层剖面图，教材插画风格。生成的图片会放到右侧 PlotFig 画布，可在画布上继续编辑或引用。' }
-        invocation.signal.throwIfAborted()
-        const agent = invocation.agent, id = String(invocation.commandId)
-        let receipts = seen.get(agent); if (!receipts) { receipts = new Set(); seen.set(agent, receipts) }
-        if (receipts.has(id)) return { kind: 'success', text: '已加入当前对话。' }
-        if (typeof agent.followup !== 'function') return { kind: 'error', text: '当前 Harness 不支持此命令。' }
-        agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: `/seedream ${text}` }] }))
-        receipts.add(id); while (receipts.size > 128) receipts.delete(receipts.values().next().value!)
-        return { kind: 'success', text: '已加入当前对话，将使用画布所选模型生成图片。' }
-      },
-    })
+    for (const name of ['plotfig', 'seedream']) {
+      child.commands.register({
+        name,
+        description: name === 'plotfig' ? 'PlotFig · 打开当前对话的画布，或描述要生成或修改的图片' : 'PlotFig · 生成或修改图片（旧命令）',
+        input: { hint: '画一张热带雨林垂直分层剖面图，教材插画风格', images: false },
+        handler(invocation) {
+          invocation.signal.throwIfAborted()
+          const text = invocation.rawInput.trim()
+          if (!text || /^(help|帮助|用法|\?)$/i.test(text)) {
+            return { kind: 'success', text: `在 /${name} 后面写下绘图要求，例如「/${name} 画一张热带雨林垂直分层剖面图」。要修改已有图片，可从当前对话的 PlotFig 画布中引用它。` }
+          }
+          const { agent, commandId } = invocation
+          if (typeof agent.followup !== 'function') return { kind: 'error', text: '当前 Harness 不支持把绘图请求加入对话。' }
+          let receipts = seen.get(agent)
+          if (!receipts) {
+            receipts = new Set()
+            seen.set(agent, receipts)
+          }
+          if (receipts.has(commandId)) return { kind: 'success', text: '已加入当前对话。' }
+          agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: `/${name} ${text}` }] }))
+          receipts.add(commandId)
+          if (receipts.size > 128) receipts.delete(receipts.values().next().value!)
+          return { kind: 'success', text: '绘图请求已加入当前对话。' }
+        },
+      })
+    }
   })
 }

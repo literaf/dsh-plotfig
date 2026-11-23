@@ -46,7 +46,7 @@ export function apply(ctx: Context, config: Config): void {
     return { version: VERSION, provider: 'ai4scholar', configured: isAI4ScholarKey(await resolveKey()), keyRef: KEY_REF, model: MODEL, defaultSize: p.size, watermark: p.watermark }
   })
   ctx.systemPrompt.section({ name: 'seedream:workflow', order: 159, text: [
-    'dsh-plotfig (PlotFig) provides /seedream and a per-conversation canvas (right sidebar tab "PlotFig 画布"). Use seedream_generate to create or edit images and seedream_canvas to list what is already on the canvas.',
+    'For /plotfig requests (also accepted as /seedream), use PlotFig tools so the result is saved to the current conversation’s canvas (right sidebar tab "PlotFig 画布"). Use seedream_generate to create images or edit by reference and seedream_canvas to list existing images.',
     'Single and batch generation inherit the canvas model (default Seedream 5.5). Supply a model override only when the user requests one. Specialized AI edits and layer splitting use Seedream.',
     'Every seedream_generate call is billed per output image. Do not call it again to retry or to produce variants unless the user asks. Read the canvas first instead of regenerating an existing image.',
     'When the user asks for a set of different images (several figures for one paper, a series in one style), use seedream_generate_batch with one complete prompt per image instead of repeated seedream_generate calls. It bills one image per item and reports any failed item without retrying.',

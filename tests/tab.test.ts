@@ -1,12 +1,36 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import { act, createElement } from 'react'
 import type { ComponentType } from 'react'
 import { createRoot } from 'react-dom/client'
 import * as browser from '../src/client/index.js'
 
 describe('right Sidebar tab', () => {
+  it('opens the canvas only for a successful local /plotfig in the mounted conversation', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { headers: { 'Content-Type': 'application/json' } })))
+    const ctx = new Context()
+    const openTab = vi.fn(), sessionId = 'current' as SessionId
+    ctx.reflect.provide('slots', { inject: () => () => undefined })
+    ctx.reflect.provide('sidebarRightTabs', { register: () => () => undefined })
+    ctx.reflect.provide('sidebarRight', { mounted: { getSnapshot: () => sessionId }, isExpanded: () => true, openTab })
+    const fiber = await ctx.plugin(browser as unknown as { inject: string[]; apply(c: Context): void })
+    try {
+      ctx.emit('command/executed', 'other' as SessionId, 'plotfig', { kind: 'success' })
+      ctx.emit('command/executed', sessionId, 'plotfig', { kind: 'error', text: 'cancelled' })
+      ctx.emit('command/executed', sessionId, 'ai4scholar', { kind: 'success' })
+      expect(openTab).not.toHaveBeenCalled()
+      ctx.emit('command/executed', sessionId, 'plotfig', { kind: 'success' })
+      expect(openTab).toHaveBeenCalledExactlyOnceWith('seedream')
+    } finally {
+      await fiber.dispose()
+      vi.unstubAllGlobals()
+    }
+    ctx.emit('command/executed', sessionId, 'plotfig', { kind: 'success' })
+    expect(openTab).toHaveBeenCalledOnce()
+  })
+
   it('registers the canvas tab type only where the host provides one, and unregisters on dispose', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: false, error: 'x' }), { headers: { 'Content-Type': 'application/json' } })))
     const registered: string[] = [], seats: string[] = []

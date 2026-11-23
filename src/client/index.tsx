@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { useEffect, useSyncExternalStore } from 'react'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ClientContext, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { CommandResult } from '@deepseek-ai/dsh-commands/types'
 import { Controller } from './controller.js'
 import type { PluginUpdateManager } from './plugin-update.js'
 import { resolveCredentialsPort } from './credentials-port.js'
@@ -11,6 +12,13 @@ import { conversationActions } from './handoff.js'
 import { CanvasNavigation, showCanvas } from './navigation.js'
 import type { SidebarRight } from './navigation.js'
 import { PANEL, TAB_ID, TAB_KIND } from '../shared/types.js'
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    'command/executed'(sessionId: SessionId, name: string, result: CommandResult): void
+  }
+}
+
 export const inject = ['slots']
 interface Slots {
   inject(name: string, callback: () => () => void): () => void
@@ -66,6 +74,9 @@ export function apply(ctx: ClientContext): void {
     slots.inject('sidebar.right.pane.tab', () => slots.register({ name: 'sidebar.right.pane.tab', key: TAB_ID }, Body))
     /** Open the canvas tab in this Session and make sure the column is showing it. */
     const show = (sessionId: string) => showCanvas(right, sessionId)
+    child.on('command/executed', (sessionId, name, result) => {
+      if (name === 'plotfig' && result.kind === 'success') show(sessionId)
+    })
     // Mounted in each conversation header: opens the canvas when that conversation starts a generation.
     const Open = ({ sessionId }: { sessionId: string }) => {
       const active = useSyncExternalStore(controller.subscribeActive, controller.getActive)
