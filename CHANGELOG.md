@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2 (2026-11-23)
 
 - The AI4Scholar link in PlotFig settings opens the homepage. The Chinese and English guides link to the homepage in their respective languages.
 
