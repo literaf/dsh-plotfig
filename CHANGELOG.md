@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 (2026-11-23)
+
+- Link the npm package to the public PlotFig source repository, issue tracker and AI4Scholar installation guide.
+- Declare the existing screenshots in `screenshots.json` and add a raster storefront icon for plugin directories.
+- Update the installation and upgrade instructions for this metadata release. Drawing and canvas behavior are unchanged.
+
 ## 0.5.0 (2026-11-23)
 
 - Send `/plotfig` in the DSH chat composer to open the current conversation’s canvas, or follow it with a description to generate or edit an image. The existing `/seedream` drawing command is also available.

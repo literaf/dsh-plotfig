@@ -1,6 +1,6 @@
 {
   "name": "dsh-plotfig",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "PlotFig for DeepSeek Harness: create scientific figures with Seedream, GPT Image and Nano Banana through AI4Scholar, edit images and OCR text, split layers, and export PNG/SVG/PDF/PSD.",
   "type": "module",
   "license": "MIT",
@@ -27,7 +27,8 @@
     "LICENSE",
     "CHANGELOG.md",
     "README_CN.md",
-    "RELEASING.md"
+    "RELEASING.md",
+    "screenshots.json"
   ],
   "sideEffects": false,
   "keywords": [
@@ -125,5 +126,12 @@
     "vitest": "^4.1.8"
   },
   "icon": "./assets/icon.svg",
-  "homepage": "https://www.npmjs.com/package/dsh-plotfig"
+  "homepage": "https://ai4scholar.net/integrations/dsh-plotfig",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/literaf/dsh-plotfig.git"
+  },
+  "bugs": {
+    "url": "https://github.com/literaf/dsh-plotfig/issues"
+  }
 }
