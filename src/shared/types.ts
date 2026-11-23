@@ -196,6 +196,7 @@ export interface CanvasEntry {
   updatedAt: string
   cover?: string
   diagramCover?: string
+  hasPendingLayers?: boolean
 }
 export interface Status {
   provider?: 'ai4scholar'
@@ -219,7 +220,7 @@ export const entryOf = (canvas: Canvas): CanvasEntry => {
   const originals = canvas.items.filter(i => i.role !== 'layer' && !i.superseded)
   const first = originals[0], last = originals.at(-1), diagram = canvas.compositions?.at(-1)
   const title = first && (canvas.title === undefined || canvas.title === first.title) ? labelOf(first) : canvas.title ?? '未命名画布'
-  return { sessionId: canvas.sessionId, title, count: originals.length + (canvas.compositions?.length ?? 0), revision: canvas.revision, updatedAt: canvas.updatedAt, ...(last ? { cover: last.id } : diagram && diagram.layers.every(l => l.kind !== 'image' && !l.ocr) ? { diagramCover: diagram.id } : {}) }
+  return { sessionId: canvas.sessionId, title, count: originals.length + (canvas.compositions?.length ?? 0), revision: canvas.revision, updatedAt: canvas.updatedAt, ...(canvas.layerTasks?.length ? { hasPendingLayers: true } : {}), ...(last ? { cover: last.id } : diagram && diagram.layers.every(l => l.kind !== 'image' && !l.ocr) ? { diagramCover: diagram.id } : {}) }
 }
 /**
  * A short, readable label from a prompt: the first clause, cut at a word

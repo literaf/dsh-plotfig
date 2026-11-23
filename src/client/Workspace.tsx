@@ -1,9 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { MARK_BODY, MARK_LEAF, MARK_TRANSFORM, MARK_VIEWBOX } from './mark.js'
 import { BOARD_PREFIX, isBoard, SIZE_TIERS } from '../shared/types.js'
-import { BackIcon, ChevronIcon, GearIcon, ImageIcon, NewIcon } from './icons.js'
+import { BackIcon, GearIcon, NewIcon } from './icons.js'
 import type { Controller, State } from './controller.js'
-import { imageUrl } from './controller.js'
+import { CanvasGallery } from './CanvasGallery.js'
 import { CanvasView } from './Canvas.js'
 import type { ConversationActions } from './handoff.js'
 import { ResearchTools } from './ResearchTools.js'
@@ -15,7 +15,6 @@ import { UpdateCheck } from './UpdateCheck.js'
 import { Composer, ModelPicker, SizePicker, TransparentToggle, useDrawingOptions } from './Composer.js'
 import { MODEL } from '../shared/models.js'
 import type { DrawingModel } from '../shared/models.js'
-const RECENT_CANVASES = 8
 
 export function Icon({ size = 20 }: { size?: number }) {
   // The P follows the surrounding text color, so it reads on light and dark sidebars; the leaf is burnt orange on light themes and lime on dark ones.
@@ -76,7 +75,6 @@ export function Workspace({ controller, openConversation, conversation, openPlug
   }, [controller, open, settings])
   const c = state.catalog, canvases = c?.canvases ?? []
   const current = canvases.find(x => x.sessionId === open)
-  const visibleCanvases = library ? canvases : canvases.slice(0, RECENT_CANVASES)
   const openNew = (id: string, tool?: ResearchToolId, compositionId?: string) => {
     if (drawingModel !== MODEL || style !== 'auto') void controller.canvas(id).setGenerationOptions({ generationModel: drawingModel, generationStyle: style })
     setTemplateComposition(compositionId); setLaunch(tool); setSettings(false); setOpen(id)
@@ -107,13 +105,6 @@ export function Workspace({ controller, openConversation, conversation, openPlug
     setTemplateComposition(undefined); setLaunch(undefined)
     try { if (isBoard(id) || !openConversation(id)) setOpen(id) }
     catch (error) { controller.notify(error instanceof Error ? error.message : '无法打开原对话') }
-  }
-  const relative = (iso: string) => {
-    const minutes = Math.round((Date.now() - Date.parse(iso)) / 60000)
-    if (minutes < 1) return '刚刚'
-    if (minutes < 60) return `${minutes} 分钟前`
-    if (minutes < 60 * 24) return `${Math.round(minutes / 60)} 小时前`
-    return new Date(iso).toLocaleDateString()
   }
   const heading = settings ? '设置' : open ? current?.title ?? (isBoard(open) ? '新画布' : '画布') : library ? '全部画布' : 'PlotFig'
   const backLabel = (open || settings) && library ? '返回全部画布' : '返回首页'
@@ -156,17 +147,7 @@ export function Workspace({ controller, openConversation, conversation, openPlug
           </div>
           <nav className="sd-home-shortcuts" aria-label="常用工具"><ResearchTools compact disabled={starting} onSelect={selectHomeTool}/></nav>
         </section> : null}
-        {!library && canvases.length ? <div className="sd-recent-title"><h2>最近画布</h2><button type="button" className="sd-all-canvases" onClick={() => setLibrary(true)} aria-label="全部画布"><span>全部画布</span><span className="sd-canvas-count">{canvases.length}</span><ChevronIcon size={14}/></button></div> : null}
-        {canvases.length ? <ul className="sd-gallery" aria-label={library ? '全部画布' : '最近画布'} data-view={library ? 'all' : 'recent'}>
-          {visibleCanvases.map(x => { const running = c?.active?.[x.sessionId]?.length ?? 0
-            return <li key={x.sessionId}><button className="sd-card" onClick={() => openCanvas(x.sessionId)}>
-              <span className="sd-card-cover">{x.cover ? <img src={imageUrl(x.sessionId, x.cover)} alt="" loading="lazy"/> : x.diagramCover ? <img data-diagram src={`${imageUrl(x.sessionId, x.diagramCover)}&diagram=1&v=${x.revision}`} alt="" loading="lazy"/> : <ImageIcon size={22}/>}
-                {running ? <span className="sd-card-badge"><span className="sd-spinner sd-spinner-small"/>生成中</span> : x.count > 1 ? <span className="sd-card-badge">{x.count} 张</span> : null}</span>
-              <strong>{x.title}</strong>
-              <span className="sd-card-meta"><span className="sd-tag" data-kind={isBoard(x.sessionId) ? 'board' : 'chat'}>{isBoard(x.sessionId) ? '独立' : '对话'}</span>{relative(x.updatedAt)}</span>
-            </button></li> })}
-        </ul>
-          : <div className="sd-home-empty">{library ? '还没有画布，点击“新建画布”开始第一张图。' : '还没有画布。在上方输入描述，开始第一张图。'}</div>}
+        <CanvasGallery controller={controller} catalog={c} library={library} showAll={() => setLibrary(true)} openCanvas={openCanvas}/>
       </div>}
     {templatePicker ? <DiagramTemplates onClose={() => setTemplatePicker(false)} onCreate={async (id, palette) => {
       const session = BOARD_PREFIX + crypto.randomUUID(), composition = await controller.canvas(session).createTemplate(id, palette)

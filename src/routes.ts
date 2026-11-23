@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Seedream } from './service.js'
-import { checkItem, checkSession, EditConflict } from './store.js'
+import { CanvasDeleteConflict, checkItem, checkSession, EditConflict } from './store.js'
 import { AI4ScholarError } from './ai4scholar.js'
 import { imageInfo, MAX_BYTES } from './image-data.js'
 import { entryOf, isRecord, parseGenerate, parseSize, ROUTE } from './shared/types.js'
@@ -16,7 +16,7 @@ interface Route { path: string; methods: readonly string[]; requestBody: 'buffer
 interface Connection { fetch?: { register(route: Route): () => Promise<void> } }
 const HEADERS = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }
 export const json = (value: unknown, status = 200): Response => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...HEADERS } })
-const fail = (error: unknown, fallback: string, status = 400) => json({ ok: false, error: error instanceof Error ? error.message : fallback }, error instanceof EditConflict ? 409 : error instanceof AI4ScholarError ? 502 : status)
+const fail = (error: unknown, fallback: string, status = 400) => json({ ok: false, error: error instanceof Error ? error.message : fallback }, error instanceof EditConflict || error instanceof CanvasDeleteConflict ? 409 : error instanceof AI4ScholarError ? 502 : status)
 async function body(request: Request, limit: number): Promise<unknown> {
   const text = await request.text()
   if (text.length > limit) throw new Error('请求内容过长。')
@@ -37,6 +37,11 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
     async canvas(request: Request): Promise<Response> {
       try {
         const url = new URL(request.url), id = session(url)
+        if (request.method === 'DELETE') {
+          const revision = url.searchParams.get('revision')
+          if (!revision || !/^\d+$/.test(revision) || !Number.isSafeInteger(Number(revision))) throw new Error('缺少有效的画布版本，请刷新后重试。')
+          return json({ ok: true, value: await service.removeCanvas(id, Number(revision)) })
+        }
         if (request.method === 'PATCH') {
           const raw = await body(request, 256 * 1024)
           if (isRecord(raw) && typeof raw.dismissLayerTask === 'string') {
@@ -55,7 +60,10 @@ export function createHandlers(service: Seedream, prefs: Preferences, status: ()
         const canvas = await service.store.get(id)
         service.resumeLayerTasks(canvas, url.searchParams.get('resumeLayer'))
         return json({ ok: true, value: { ...canvas, pending: service.pending(id) } })
-      } catch (error) { return fail(error, '读取画布失败。') }
+      } catch (error) {
+        if (request.method === 'DELETE' && error instanceof Error && 'code' in error) return json({ ok: false, error: '删除文件失败，请检查存储权限后重试。' }, 500)
+        return fail(error, request.method === 'DELETE' ? '删除画布失败。' : '读取画布失败。')
+      }
     },
     async generate(request: Request): Promise<Response> {
       let id: string, input
@@ -181,7 +189,7 @@ export function applyRoutes(ctx: Context, service: Seedream, prefs: Preferences,
     bridge.register({ path: ROUTE, methods: ['GET'], requestBody: 'buffered', fetch: () => h.catalog() })
     bridge.register({ path: ROUTE + '/update', methods: ['GET'], requestBody: 'buffered', fetch: r => h.update(r) })
     bridge.register({ path: `${ROUTE}/active`, methods: ['GET'], requestBody: 'buffered', fetch: async () => h.active() })
-    bridge.register({ path: `${ROUTE}/canvas`, methods: ['GET', 'PATCH'], requestBody: 'buffered', fetch: r => h.canvas(r) })
+    bridge.register({ path: `${ROUTE}/canvas`, methods: ['GET', 'PATCH', 'DELETE'], requestBody: 'buffered', fetch: r => h.canvas(r) })
     bridge.register({ path: `${ROUTE}/generate`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.generate(r) })
     bridge.register({ path: `${ROUTE}/composition`, methods: ['POST', 'PATCH', 'DELETE'], requestBody: 'buffered', fetch: r => h.composition(r) })
     bridge.register({ path: `${ROUTE}/decompose`, methods: ['POST'], requestBody: 'buffered', fetch: r => h.decompose(r) })

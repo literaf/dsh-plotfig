@@ -56,6 +56,7 @@ Use `--profile web` for the web host. You can open, edit, and export saved canva
 - Use `/seedream <description>`, ask the assistant to draw, or type into a standalone canvas prompt box. The size menu offers seven aspect ratios at 2K, or a 1K/1.5K/2K tier that lets the model choose the shape.
 - Conversation canvases share the native DSH composer: examples, edits and references append to the same Session's draft without submitting it. Opening a conversation canvas from the gallery returns to its conversation with the canvas on the right.
 - The home page starts with a prompt box. A submission opens a new standalone canvas with the selected style and size. Six tool shortcuts and up to eight recent canvases sit below it; **全部画布** opens the full gallery.
+- Use the trash icon on a card in Recent or All Canvases to delete one canvas. For a batch, open **全部画布 → 管理画布**, select the canvases, click **删除所选**, and confirm the names.
 - **重新生成** redoes a generated image with its original prompt, references, size and style, in the same place. Older versions are kept and switchable from the toolbar without a model call.
 - For a set of different images, the assistant uses `seedream_generate_batch` (2–10 items, one billed image each, run in order; failures are reported, not retried).
 - **加入参考** adds the selected canvas image to the prompt, up to 10 references. The main image (the one being edited or used for reference generation) is 图1 and the rest follow in order, so prompts can say "put the device from 图2 into 图1".

@@ -17,6 +17,7 @@ async function atomic(path: string, data: string | Uint8Array): Promise<void> {
 export const checkSession = (id: string): string => { if (!SESSION_ID.test(id)) throw new Error('无效的对话 ID。'); return id }
 export const checkItem = (id: string): string => { if (!ITEM_ID.test(id)) throw new Error('无效的图片 ID。'); return id }
 export class EditConflict extends Error { constructor() { super('画板已在其他窗口更新，当前编辑仍保留。可另存副本，避免覆盖另一窗口的内容。') } }
+export class CanvasDeleteConflict extends Error {}
 const rightEdge = (canvas: Canvas) => [...canvas.items.filter(i => i.role !== 'layer' && !i.superseded), ...canvas.compositions ?? []].reduce((m, i) => Math.max(m, i.x + i.width + GAP), 0)
 const imageLayer = (asset: CanvasItem, box = { x: 0, y: 0, width: asset.width, height: asset.height }): CanvasLayer => ({
   id: randomUUID(), kind: 'image', name: asset.title, assetId: asset.id, ...box, rotation: 0, opacity: 1, hidden: false, locked: false,
@@ -41,8 +42,13 @@ export class CanvasStore {
     let raw: unknown
     try { raw = JSON.parse(await readFile(this.canvasPath(sessionId), 'utf8')) }
     catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { sessionId, revision: 0, createdAt: now, updatedAt: now, items: [] }
-      throw error
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      // A deleted conversation can draw again. Its revision must still advance in open windows.
+      let revision = 0
+      try { revision = Number(await readFile(this.directory(sessionId) + '.revision', 'utf8')) }
+      catch (cause) { if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') throw cause }
+      if (!Number.isSafeInteger(revision) || revision < 0) throw new Error('画布版本记录无效。')
+      return { sessionId, revision, createdAt: now, updatedAt: now, items: [] }
     }
     if (!isRecord(raw) || raw.sessionId !== sessionId || !Array.isArray(raw.items) || typeof raw.revision !== 'number') throw new Error('画布数据无效。')
     return raw as unknown as Canvas
@@ -54,6 +60,26 @@ export class CanvasStore {
     return canvas
   }
   readImage(sessionId: string, itemId: string): Promise<Buffer> { return readFile(this.imagePath(sessionId, itemId)) }
+  removeCanvas(sessionId: string, expectedRevision: number): Promise<Canvas> {
+    const directory = this.directory(sessionId)
+    return this.serial(sessionId, async () => {
+      const canvas = await this.get(sessionId)
+      if (canvas.layerTasks?.length) throw new CanvasDeleteConflict('还有待取回的分层结果，请先在画布中处理。')
+      const hasContent = canvas.items.length > 0 || !!canvas.compositions?.length
+      if (!hasContent) return canvas
+      if (canvas.revision !== expectedRevision) throw new CanvasDeleteConflict('画布内容已更新，请核对后重新删除。')
+      const retired = directory + '.deleting'
+      await rm(retired, { recursive: true, force: true })
+      const now = new Date().toISOString()
+      const empty = { sessionId, revision: canvas.revision + 1, createdAt: now, updatedAt: now, items: [] }
+      // One rename unlinks the manifest and every asset together. Only the revision survives.
+      await atomic(directory + '.revision', String(empty.revision))
+      await rename(directory, retired)
+      // The gallery retries cleanup if an open file or a host shutdown interrupts reclamation.
+      await rm(retired, { recursive: true, force: true }).catch(() => {})
+      return empty
+    })
+  }
   setGenerationStyle(sessionId: string, generationStyle: unknown): Promise<Canvas> {
     return this.setGenerationOptions(sessionId, { generationStyle })
   }
@@ -209,6 +235,12 @@ export class CanvasStore {
   async list(include: string[] = []): Promise<CanvasEntry[]> {
     let names: string[]
     try { names = await readdir(this.root) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; names = [] }
+    // Finish reclaiming files if the host stopped after the deletion was committed.
+    for (const name of names) {
+      if (!name.endsWith('.deleting')) continue
+      const id = name.slice(0, -'.deleting'.length)
+      if (SESSION_ID.test(id)) await this.serial(id, () => rm(join(this.root, name), { recursive: true, force: true })).catch(() => {})
+    }
     const wanted = new Set(include), all = [...new Set([...names, ...include])].filter(n => SESSION_ID.test(n))
     const entries = await Promise.all(all.map(async n => { try { const c = await this.get(n); return c.items.length || c.compositions?.length || wanted.has(n) ? entryOf(c) : undefined } catch { return undefined } }))
     return entries.filter((e): e is CanvasEntry => !!e).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))

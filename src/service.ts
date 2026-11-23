@@ -4,7 +4,7 @@ import { extname, isAbsolute } from 'node:path'
 import { imageInfo, MAX_BYTES } from './image-data.js'
 import { AI4ScholarError } from './ai4scholar.js'
 import type { AI4ScholarClient, ImageResult } from './ai4scholar.js'
-import type { CanvasStore } from './store.js'
+import { CanvasDeleteConflict, type CanvasStore } from './store.js'
 import type { Canvas, CanvasItem, GenerateInput, LayerQuote, PendingGeneration, SavedLayerTask } from './shared/types.js'
 import { ITEM_ID, MAX_PROMPT, titleFrom } from './shared/types.js'
 import { parseGenerationStyle, styledPrompt } from './shared/research.js'
@@ -25,6 +25,8 @@ export interface GenerateResult { canvas: Canvas; items: CanvasItem[] }
 export interface ImageEditResult extends GenerateResult { warnings: string[] }
 export class Seedream {
   private inflight = new Map<string, PendingGeneration[]>()
+  private canvasJobs = new Map<string, number>()
+  private deleting = new Set<string>()
   private editRequests = new Map<string, { fingerprint: string; promise: Promise<ImageEditResult>; settled: boolean }>()
   constructor(readonly client: AI4ScholarClient, readonly store: CanvasStore) {}
   async layerQuote(maxImages: number): Promise<LayerQuote> {
@@ -34,6 +36,29 @@ export class Seedream {
   pending(sessionId: string): PendingGeneration[] { return this.inflight.get(sessionId) ?? [] }
   /** Sessions with a generation running now, for the client to open their canvas. */
   active(): Record<string, PendingGeneration[]> { return Object.fromEntries(this.inflight) }
+  // Reference loading and image preparation also use the canvas, before a job has a progress card.
+  private async runCanvasJob<T>(sessionId: string, run: () => Promise<T>): Promise<T> {
+    if (this.deleting.has(sessionId)) throw new CanvasDeleteConflict('画布正在删除。')
+    this.canvasJobs.set(sessionId, (this.canvasJobs.get(sessionId) ?? 0) + 1)
+    try { return await run() }
+    finally {
+      const remaining = this.canvasJobs.get(sessionId)! - 1
+      if (remaining) this.canvasJobs.set(sessionId, remaining)
+      else this.canvasJobs.delete(sessionId)
+    }
+  }
+  async removeCanvas(sessionId: string, revision: number): Promise<Canvas> {
+    if (this.deleting.has(sessionId)) throw new CanvasDeleteConflict('画布正在删除。')
+    if (this.canvasJobs.has(sessionId) || this.pending(sessionId).length) throw new CanvasDeleteConflict('画布中有任务正在进行，请等待结果保存后再删除。')
+    this.deleting.add(sessionId)
+    try {
+      const empty = await this.store.removeCanvas(sessionId, revision)
+      for (const key of this.editRequests.keys()) {
+        if (key.startsWith(sessionId + ':')) this.editRequests.delete(key)
+      }
+      return empty
+    } finally { this.deleting.delete(sessionId) }
+  }
   async generationDefaults(sessionId: string, settings: { size: string; watermark: boolean }) {
     const canvas = await this.store.get(sessionId)
     return { ...settings, model: canvas.generationModel ?? MODEL }
@@ -71,7 +96,10 @@ export class Seedream {
     }
     return { images, items, external }
   }
-  async generate(sessionId: string, input: GenerateInput, signal: AbortSignal, allowLocal = false): Promise<GenerateResult> {
+  generate(sessionId: string, input: GenerateInput, signal: AbortSignal, allowLocal = false): Promise<GenerateResult> {
+    return this.runCanvasJob(sessionId, () => this.performGeneration(sessionId, input, signal, allowLocal))
+  }
+  private async performGeneration(sessionId: string, input: GenerateInput, signal: AbortSignal, allowLocal: boolean): Promise<GenerateResult> {
     const model = input.model ?? MODEL
     const style = parseGenerationStyle(input.style ?? (await this.store.get(sessionId)).generationStyle ?? 'auto')
     const prompt = styledPrompt(input.prompt, style)
@@ -95,7 +123,10 @@ export class Seedream {
       if (rest.length) this.inflight.set(sessionId, rest); else this.inflight.delete(sessionId)
     }
   }
-  async decompose(sessionId: string, input: DecomposeInput, signal: AbortSignal) {
+  decompose(sessionId: string, input: DecomposeInput, signal: AbortSignal) {
+    return this.runCanvasJob(sessionId, () => this.performDecomposition(sessionId, input, signal))
+  }
+  private async performDecomposition(sessionId: string, input: DecomposeInput, signal: AbortSignal) {
     const refs = await this.resolve(sessionId, [input.image], false), sourceId = refs.items[0]!
     const canvas = await this.store.get(sessionId), source = canvas.items.find(i => i.id === sourceId)!
     const id = input.requestId ?? randomUUID()
@@ -148,6 +179,7 @@ export class Seedream {
   /** Reopen only polls existing paid jobs, including after a host restart. */
   resumeLayerTasks(canvas: Canvas, retryId: string | null = null) {
     const sid = canvas.sessionId
+    if (this.deleting.has(sid)) return
     for (const job of canvas.layerTasks ?? []) {
       if ((job.error && job.id !== retryId) || this.pending(sid).some(p => p.key === job.id)) continue
       this.inflight.set(sid, [...this.pending(sid), { key: job.id, parentId: job.sourceId, prompt: '取回分层结果', size: 'auto', startedAt: job.startedAt }])
@@ -159,6 +191,7 @@ export class Seedream {
   }
   /** A duplicate request id reuses its original result; it never starts another billable call. */
   async editImage(sessionId: string, input: ImageEditInput, signal: AbortSignal): Promise<ImageEditResult> {
+    if (this.deleting.has(sessionId)) throw new CanvasDeleteConflict('画布正在删除。')
     const fingerprint = createHash('sha256').update(JSON.stringify(input)).digest('hex'), key = `${sessionId}:${input.requestId}`
     const known = this.editRequests.get(key)
     if (known) {
@@ -166,7 +199,7 @@ export class Seedream {
       return known.promise
     }
     signal.throwIfAborted()
-    const request = { fingerprint, promise: this.performEdit(sessionId, input, fingerprint, signal), settled: false }
+    const request = { fingerprint, promise: this.runCanvasJob(sessionId, () => this.performEdit(sessionId, input, fingerprint, signal)), settled: false }
     this.editRequests.set(key, request)
     void request.promise.finally(() => {
       request.settled = true

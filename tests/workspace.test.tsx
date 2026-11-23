@@ -192,3 +192,80 @@ describe('home generation entry', () => {
     } finally { await h.cleanup() }
   })
 })
+
+describe('gallery canvas deletion', () => {
+  function setup(rejectOne = false) {
+    const entries = ['chat', 'board-a', 'board-b', 'busy', 'layers'].map(sessionId => ({
+      sessionId, title: sessionId, revision: 3, updatedAt: new Date().toISOString(), count: 1, hasPendingLayers: sessionId === 'layers',
+    }))
+    const deleted: string[] = []
+    const fetcher = vi.fn(async (path: string, _signal: AbortSignal, _body?: unknown, method?: string) => {
+      if (method === 'DELETE') {
+        const params = new URL(path, 'http://local').searchParams
+        const id = params.get('session')!
+        expect(params.get('revision')).toBe('3')
+        deleted.push(id)
+        if (rejectOne && id === 'board-b') return { ok: false, error: '画布内容已更新' }
+        entries.splice(entries.findIndex(entry => entry.sessionId === id), 1)
+        return { ok: true, value: { sessionId: id, revision: 4, items: [] } }
+      }
+      return { ok: true, value: { configured: false, defaultSize: '2K', canvases: [...entries], active: { busy: [{ key: 'running' }] } } }
+    }) as unknown as Fetcher
+    const controller = new Controller(() => { throw new Error('No credential needed') }, fetcher)
+    const node = document.createElement('div'), root = createRoot(node), open = vi.fn(() => true)
+    const render = () => act(async () => { root.render(<Workspace controller={controller} openConversation={open} conversation={vi.fn()}/>) })
+    const button = (text: string) => [...node.querySelectorAll('button')].find(b => b.textContent === text)!
+    const click = (el: HTMLElement) => act(async () => { el.click() })
+    const close = async () => { await act(async () => root.unmount()); controller.dispose() }
+    return { node, open, render, button, click, close, deleted }
+  }
+  it('confirms by name in Recent, supports cancellation and removes a chat canvas without opening its conversation', async () => {
+    const h = setup()
+    const remove = () => h.node.querySelector<HTMLButtonElement>('[aria-label="删除画布「chat」"]')!
+    try {
+      await h.render()
+      await h.click(remove())
+      expect(h.node.querySelector('[role="dialog"]')?.textContent).toContain('确定删除「chat」')
+      expect(h.node.querySelector('[role="dialog"]')?.textContent).toContain('原对话记录会保留')
+      await h.click(h.button('取消'))
+      expect(h.deleted).toEqual([])
+      await h.click(remove())
+      await h.click(h.button('确认删除'))
+      expect(h.deleted).toEqual(['chat'])
+      expect(remove()).toBeNull()
+      expect(h.node.querySelector('.sd-canvas-count')?.textContent).toBe('4')
+      expect(h.open).not.toHaveBeenCalled()
+    } finally { await h.close() }
+  })
+  it('selects only eligible canvases, clears selection, and reports partial success with the failed canvas still selected', async () => {
+    const h = setup(true)
+    try {
+      await h.render()
+      await h.click(h.node.querySelector<HTMLButtonElement>('.sd-all-canvases')!)
+      await h.click(h.button('管理画布'))
+      const checks = () => [...h.node.querySelectorAll<HTMLInputElement>('.sd-card-check')]
+      const all = h.node.querySelector<HTMLInputElement>('.sd-select-all input')!
+      expect(h.button('删除所选').disabled).toBe(true)
+      expect(checks().filter(c => c.disabled)).toHaveLength(2)
+      await h.click(checks()[0]!)
+      expect(all.indeterminate).toBe(true)
+      await h.click(all)
+      expect(checks().filter(c => c.checked)).toHaveLength(3)
+      await h.click(all)
+      expect(h.button('删除所选').disabled).toBe(true)
+      await h.click(checks()[1]!)
+      await h.click(checks()[2]!)
+      await h.click(h.button('删除所选'))
+      expect(h.node.querySelector('[role="dialog"]')?.textContent).toContain('确定删除选中的 2 个画布')
+      await h.click(h.button('取消'))
+      expect(h.deleted).toEqual([])
+      await h.click(h.button('删除所选'))
+      await h.click(h.button('确认删除'))
+      expect(h.deleted).toEqual(['board-a', 'board-b'])
+      expect(h.node.querySelector('[role="alert"]')?.textContent).toContain('「board-b」画布内容已更新')
+      expect(checks().filter(c => c.checked)).toHaveLength(1)
+      expect(h.node.querySelector('.sd-brand')?.textContent).toBe('4 个画布')
+      expect(h.open).not.toHaveBeenCalled()
+    } finally { await h.close() }
+  })
+})

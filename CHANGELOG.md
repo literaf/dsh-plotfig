@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Delete a canvas from Recent or All Canvases. Use Manage Canvases in the full gallery to select several or all eligible canvases and confirm one batch deletion.
+
 ## 0.3.2 (2026-11-23)
 
 - The AI4Scholar link in PlotFig settings opens the homepage. The Chinese and English guides link to the homepage in their respective languages.

@@ -108,6 +108,13 @@ export class CanvasModel extends Emitter<CanvasState> {
     if (current && canvas.revision <= current.revision) return
     this.set({ canvas, loading: false, error: undefined })
   }
+  acceptDeletion(empty: Canvas) {
+    this.accept(empty)
+    if (this.state.canvas?.revision !== empty.revision) return
+    for (const editor of this.editors.values()) editor.dispose()
+    this.editors.clear()
+    this.set({ created: [], error: undefined, message: undefined })
+  }
   async refresh(resumeLayer?: string): Promise<void> {
     if (this.reading || this.disposed) return
     const control = new AbortController(); this.reading = control
@@ -302,6 +309,26 @@ export class Controller extends Emitter<State> {
     let model = this.models.get(sessionId)
     if (!model) { model = new CanvasModel(sessionId, this.fetcher, () => { void this.attach() }); this.models.set(sessionId, model) }
     return model
+  }
+  async removeCanvases(entries: readonly CanvasEntry[]): Promise<Array<{ entry: CanvasEntry; error: string }>> {
+    const removed = new Set<string>()
+    const failed: Array<{ entry: CanvasEntry; error: string }> = []
+    for (const entry of entries) {
+      try {
+        const query = new URLSearchParams({ session: entry.sessionId, revision: String(entry.revision) })
+        const reply = await this.fetcher<Canvas>(`${ROUTE}/canvas?${query}`, new AbortController().signal, undefined, 'DELETE')
+        if (!reply.ok) throw new Error(reply.error)
+        this.models.get(entry.sessionId)?.acceptDeletion(reply.value)
+        removed.add(entry.sessionId)
+      } catch (error) { failed.push({ entry, error: errorText(error, '删除失败，请重试。') }) }
+    }
+    const catalog = this.state.catalog
+    if (catalog && removed.size) {
+      this.set({ catalog: { ...catalog, canvases: catalog.canvases.filter(entry => !removed.has(entry.sessionId)) } })
+      this.notify(`已删除 ${removed.size} 个画布。`)
+    }
+    await this.attach()
+    return failed
   }
   async attach(): Promise<void> {
     this.refreshRequest?.abort()
