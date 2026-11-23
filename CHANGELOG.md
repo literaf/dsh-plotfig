@@ -10,7 +10,6 @@
 - Use a new minor version to make this license transition explicit. Plugin features, API billing and runtime behavior are unchanged.
 - Include the plugin-specific `src` attribution parameter in the package homepage URL.
 
-
 ## 0.5.1 (2026-11-23)
 
 - Link the npm package to the public PlotFig source repository, issue tracker and AI4Scholar installation guide.
