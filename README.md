@@ -1,3 +1,5 @@
+> **License change in 0.6.0:** AGPL-3.0-only with separate commercial licensing. Earlier MIT grants remain valid. [Details](LICENSING.md).
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/literaf/dsh-plotfig/main/docs/images/logo-dark.svg">
@@ -38,14 +40,14 @@ The layer service places transparent inputs on white paper for decomposition. Or
 Open DeepSeek Harness Desktop once to initialize the profile, then fully quit it. Install PlotFig from npm with this command.
 
 ```bash
-dsh plugin --profile desktop add dsh-plotfig@0.5.1
+dsh plugin --profile desktop add dsh-plotfig@0.6.0
 ```
 
 Reopen Desktop, go to **Plugins → Installed plugins**, and enable **dsh-plotfig**. Open **PlotFig** from the sidebar.
 
 Choose **检查更新** in the top-right corner of the PlotFig gallery to compare your installed version with the latest stable npm release. For an npm installation on a supported Harness host, choose **更新到 v…** to update in the dialog. It tells you if the host needs a restart. Older hosts offer a path to the plugin manager.
 
-In PlotFig 0.3.0 through 0.5.0, choose **检查更新 → 更新到 v0.5.1**. With 0.2.1 or earlier, open **精选科研插件** and choose **更新到 v0.5.1** on the PlotFig card.
+In PlotFig 0.3.0 through 0.5.1, choose **检查更新 → 更新到 v0.6.0**. With 0.2.1 or earlier, open **精选科研插件** and choose **更新到 v0.6.0** on the PlotFig card.
 
 PlotFig uses an AI4Scholar API key for generation, editing, and layer splitting. If dsh-ai4scholar already has a key under `AI4SCHOLAR_API_KEY`, PlotFig uses it automatically. To create one, select **获取密钥** in PlotFig settings, sign in, and open the Open Platform. Paste the key into the field and save it. **测试连接** checks your balance and Seedream availability for free. [Visit the AI4Scholar homepage](https://ai4scholar.net/en?src=dsh_plotfig).
 
@@ -104,3 +106,9 @@ AI4Scholar bills ordinary generation per image and reserves the quoted maximum f
 - AI results depend on the model. Pixel protection is exact; picture quality is not guaranteed. Expanding blank areas beside diagrams and tables is unreliable, cutouts lose glass-like translucency, combining several references can drop text labels, naturalistic and 3D presets look similar, and images in one batch are generated independently, so their look can differ even with the same style.
 - PSD files have been checked in Photopea and Adobe Illustrator 2025, not in Photoshop. Fonts missing on the target machine are substituted.
 - Seedream generation, editing, layer splitting and credit settlement have been verified with the live AI4Scholar service. For the eight other models, release checks covered request parameters and simulated responses. [Full Chinese guide and shortcuts](https://github.com/literaf/dsh-plotfig/blob/main/README_CN.md)
+
+## License
+
+Starting with **0.6.0**, this plugin's AI4Scholar-authored code uses [AGPL-3.0-only](LICENSE). **Commercial use is allowed under AGPL**; a separate written [commercial license](COMMERCIAL-LICENSE.md) is available for other terms covering rights AI4Scholar owns.
+
+Earlier releases through **0.5.1** keep their original MIT grants. Third-party licenses remain applicable. See [licensing details](LICENSING.md), [third-party notices](THIRD_PARTY_NOTICES.md) and [corresponding source](SOURCE.md).

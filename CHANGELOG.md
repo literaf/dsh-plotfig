@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — 2026-11-23
+
+### Licensing change
+
+- Change the public license for AI4Scholar-authored code to **AGPL-3.0-only**, with separate written commercial licensing available through [literaf@proton.me](mailto:literaf@proton.me). Commercial use that complies with AGPL remains permitted.
+- Preserve all existing MIT grants for **0.5.1 and earlier releases**. Third-party licenses and separately identified asset terms remain applicable.
+- Include licensing guidance, the historical MIT notice, third-party notices and version-specific Corresponding Source instructions in the npm package.
+- Use a new minor version to make this license transition explicit. Plugin features, API billing and runtime behavior are unchanged.
+- Include the plugin-specific `src` attribution parameter in the package homepage URL.
+
+
 ## 0.5.1 (2026-11-23)
 
 - Link the npm package to the public PlotFig source repository, issue tracker and AI4Scholar installation guide.

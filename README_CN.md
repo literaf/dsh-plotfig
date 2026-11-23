@@ -1,3 +1,5 @@
+> **0.6.0 许可变更：** 采用 AGPL-3.0-only，可另行协商商业授权；此前 MIT 授权继续有效。[说明](LICENSING.md)。
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
@@ -38,14 +40,14 @@
 首次使用时先打开一次 DeepSeek Harness 桌面版以初始化配置，然后完全退出。运行以下命令从 npm 安装 PlotFig。
 
 ```bash
-dsh plugin --profile desktop add dsh-plotfig@0.5.1
+dsh plugin --profile desktop add dsh-plotfig@0.6.0
 ```
 
 重新打开桌面版，在「插件 → 已安装插件」中启用 **dsh-plotfig**，再从侧栏打开 **PlotFig**。
 
 点击首页右上角的 **检查更新**，可查看已安装版本和 npm 上的最新正式版。通过包名安装的 PlotFig 在支持更新的 DSH 中会显示 **更新到 v…**。点击即可在弹窗内升级。如果需要重启，弹窗会提示。旧版 DSH 可从插件管理器更新。
 
-使用 0.3.0 至 0.5.0 时，点 PlotFig 首页右上角的 **检查更新 → 更新到 v0.5.1**。使用 0.2.1 或更早版本时，在「精选科研插件」的 PlotFig 卡片上点 **更新到 v0.5.1**。
+使用 0.3.0 至 0.5.1 时，点 PlotFig 首页右上角的 **检查更新 → 更新到 v0.6.0**。使用 0.2.1 或更早版本时，在「精选科研插件」的 PlotFig 卡片上点 **更新到 v0.6.0**。
 
 绘图、编辑和分层使用 AI4Scholar 密钥。已在 dsh-ai4scholar 配置过 `AI4SCHOLAR_API_KEY` 的用户可以直接复用。首次使用可在 PlotFig 设置中点 **获取密钥**，登录后进入「开放平台」创建密钥。将密钥粘贴到输入框并保存，点 **测试连接** 可免费查看余额和 Seedream 配置状态。[前往 AI4Scholar 首页](https://ai4scholar.net/?src=dsh_plotfig)
 
@@ -175,3 +177,9 @@ Web 端使用 `--profile web`。未配置或移除 Key 后，已有画布仍可�
 - PSD 与 SVG 不嵌入字体，打开的软件缺少对应字体时会替换，基线和换行也可能与画布不同；需要固定外观时用「PSD（文字转图片）」。PSD 尚未在 Photoshop 中验收，已在 Photopea 和 Adobe Illustrator 2025 中检查文字层。
 - PDF 内容为图像，文字不可选中。
 - Seedream 的生图、改图、分层和积分结算已在 AI4Scholar 生产服务验证。其余八个模型在本次发布中通过了请求参数校验和模拟响应测试。
+
+## 许可证
+
+从 **0.6.0** 起，本插件中由 AI4Scholar 拥有权利的代码采用 [AGPL-3.0-only](LICENSE)。**遵守 AGPL 的商业使用是允许的**；需要其他条件时，可就 AI4Scholar 拥有的权利另行协商[书面商业授权](COMMERCIAL-LICENSE.md)。
+
+**0.5.1 及更早版本**保留原 MIT 授权，第三方许可继续适用。详见[许可说明](LICENSING.md)、[第三方声明](THIRD_PARTY_NOTICES.md)和[对应源码](SOURCE.md)。
